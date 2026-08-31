@@ -1,0 +1,476 @@
+/* ─── Asset Tracking / Chain of Custody Styles ──────────── */
+
+/* Pipeline stages header */
+.coc-pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, var(--panel), var(--bg2));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.coc-stage-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 10px;
+  text-align: center;
+  position: relative;
+}
+
+.coc-stage-header .csh-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid;
+  background: var(--panel);
+}
+
+.coc-stage-header .csh-label {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.coc-stage-header .csh-count {
+  font-size: 18px;
+  font-family: var(--cond);
+  font-weight: 700;
+}
+
+.coc-stage-header .csh-sub {
+  font-size: 10px;
+  color: var(--faint);
+  font-family: var(--mono);
+}
+
+/* Connector arrows between stages */
+.coc-pipeline .coc-stage-header:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  right: -12px;
+  top: 20px;
+  color: var(--faint);
+  font-size: 14px;
+  z-index: 1;
+}
+
+/* Link filter bar */
+.coc-link-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.coc-link-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  font-weight: 600;
+  border-radius: 9px;
+  border: 1px solid var(--line2);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.coc-link-tab:hover {
+  border-color: var(--steel);
+  color: var(--ink);
+}
+
+.coc-link-tab.active {
+  background: rgba(95, 168, 255, 0.12);
+  border-color: rgba(95, 168, 255, 0.4);
+  color: var(--amber);
+}
+
+.coc-link-tab .clt-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* Asset tracking card */
+.coc-asset-card {
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: linear-gradient(180deg, var(--panel), var(--bg2));
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.coc-asset-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: 0.12s;
+}
+
+.coc-asset-head:hover {
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.coc-asset-head .cah-ico {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--panel3);
+  border: 1px solid var(--line);
+  color: var(--amber);
+  flex: none;
+}
+
+.coc-asset-head .cah-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.coc-asset-head .cah-serial {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.coc-asset-head .cah-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.coc-asset-head .cah-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* Mini stage dots in header */
+.coc-mini-stages {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.coc-mini-dot {
+  width: 20px;
+  height: 6px;
+  border-radius: 3px;
+  transition: 0.2s;
+}
+
+.coc-mini-dot.done {
+  background: var(--teal);
+}
+
+.coc-mini-dot.current {
+  background: var(--amber);
+  animation: dot-glow 1.5s ease-in-out infinite;
+}
+
+.coc-mini-dot.pending {
+  background: var(--line2);
+}
+
+@keyframes dot-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(95, 168, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 8px rgba(95, 168, 255, 0.7);
+  }
+}
+
+/* Timeline */
+.coc-timeline {
+  padding: 16px 18px;
+}
+
+.coc-tl-item {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 12px;
+  min-height: 64px;
+  position: relative;
+}
+
+/* Vertical connector line */
+.coc-tl-item:not(:last-child) .coc-tl-line::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 30px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--line);
+}
+
+.coc-tl-item.done:not(:last-child) .coc-tl-line::after {
+  background: rgba(51, 220, 174, 0.3);
+}
+
+.coc-tl-line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.coc-tl-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid;
+  background: var(--panel);
+  z-index: 2;
+  flex: none;
+}
+
+.coc-tl-dot.done {
+  border-color: var(--teal);
+  background: rgba(51, 220, 174, 0.08);
+  color: var(--teal);
+}
+
+.coc-tl-dot.current {
+  border-color: var(--amber);
+  background: rgba(95, 168, 255, 0.08);
+  color: var(--amber);
+}
+
+.coc-tl-dot.pending {
+  border-color: var(--line2);
+  color: var(--faint);
+}
+
+.coc-tl-dot.missing {
+  border-color: var(--red);
+  background: rgba(255, 95, 95, 0.08);
+  color: var(--red);
+}
+
+.coc-tl-body {
+  padding-bottom: 16px;
+}
+
+.coc-tl-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.coc-tl-stage {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.coc-tl-time {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--faint);
+}
+
+.coc-tl-detail {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(8, 11, 16, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.coc-tl-detail .ctd-label {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 3px;
+}
+
+.coc-tl-detail .ctd-val {
+  font-size: 11.5px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* Evidence badge */
+.coc-evidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.coc-evidence.grn {
+  background: rgba(51, 220, 174, 0.1);
+  color: var(--teal);
+  border: 1px solid rgba(51, 220, 174, 0.25);
+}
+
+.coc-evidence.config {
+  background: rgba(95, 168, 255, 0.1);
+  color: var(--amber);
+  border: 1px solid rgba(95, 168, 255, 0.25);
+}
+
+.coc-evidence.gatepass {
+  background: rgba(173, 139, 255, 0.1);
+  color: var(--violet);
+  border: 1px solid rgba(173, 139, 255, 0.25);
+}
+
+.coc-evidence.pod {
+  background: rgba(51, 220, 174, 0.1);
+  color: var(--teal);
+  border: 1px solid rgba(51, 220, 174, 0.25);
+}
+
+.coc-evidence.photo {
+  background: rgba(95, 168, 255, 0.1);
+  color: var(--blue);
+  border: 1px solid rgba(95, 168, 255, 0.25);
+}
+
+.coc-evidence.visual {
+  background: rgba(125, 144, 164, 0.1);
+  color: var(--steel);
+  border: 1px solid rgba(125, 144, 164, 0.25);
+}
+
+.coc-evidence.missing {
+  background: rgba(255, 95, 95, 0.08);
+  color: var(--red);
+  border: 1px dashed rgba(255, 95, 95, 0.35);
+}
+
+/* Pending stage placeholder */
+.coc-tl-pending {
+  padding: 8px 12px;
+  border: 1px dashed var(--line2);
+  border-radius: 9px;
+  font-size: 11px;
+  color: var(--faint);
+  font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Expand/collapse chevron */
+.coc-chevron {
+  transition: transform 0.2s;
+  color: var(--faint);
+}
+
+.coc-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .coc-pipeline {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+  }
+
+  .coc-pipeline .coc-stage-header:not(:last-child)::after {
+    display: none;
+  }
+
+  .coc-tl-detail {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .coc-pipeline {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .coc-tl-detail {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Pipeline strip: scroll horizontally */
+  .coc-pipeline {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+
+  .coc-stage-header {
+    min-width: 100px;
+    flex: none;
+  }
+
+  /* Full-width asset cards */
+  .coc-asset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coc-tl-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .coc-filters {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* --- RESPONSIVE MEDIA QUERIES --- */
+
+/* Small Devices / Mobile Adjustments */
+@media (max-width: 600px) {
+  :root {
+    /* Slightly tone down background radial glows on small devices */
+    --grid-size: 24px;
+  }
+
+  .up {
+    letter-spacing: 0.08em; /* Reduces letter spacing on narrow viewports */
+  }
+}
+
+/* Touch Device Interactions (Hover States Fix) */
+@media (hover: hover) and (pointer: fine) {
+  /* Add fine-pointer hover styles here if needed */
+}

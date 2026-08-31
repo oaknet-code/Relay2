@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4A9BEA"/>
+      <stop offset="100%" stop-color="#238BEF"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="88" fill="url(#bg)"/>
+
+  <!-- Broadcast signal -->
+  <g fill="none" stroke="#000" stroke-width="22" stroke-linecap="round">
+    <path d="M143 126 C91 174 91 256 143 304"/>
+    <path d="M181 166 C147 198 147 232 181 264"/>
+    <path d="M369 126 C421 174 421 256 369 304"/>
+    <path d="M331 166 C365 198 365 232 331 264"/>
+  </g>
+
+  <!-- Antenna -->
+  <g fill="#000">
+    <circle cx="256" cy="219" r="31"/>
+    <path d="M244 244 L174 407 Q170 417 181 421 L196 421 Q204 420 208 411 L256 300 L304 411 Q308 420 316 421 L331 421 Q342 417 338 407 L268 244 Z"/>
+    <rect x="211" y="319" width="90" height="19" rx="9.5"/>
+  </g>
+</svg>

@@ -1,0 +1,343 @@
+/* ─── Shell / grid ───────────────────────────────────────── */
+.shell {
+  display: grid;
+  grid-template-columns: 236px 1fr;
+  min-height: 100vh;
+}
+
+/* ─── Sidebar ────────────────────────────────────────────── */
+.sidebar {
+  border-right: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--bg2), var(--bg));
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 12px;
+  z-index: 200;
+  overflow-y: auto;
+}
+
+/* ─── Brand ──────────────────────────────────────────────── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 16px;
+}
+
+.brand-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--amber), var(--amber2));
+  color: #06111f;
+  box-shadow: 0 0 18px rgba(95, 168, 255, 0.38);
+  flex: none;
+}
+
+.brand h1 {
+  font-size: 18px;
+  margin: 0;
+  font-family: var(--cond);
+  letter-spacing: 0.04em;
+}
+
+.brand small {
+  display: block;
+  color: var(--faint);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+/* Close button inside sidebar — desktop: hidden */
+.sidebar-close {
+  display: none;
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.sidebar-close:hover {
+  color: var(--ink);
+  background: var(--panel);
+}
+
+/* ─── Navigation ─────────────────────────────────────────── */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.nav-label {
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 14px 10px 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 13.5px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: 0.13s;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.nav-item:hover {
+  color: var(--ink);
+  background: var(--panel);
+}
+
+.nav-item.on {
+  color: var(--ink);
+  background: var(--panel2);
+  border-color: var(--line2);
+}
+
+.nav-item.on .ni-ico {
+  color: var(--amber);
+}
+
+.ni-ico {
+  color: var(--faint);
+  flex: none;
+}
+
+.nav-step {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--faint);
+  font-family: var(--mono);
+}
+
+/* ─── Sidebar footer ─────────────────────────────────────── */
+.sb-foot {
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--panel3);
+  border: 1px solid var(--line2);
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--teal);
+  flex: none;
+}
+
+/* ─── Main area ──────────────────────────────────────────── */
+.main {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* prevent grid blowout */
+}
+
+/* ─── Topbar ─────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 26px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 11, 16, 0.7);
+  backdrop-filter: blur(6px);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+/* Hamburger — hidden on desktop */
+.hamburger {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px;
+  line-height: 1;
+  flex: none;
+}
+
+.hamburger:hover {
+  color: var(--ink);
+  border-color: var(--steel);
+}
+
+.crumb {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.crumb b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.topbar-r {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.netpill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  padding: 6px 11px;
+  border-radius: 20px;
+  border: 1px solid var(--line2);
+  background: var(--panel);
+  font-family: var(--mono);
+}
+
+/* ─── Body ───────────────────────────────────────────────── */
+.body {
+  padding: 26px;
+  flex: 1;
+}
+
+/* ─── Mobile backdrop ────────────────────────────────────── */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 199;
+  backdrop-filter: blur(2px);
+}
+
+/* ─── TABLET (≤ 880px) ───────────────────────────────────── */
+@media (max-width: 880px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  /* Sidebar becomes a fixed off-screen drawer */
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    width: 260px;
+    transform: translateX(-100%);
+    transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 6px 0 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+  }
+
+  /* Show the X close button inside sidebar */
+  .sidebar-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Show hamburger in topbar */
+  .hamburger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .topbar {
+    padding: 12px 16px;
+  }
+
+  /* Hide the "planned" pill on tablet to save space */
+  .netpill-planned {
+    display: none;
+  }
+
+  .body {
+    padding: 18px 16px;
+  }
+}
+
+/* ─── MOBILE (≤ 480px) ───────────────────────────────────── */
+@media (max-width: 480px) {
+  .topbar {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .crumb {
+    font-size: 11px;
+  }
+
+  /* Hide both pills on small phones */
+  .netpill {
+    display: none;
+  }
+
+  /* Show only the live count pill */
+  .netpill-live {
+    display: flex;
+    padding: 5px 9px;
+    font-size: 10.5px;
+  }
+
+  .body {
+    padding: 14px 12px;
+  }
+}
+
+/* --- RESPONSIVE MEDIA QUERIES --- */
+
+/* Small Devices / Mobile Adjustments */
+@media (max-width: 600px) {
+  :root {
+    /* Slightly tone down background radial glows on small devices */
+    --grid-size: 24px;
+  }
+
+  .up {
+    letter-spacing: 0.08em; /* Reduces letter spacing on narrow viewports */
+  }
+}
+
+/* Touch Device Interactions (Hover States Fix) */
+@media (hover: hover) and (pointer: fine) {
+  /* Add fine-pointer hover styles here if needed */
+}

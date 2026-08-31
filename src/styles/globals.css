@@ -1,0 +1,175 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap");
+
+:root {
+  /* Color Palette */
+  --bg: #080b10;
+  --bg2: #0b0f15;
+  --panel: #10161f;
+  --panel2: #141c27;
+  --panel3: #192230;
+  --line: #1d2735;
+  --line2: #2a3849;
+  --ink: #e7eef6;
+  --muted: #90a0b2;
+  --faint: #5f6e80;
+  --amber: #5fa8ff;
+  --amber2: #2f7fd4;
+  --teal: #33dcae;
+  --teal2: #1f9d7c;
+  --red: #ff5f5f;
+  --red2: #bb3b3b;
+  --blue: #5fa8ff;
+  --violet: #ad8bff;
+  --steel: #7d90a4;
+  --b7: #33dcae;
+  --b11: #5fa8ff;
+  --b18: #5fa8ff;
+  --b23: #ad8bff;
+  --beb: #ff7d9c;
+
+  /* Typography */
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Responsive Fluid Typography */
+  --font-size-sm: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --font-size-base: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+  --font-size-lg: clamp(1.125rem, 1rem + 0.6vw, 1.35rem);
+  --font-size-xl: clamp(1.5rem, 1.2rem + 1.2vw, 2.25rem);
+
+  /* Dynamic Layout Spacing */
+  --grid-size: clamp(24px, 4vw, 38px);
+  --container-padding: clamp(1rem, 3vw, 2.5rem);
+  --max-width: 1280px;
+}
+
+/* Base Box-Sizing Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Smooth Scrolling & Prevent Horizontal Overflow */
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Media Safety Defaults */
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Responsive Main Layout Container */
+.relay {
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--bg);
+  min-height: 100vh;
+  width: 100%;
+  background-image:
+    radial-gradient(
+      900px 500px at 12% -8%,
+      rgba(95, 168, 255, 0.12),
+      transparent 60%
+    ),
+    radial-gradient(
+      800px 600px at 105% 8%,
+      rgba(51, 220, 174, 0.07),
+      transparent 55%
+    ),
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  /* Uses dynamic grid sizing to scale grid lines on smaller screens */
+  background-size:
+    auto,
+    auto,
+    var(--grid-size) var(--grid-size),
+    var(--grid-size) var(--grid-size);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Wrapper Utility Class for Main Content Sections */
+.container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--container-padding);
+  padding-right: var(--container-padding);
+}
+
+/* Typography Utilities */
+.mono {
+  font-family: var(--mono);
+}
+
+.cond {
+  font-family: var(--cond);
+}
+
+.up {
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.faint {
+  color: var(--faint);
+}
+
+/* --- RESPONSIVE MEDIA QUERIES --- */
+
+/* Small Devices / Mobile Adjustments */
+@media (max-width: 600px) {
+  :root {
+    /* Slightly tone down background radial glows on small devices */
+    --grid-size: 24px;
+  }
+
+  .up {
+    letter-spacing: 0.08em; /* Reduces letter spacing on narrow viewports */
+  }
+}
+
+/* Touch Device Interactions (Hover States Fix) */
+@media (hover: hover) and (pointer: fine) {
+  /* Add fine-pointer hover styles here if needed */
+}
+
+/* Loading spinner (used by Loader2 icons during async fetch/import) */
+.spin {
+  animation: relay-spin 0.9s linear infinite;
+}
+@keyframes relay-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

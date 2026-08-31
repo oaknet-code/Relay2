@@ -1,0 +1,444 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  Truck, ScanLine, ListChecks, CheckCircle2, FileText, Plus, Minus,
+  Cable, ShieldCheck, Package, Boxes, User, Clock, ChevronDown, Loader2, AlertTriangle
+} from 'lucide-react';
+import { TypeIcon, Band } from '../components/ui';
+import { LINKS, SITES, TODAY, FLEET_VEHICLES } from '../data/mockData';
+import { getSiteKit, createDispatch, getDispatches } from '../services/api';
+
+// Picks a reasonable icon for a consumable line based on its model/name —
+// purely cosmetic, has no bearing on the actual decrement logic.
+function consumableIcon(label = "") {
+  const s = label.toLowerCase();
+  if (s.includes("wave") || s.includes("cable") || s.includes("wg")) return Cable;
+  if (s.includes("ground") || s.includes("gnd")) return ShieldCheck;
+  if (s.includes("tape") || s.includes("wpf")) return Package;
+  return Boxes;
+}
+
+// Convention: a link's kit is looked up as "KIT-<linkId>" (e.g. MW-02 -> KIT-MW-02).
+// Make sure your Site Kits Excel sheet's kit_id column follows this for the
+// kit that's meant to supply this link.
+const kitIdForLink = (linkId) => `KIT-${linkId}`;
+
+export function Dispatch({ assets, onDispatch }) {
+  const job = LINKS.find(l => l.id === "MW-02");
+  const serUnits = assets.filter(a => a.link === "MW-02" && (a.state === "staged" || a.state === "dispatched"));
+  const dispatched = serUnits.length > 0 && serUnits.every(a => a.state === "dispatched");
+
+  const [kit, setKit] = useState(null);
+  const [kitLoading, setKitLoading] = useState(true);
+  const [kitError, setKitError] = useState(null);
+
+  const [verified, setVerified] = useState({});
+  const [counts, setCounts] = useState({}); // keyed by componentId
+  const [waybill, setWaybill] = useState(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [dispatchTime, setDispatchTime] = useState(null);
+  const [dispatchError, setDispatchError] = useState(null);
+  const [firing, setFiring] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setKitLoading(true);
+    setKitError(null);
+    getSiteKit(kitIdForLink(job.id))
+      .then(data => { if (!cancelled) setKit(data); })
+      .catch(err => { if (!cancelled) setKitError(err.response?.data?.message || "Couldn't load this link's kit."); })
+      .finally(() => { if (!cancelled) setKitLoading(false); });
+    return () => { cancelled = true; };
+  }, [job.id]);
+
+  // If this link was already dispatched in a previous session, the server
+  // still knows even after a page refresh wipes local component state —
+  // so pick up the most recent dispatch record and show "issued" instead
+  // of re-presenting the form (which would just get rejected as
+  // out-of-stock anyway).
+  useEffect(() => {
+    let cancelled = false;
+    getDispatches({ linkId: job.id })
+      .then(records => {
+        if (cancelled || !records.length) return;
+        const latest = records[0]; // API returns newest first
+        setWaybill(latest.waybillId);
+        setDispatchTime(new Date(latest.dispatchedAt));
+      })
+      .catch(() => { /* non-fatal — form just stays available */ });
+    return () => { cancelled = true; };
+  }, [job.id]);
+
+  // Available vehicles: exclude those in maintenance
+  const availableVehicles = useMemo(
+    () => FLEET_VEHICLES.filter(v => v.status !== 'maintenance'),
+    []
+  );
+  const selectedVehicle = availableVehicles.find(v => v.id === selectedVehicleId) || null;
+
+  // Consumable pick-list is driven straight from the kit's components —
+  // the "required" amount doubles as what gets requested from stock.
+  const consReq = (kit?.components || [])
+    .filter(c => c.type === "Consumable")
+    .map(c => ({
+      k: c._id,
+      t: c.model,
+      req: c.qtyRequired,
+      unit: c.unit || "ea",
+      ico: consumableIcon(c.model),
+    }));
+
+  // Serialized (IDU/ODU/DISH) units are matched to a kit component of the
+  // same type, so scanning them can decrement that component too.
+  const serialComponentForType = (type) =>
+    (kit?.components || []).find(c => c.type === type && c.type !== "Consumable");
+
+  const step = (k, d) => setCounts(p => ({ ...p, [k]: Math.max(0, (p[k] || 0) + d) }));
+  const verify = (uid) => setVerified(p => ({ ...p, [uid]: true }));
+
+  const serDone = serUnits.length > 0 && serUnits.every(a => dispatched || verified[a.uid]);
+  const consDone = consReq.length === 0 || consReq.every(c => (counts[c.k] || 0) >= c.req);
+  const ready = !!kit && serDone && consDone && !!selectedVehicle && !dispatched;
+  const serN = serUnits.filter(a => dispatched || verified[a.uid]).length;
+
+  const fire = async () => {
+    if (!kit) return;
+    setDispatchError(null);
+    setFiring(true);
+    try {
+      // Consumables: one line per component, qty = whatever was counted.
+      const items = consReq
+        .filter(c => (counts[c.k] || 0) > 0)
+        .map(c => ({ componentId: c.k, qty: counts[c.k] }));
+
+      // Serialized units: group verified units by type, decrement the
+      // matching kit component by that count.
+      const byType = {};
+      serUnits.forEach(a => {
+        if (verified[a.uid]) byType[a.type] = (byType[a.type] || 0) + 1;
+      });
+      Object.entries(byType).forEach(([type, qty]) => {
+        const comp = serialComponentForType(type);
+        if (comp) items.push({ componentId: comp._id, qty });
+      });
+
+      const { dispatch, kit: updatedKit } = await createDispatch({
+        kitId: kit.kitId,
+        linkId: job.id,
+        items,
+        vehicle: {
+          id: selectedVehicle.id,
+          plate: selectedVehicle.plate,
+          make: selectedVehicle.make,
+          type: selectedVehicle.type,
+        },
+        driver: { name: selectedVehicle.driver, phone: selectedVehicle.phone },
+      });
+
+      setKit(updatedKit); // reflects the decremented component quantities
+      setWaybill(dispatch.waybillId);
+      setDispatchTime(new Date(dispatch.dispatchedAt));
+      onDispatch(serUnits.map(a => a.uid));
+    } catch (err) {
+      const details = err.response?.data?.details;
+      setDispatchError(
+        details ? details.join("; ") : (err.response?.data?.message || "Dispatch failed.")
+      );
+    } finally {
+      setFiring(false);
+    }
+  };
+
+  const fmtTime = (d) => {
+    if (!d) return '';
+    return d.toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
+  };
+
+  return (
+    <div>
+      <div className="view-head">
+        <span className="tagchip">
+          <Truck size={11} />
+          Step 3 · Dynamic BOM Pick-List
+        </span>
+        <h2>Dispatch · {job.id}</h2>
+        <p>
+          Pick-list auto-populated from the path profile for{" "}
+          <b>{SITES[job.a].name} → {SITES[job.b].name}</b> ({job.path}) — a long hop, 
+          so the engineering BOM specifies <b>{job.dish}</b> dishes. High-value units are{" "}
+          <b>scanned to verify</b>; consumables are <b>counted to verify</b>.
+        </p>
+      </div>
+
+      {kitLoading && (
+        <div style={{ textAlign: "center", padding: 60, color: "var(--faint)" }}>
+          <Loader2 size={24} className="spin" style={{ marginBottom: 12 }} />
+          <div style={{ fontSize: 12 }}>Loading kit {kitIdForLink(job.id)}…</div>
+        </div>
+      )}
+
+      {!kitLoading && kitError && (
+        <div style={{
+          textAlign: "center", padding: 40, color: "var(--red)",
+          background: "rgba(255,90,90,.05)", border: "1px solid rgba(255,90,90,.25)", borderRadius: 14
+        }}>
+          <AlertTriangle size={24} style={{ marginBottom: 10 }} />
+          <div style={{ fontSize: 13 }}>{kitError}</div>
+          <div className="faint" style={{ fontSize: 11.5, marginTop: 6 }}>
+            Import a Site Kits sheet with kit_id "{kitIdForLink(job.id)}" first.
+          </div>
+        </div>
+      )}
+
+      {!kitLoading && !kitError && kit && (
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-h">
+          <Boxes size={15} className="ph-ico" />
+          <h3>{kit.name}</h3>
+          <Band b={job.band} />
+          <span className="ph-r" style={{ marginLeft: "auto" }}>
+            {(dispatched || waybill) ? 
+              "Gate pass issued" : 
+              `${serN}/${serUnits.length} scanned · ${consReq.filter(c => (counts[c.k] || 0) >= c.req).length}/${consReq.length} counted`
+            }
+          </span>
+        </div>
+        
+        <div className="panel-b">
+          <div className="split">
+            <div>
+              <div className="up faint" style={{ fontSize: 10, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+                <ScanLine size={13} /> Scan to verify · serialized
+              </div>
+              {serUnits.map(a => {
+                const v = dispatched || verified[a.uid];
+                return (
+                  <div className={`pickrow ${v ? "done" : ""}`} key={a.uid}>
+                    <span className="pi">
+                      <TypeIcon t={a.type} />
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12.5 }}>{a.type} · {a.model}</div>
+                      <div className="mono faint" style={{ fontSize: 10.5 }}>
+                        {a.serial} · End {a.end}
+                      </div>
+                    </div>
+                    {v ? (
+                      <span className="pill" style={{ color: "var(--teal)" }}>
+                        <CheckCircle2 size={13} />
+                        Verified
+                      </span>
+                    ) : (
+                      <button className="btn sm" onClick={() => verify(a.uid)}>
+                        <ScanLine size={13} />
+                        Scan
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div>
+              <div className="up faint" style={{ fontSize: 10, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+                <ListChecks size={13} /> Count to verify · consumables
+              </div>
+              {consReq.map(c => {
+                const ok = counts[c.k] >= c.req;
+                return (
+                  <div className={`pickrow ${ok ? "done" : ""}`} key={c.k}>
+                    <span className="pi" style={{ color: "var(--steel)" }}>
+                      <c.ico size={16} />
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12.5 }}>{c.t}</div>
+                      <div className="mono faint" style={{ fontSize: 10.5 }}>
+                        required {c.req} {c.unit}
+                      </div>
+                    </div>
+                    {dispatched ? (
+                      <span className="pill" style={{ color: "var(--teal)" }}>
+                        <CheckCircle2 size={13} />
+                        {c.req}
+                      </span>
+                    ) : (
+                      <div className="stepper">
+                        <button onClick={() => step(c.k, -1)}>
+                          <Minus size={13} />
+                        </button>
+                        <span className="n" style={{ color: ok ? "var(--teal)" : "var(--ink)" }}>
+                          {counts[c.k]}
+                        </span>
+                        <button onClick={() => step(c.k, 1)}>
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Fleet & Driver Selection ────────────────── */}
+          {!(waybill || dispatched) && (
+            <div style={{
+              marginTop: 18,
+              paddingTop: 16,
+              borderTop: "1px solid var(--line)"
+            }}>
+              <div className="up faint" style={{ fontSize: 10, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+                <Truck size={13} /> Assign vehicle & driver
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                {/* Vehicle selector */}
+                <div style={{ position: 'relative' }}>
+                  <label className="faint" style={{ display: 'block', fontSize: 10.5, marginBottom: 5, fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>VEHICLE</label>
+                  <div style={{ position: 'relative' }}>
+                    <select
+                      value={selectedVehicleId}
+                      onChange={e => setSelectedVehicleId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 32px 10px 12px',
+                        background: 'var(--bg)',
+                        border: `1px solid ${selectedVehicle ? 'rgba(51, 220, 174, 0.4)' : 'var(--line2)'}`,
+                        borderRadius: 9,
+                        color: 'var(--ink)',
+                        fontSize: 12.5,
+                        fontFamily: 'var(--mono)',
+                        cursor: 'pointer',
+                        appearance: 'none',
+                        WebkitAppearance: 'none'
+                      }}
+                    >
+                      <option value="">— Select vehicle —</option>
+                      {availableVehicles.map(v => (
+                        <option key={v.id} value={v.id}>
+                          {v.plate} · {v.make} ({v.type})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--faint)', pointerEvents: 'none' }} />
+                  </div>
+                </div>
+
+                {/* Driver display (auto-populated from selected vehicle) */}
+                <div>
+                  <label className="faint" style={{ display: 'block', fontSize: 10.5, marginBottom: 5, fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>DRIVER</label>
+                  <div style={{
+                    padding: '10px 12px',
+                    background: 'var(--bg)',
+                    border: `1px solid ${selectedVehicle ? 'rgba(51, 220, 174, 0.4)' : 'var(--line2)'}`,
+                    borderRadius: 9,
+                    fontSize: 12.5,
+                    fontFamily: 'var(--mono)',
+                    color: selectedVehicle ? 'var(--ink)' : 'var(--faint)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8
+                  }}>
+                    <User size={14} style={{ color: selectedVehicle ? 'var(--teal)' : 'var(--faint)', flexShrink: 0 }} />
+                    {selectedVehicle ? (
+                      <span>{selectedVehicle.driver} <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>{selectedVehicle.phone}</span></span>
+                    ) : (
+                      <span>Select a vehicle first</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Generate / Gate Pass Result ────────────── */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            ...(waybill || dispatched ? {
+              marginTop: 18,
+              paddingTop: 16,
+              borderTop: "1px solid var(--line)"
+            } : {})
+          }}>
+            {(waybill || dispatched) ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span className="pill" style={{ color: "var(--teal)", fontSize: 12, padding: "6px 12px" }}>
+                    <FileText size={14} />
+                    Gate pass {waybill || "GP-2207"} generated
+                  </span>
+                </div>
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr 1fr",
+                  gap: 12,
+                  padding: "12px 14px",
+                  background: "rgba(51, 220, 174, 0.04)",
+                  border: "1px solid rgba(51, 220, 174, 0.18)",
+                  borderRadius: 10
+                }}>
+                  <div>
+                    <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Vehicle</div>
+                    <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
+                      {selectedVehicle?.plate || 'KDB-118J'}
+                    </div>
+                    <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
+                      {selectedVehicle?.make || 'Toyota Hilux'} · {selectedVehicle?.type || 'Pickup'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Driver</div>
+                    <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
+                      {selectedVehicle?.driver || 'D. Mwangi'}
+                    </div>
+                    <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
+                      {selectedVehicle?.phone || ''}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Issued</div>
+                    <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
+                      {dispatchTime ? fmtTime(dispatchTime) : TODAY}
+                    </div>
+                    <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
+                      {SITES[job.a].name} → {SITES[job.b].name}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button className="btn amber" disabled={!ready || firing} onClick={fire}>
+                  {firing ? <Loader2 size={15} className="spin" /> : <FileText size={15} />}
+                  {firing ? "Dispatching…" : "Generate Waybill & Gate Pass"}
+                </button>
+                <span className="faint" style={{ fontSize: 11.5 }}>
+                  {!selectedVehicle && serDone && consDone
+                    ? "Select a vehicle above to enable."
+                    : ready 
+                      ? "All lines verified — ready to seal manifest." 
+                      : "Verify every serialized + consumable line to enable."
+                  }
+                </span>
+              </>
+            )}
+          </div>
+          {dispatchError && (
+            <div style={{
+              marginTop: 14, padding: "10px 14px", borderRadius: 10, fontSize: 12,
+              display: "flex", alignItems: "center", gap: 8,
+              background: "rgba(255,90,90,.06)", border: "1px solid rgba(255,90,90,.25)", color: "var(--red)"
+            }}>
+              <AlertTriangle size={14} />
+              {dispatchError}
+            </div>
+          )}
+        </div>
+      </div>
+      )}
+    </div>
+  );
+}

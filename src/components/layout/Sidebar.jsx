@@ -1,0 +1,155 @@
+import React from "react";
+import { RadioTower, LogOut, Settings, X } from "lucide-react";
+
+export function Sidebar({
+  navigation,
+  currentTab,
+  onTabChange,
+  user,
+  onLogout,
+  onChangePassword,
+  isOpen,
+  onClose,
+}) {
+  // Clean logout handler
+  const handleLogoutClick = (e) => {
+    e.preventDefault();
+
+    // 1. Clear local storage items
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    localStorage.clear();
+
+    // 2. Execute parent component's logout prop if provided
+    if (typeof onLogout === "function") {
+      try {
+        onLogout();
+      } catch (err) {
+        console.error("Logout handler error:", err);
+      }
+    }
+
+    // 3. Force reload/redirect to reset application state to login
+    window.location.href = "/";
+  };
+
+  return (
+    <>
+      {/* Mobile backdrop — click outside to close */}
+      {isOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside className={`sidebar ${isOpen ? "sidebar-open" : ""}`}>
+        <div className="brand">
+          <div className="brand-badge">
+            <RadioTower size={19} />
+          </div>
+          <div>
+            <h1>RELAY</h1>
+            <small>MW Rollout Ops</small>
+          </div>
+          {/* Close button — only visible on mobile */}
+          <button
+            className="sidebar-close"
+            onClick={onClose}
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="nav-label">Rollout pipeline</div>
+        <div className="nav">
+          {navigation.map((n) => (
+            <button
+              key={n.id}
+              className={`nav-item ${currentTab === n.id ? "on" : ""}`}
+              onClick={() => onTabChange(n.id)}
+            >
+              <n.ico size={17} className="ni-ico" />
+              {n.label}
+              <span className="nav-step">{n.step}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="sb-foot">
+          <div className="avatar">{user?.initials || "WM"}</div>
+          <div style={{ lineHeight: 1.2, flex: 1, overflow: "hidden" }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: "500",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                color: "var(--ink)",
+              }}
+            >
+              {user?.name || user?.firstName || "J. Okoth"}
+            </div>
+            <div
+              className="faint"
+              style={{
+                fontSize: 10,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {user?.title || user?.role || "Warehouse Manager"}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            {onChangePassword && (
+              <button
+                onClick={onChangePassword}
+                className="iconbtn"
+                title="Change Password"
+                style={{
+                  padding: "6px",
+                  color: "var(--muted)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "4px",
+                }}
+              >
+                <Settings size={16} />
+              </button>
+            )}
+
+            {/* Log Out Button */}
+            <button
+              onClick={handleLogoutClick}
+              className="iconbtn"
+              title="Log out"
+              style={{
+                padding: "6px",
+                color: "var(--muted)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "4px",
+              }}
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
