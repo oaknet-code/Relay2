@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Base URL configured for your local backend server
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "http://oaknetrelay.oaknetbusiness.com";
 
 // Create an Axios instance with base configuration
 const axiosInstance = axios.create({
