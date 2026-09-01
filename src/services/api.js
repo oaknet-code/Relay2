@@ -1,7 +1,7 @@
 import axios from "axios";
 
-// Base URL configured for your local backend server
-const API_BASE_URL = "https://oaknetrelay.oaknetbusiness.com";
+// Base URL from environment variable or fallback to local development
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // Create an Axios instance with base configuration
 const axiosInstance = axios.create({
@@ -43,7 +43,7 @@ axiosInstance.interceptors.response.use(
  */
 export const loginUser = async (credentials) => {
   try {
-    const response = await axiosInstance.post("/auth/login", {
+    const response = await axiosInstance.post("/api/auth/login", {
       email: credentials.email || credentials.username,
       password: credentials.password,
     });
@@ -70,12 +70,12 @@ export const login = loginUser;
  * Site Kits
  */
 export const getSiteKits = async () => {
-  const { data } = await axiosInstance.get("/sitekits");
+  const { data } = await axiosInstance.get("/api/sitekits");
   return data;
 };
 
 export const getSiteKit = async (kitId) => {
-  const { data } = await axiosInstance.get(`/sitekits/${kitId}`);
+  const { data } = await axiosInstance.get(`/api/sitekits/${kitId}`);
   return data;
 };
 
@@ -83,7 +83,7 @@ export const getSiteKit = async (kitId) => {
 export const importSiteKitsExcel = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
-  const { data } = await axiosInstance.post("/sitekits/import", formData, {
+  const { data } = await axiosInstance.post("/api/sitekits/import", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return data;
@@ -94,7 +94,7 @@ export const importSiteKitsExcel = async (file) => {
  * server-side and records a waybill.
  */
 export const createDispatch = async (payload) => {
-  const { data } = await axiosInstance.post("/dispatch", payload);
+  const { data } = await axiosInstance.post("/api/dispatch", payload);
   return data;
 };
 
@@ -104,7 +104,7 @@ export const getDispatches = async ({ kitId, linkId } = {}) => {
   const params = {};
   if (kitId) params.kitId = kitId;
   if (linkId) params.linkId = linkId;
-  const { data } = await axiosInstance.get("/dispatch", { params });
+  const { data } = await axiosInstance.get("/api/dispatch", { params });
   return data;
 };
 
@@ -114,7 +114,7 @@ export const getDispatches = async ({ kitId, linkId } = {}) => {
  * or queued syncs upsert instead of duplicating on the server.
  */
 export const syncFieldOps = async (jobId, payload) => {
-  const { data } = await axiosInstance.post("/fieldops/sync", {
+  const { data } = await axiosInstance.post("/api/fieldops/sync", {
     jobId,
     ...payload,
   });
@@ -122,7 +122,7 @@ export const syncFieldOps = async (jobId, payload) => {
 };
 
 export const getFieldOpsReports = async (jobId) => {
-  const { data } = await axiosInstance.get(`/fieldops/${jobId}`);
+  const { data } = await axiosInstance.get(`/api/fieldops/${jobId}`);
   return data;
 };
 
