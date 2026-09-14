@@ -1,8 +1,7 @@
 import axios from "axios";
 
-// Base URL from environment variable. Defaults to "" (relative path) 
-// so Vite's dev proxy can handle `/api` requests without CORS issues.
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
+// Base URL from environment variable or fallback to local development
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // Create an Axios instance with base configuration
 const axiosInstance = axios.create({
@@ -21,7 +20,7 @@ axiosInstance.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Response Interceptor: on 401 (invalid/expired token, or account
@@ -36,7 +35,7 @@ axiosInstance.interceptors.response.use(
       if (typeof window !== "undefined") window.location.reload();
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 /**
