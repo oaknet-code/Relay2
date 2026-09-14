@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { api } from "../services/api";
 import {
   Users,
   Building2,
@@ -41,49 +40,31 @@ export function ClientAdmin() {
     notes: "",
   });
 
-  const fetchClients = async () => {
-    setIsLoading(true);
+  const loadClientsFromStorage = () => {
     try {
-      const response = await api.get("/clients");
-      setClients(Array.isArray(response.data) ? response.data : []);
-    } catch (err) {
-      console.error("Failed to fetch clients:", err);
-      // Use mock data for demo
-      setClients([
-        {
-          id: 1,
-          name: "Oaknet Business",
-          contactPerson: "John Doe",
-          email: "john@oaknetbusiness.com",
-          phone: "+1 (555) 123-4567",
-          address: "123 Business Ave",
-          city: "New York",
-          country: "USA",
-          status: "active",
-          createdAt: "2025-01-15",
-          notes: "Primary client",
-        },
-        {
-          id: 2,
-          name: "Tech Solutions Ltd",
-          contactPerson: "Jane Smith",
-          email: "jane@techsolutions.com",
-          phone: "+1 (555) 987-6543",
-          address: "456 Tech Park",
-          city: "San Francisco",
-          country: "USA",
-          status: "active",
-          createdAt: "2025-02-10",
-          notes: "Enterprise client",
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
+      const stored = localStorage.getItem("relay_clients");
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      console.error("Failed to load clients from storage:", e);
+      return [];
+    }
+  };
+
+  const saveClientsToStorage = (clientsToSave) => {
+    try {
+      localStorage.setItem("relay_clients", JSON.stringify(clientsToSave));
+    } catch (e) {
+      console.error("Failed to save clients to storage:", e);
     }
   };
 
   useEffect(() => {
-    fetchClients();
+    setIsLoading(true);
+    setTimeout(() => {
+      const loadedClients = loadClientsFromStorage();
+      setClients(loadedClients);
+      setIsLoading(false);
+    }, 300);
   }, []);
 
   const handleChange = (e) => {
@@ -141,23 +122,39 @@ export function ClientAdmin() {
     setSuccess("");
 
     try {
+      let updatedClients;
+
       if (editingClient) {
-        await api.put(`/clients/${editingClient.id}`, formData);
+        // Update existing client
+        updatedClients = clients.map((client) =>
+          client.id === editingClient.id
+            ? {
+                ...client,
+                ...formData,
+                updatedAt: new Date().toISOString().split("T")[0],
+              }
+            : client
+        );
         setSuccess("Client updated successfully!");
       } else {
-        await api.post("/clients", formData);
+        // Create new client
+        const newClient = {
+          id: Date.now(),
+          ...formData,
+          createdAt: new Date().toISOString().split("T")[0],
+          updatedAt: new Date().toISOString().split("T")[0],
+          hasAccess: true,
+        };
+        updatedClients = [newClient, ...clients];
         setSuccess("Client created successfully!");
       }
 
+      saveClientsToStorage(updatedClients);
+      setClients(updatedClients);
       resetForm();
       setView("list");
-      await fetchClients();
     } catch (err) {
-      const errorMsg =
-        err.response?.data?.message ||
-        err.message ||
-        "Failed to save client.";
-      setError(errorMsg);
+      setError("Failed to save client.");
     } finally {
       setIsSubmitting(false);
     }
@@ -166,39 +163,69 @@ export function ClientAdmin() {
   const handleDeleteClient = async (clientId, clientName) => {
     if (
       !window.confirm(
-        `Are you sure you want to delete "${clientName}"? This action cannot be undone.`,
+        `Are you sure you want to permanently delete "${clientName}"? This action cannot be undone.`,
       )
     ) {
       return;
     }
 
     try {
-      await api.delete(`/clients/${clientId}`);
+      const updatedClients = clients.filter((c) => c.id !== clientId);
+      saveClientsToStorage(updatedClients);
+      setClients(updatedClients);
       setSuccess("Client deleted successfully!");
-      await fetchClients();
     } catch (err) {
-      const errorMsg =
-        err.response?.data?.message ||
-        err.message ||
-        "Failed to delete client.";
-      setError(errorMsg);
+      setError("Failed to delete client.");
+    }
+  };
+
+  const handleRevokeAccess = async (clientId, clientName) => {
+    if (
+      !window.confirm(
+        `Revoke access for "${clientName}"? They will not be able to log in.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const updatedClients = clients.map((client) =>
+        client.id === clientId ? { ...client, hasAccess: false } : client
+      );
+      saveClientsToStorage(updatedClients);
+      setClients(updatedClients);
+      setSuccess("Client access revoked successfully!");
+    } catch (err) {
+      setError("Failed to revoke access.");
+    }
+  };
+
+  const handleRestoreAccess = async (clientId, clientName) => {
+    try {
+      const updatedClients = clients.map((client) =>
+        client.id === clientId ? { ...client, hasAccess: true } : client
+      );
+      saveClientsToStorage(updatedClients);
+      setClients(updatedClients);
+      setSuccess("Client access restored successfully!");
+    } catch (err) {
+      setError("Failed to restore access.");
     }
   };
 
   const handleDeactivate = async (clientId, clientName, currentStatus) => {
     const newStatus = currentStatus === "active" ? "inactive" : "active";
     try {
-      await api.put(`/clients/${clientId}`, { status: newStatus });
+      const updatedClients = clients.map((client) =>
+        client.id === clientId ? { ...client, status: newStatus } : client
+      );
+      saveClientsToStorage(updatedClients);
+      setClients(updatedClients);
       setSuccess(
         `Client ${newStatus === "active" ? "activated" : "deactivated"}!`,
       );
-      await fetchClients();
     } catch (err) {
-      const errorMsg =
-        err.response?.data?.message ||
-        err.message ||
-        "Failed to update client status.";
-      setError(errorMsg);
+      setError("Failed to update client status.");
     }
   };
 
@@ -660,6 +687,9 @@ export function ClientAdmin() {
                   <th style={{ padding: "12px 16px", fontWeight: "500", color: "var(--muted)" }}>
                     Status
                   </th>
+                  <th style={{ padding: "12px 16px", fontWeight: "500", color: "var(--muted)" }}>
+                    Access
+                  </th>
                   <th
                     style={{
                       padding: "12px 16px",
@@ -719,12 +749,29 @@ export function ClientAdmin() {
                         {client.status}
                       </span>
                     </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          padding: "4px 10px",
+                          borderRadius: "12px",
+                          background: client.hasAccess
+                            ? "rgba(51, 220, 174, 0.12)"
+                            : "rgba(255, 95, 95, 0.12)",
+                          color: client.hasAccess ? "var(--teal)" : "var(--red)",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {client.hasAccess ? "Granted" : "Revoked"}
+                      </span>
+                    </td>
                     <td style={{ padding: "12px 16px", textAlign: "right" }}>
                       <div
                         style={{
                           display: "flex",
                           gap: "6px",
                           justifyContent: "flex-end",
+                          flexWrap: "wrap",
                         }}
                       >
                         <button
@@ -745,30 +792,49 @@ export function ClientAdmin() {
                         >
                           <Edit size={15} />
                         </button>
-                        <button
-                          onClick={() =>
-                            handleDeactivate(
-                              client.id,
-                              client.name,
-                              client.status,
-                            )
-                          }
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--steel)",
-                            cursor: "pointer",
-                            padding: "4px",
-                            borderRadius: "4px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            transition: "opacity 130ms",
-                          }}
-                          title={client.status === "active" ? "Deactivate" : "Activate"}
-                        >
-                          <Power size={15} />
-                        </button>
+                        {client.hasAccess ? (
+                          <button
+                            onClick={() =>
+                              handleRevokeAccess(client.id, client.name)
+                            }
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "var(--beb)",
+                              cursor: "pointer",
+                              padding: "4px",
+                              borderRadius: "4px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "opacity 130ms",
+                            }}
+                            title="Revoke access"
+                          >
+                            <Power size={15} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              handleRestoreAccess(client.id, client.name)
+                            }
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "var(--teal)",
+                              cursor: "pointer",
+                              padding: "4px",
+                              borderRadius: "4px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "opacity 130ms",
+                            }}
+                            title="Restore access"
+                          >
+                            <Power size={15} />
+                          </button>
+                        )}
                         <button
                           onClick={() =>
                             handleDeleteClient(client.id, client.name)
