@@ -500,7 +500,7 @@ export function SiteKits({ canEdit = true }) {
                   flex: 1,
                   padding: "10px 16px",
                   background: isSubmitting ? "var(--muted)" : "linear-gradient(to right, var(--amber), var(--amber2))",
-                  color: "#06111f",
+                  color: "#114e9e",
                   border: "none",
                   borderRadius: 8,
                   fontWeight: 600,

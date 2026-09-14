@@ -50,9 +50,10 @@ export const loginUser = async (credentials) => {
 
     const { token, user } = response.data;
 
-    // Save authentic credentials and JWT token to local storage
+    // Save JWT token only (no user data)
     if (token) localStorage.setItem("token", token);
-    if (user) localStorage.setItem("user", JSON.stringify(user));
+    // Remove user object from localStorage - don't expose PII
+    localStorage.removeItem("user");
 
     return response.data;
   } catch (error) {
@@ -143,9 +144,20 @@ export const getFieldOpsReports = async (jobId) => {
   return data;
 };
 
+/**
+ * Logout - Clear all stored credentials
+ */
+export const logout = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user"); // Already removed by login, but ensure it's gone
+  localStorage.removeItem("relay_clients");
+  localStorage.removeItem("relay_kits");
+};
+
 // Export full API interface wrapper
 export const api = {
   login: loginUser,
+  logout,
   changePassword,
   get: (endpoint, config) => axiosInstance.get(endpoint, config),
   post: (endpoint, payload, config) =>

@@ -35,8 +35,8 @@ export function LoginPage({ onLoginSuccess }) {
 
       const loggedInUser = {
         ...response.user,
-        username: response.user?.first_name || response.user?.email,
-        displayName: response.user?.first_name || response.user?.email,
+        username: response.user?.firstName || "User",
+        displayName: response.user?.firstName || "User",
         accessLevel: getAccessLevel(response.user)
       };
 

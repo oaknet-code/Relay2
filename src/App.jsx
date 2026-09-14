@@ -238,7 +238,6 @@ export default function App() {
             user?.displayName ||
             user?.username ||
             user?.first_name ||
-            user?.email ||
             "User",
 
           title:
@@ -246,7 +245,7 @@ export default function App() {
               ? "Full Access"
               : "Client View Only",
 
-          initials: (user?.displayName || user?.username || user?.email || "U")
+          initials: (user?.displayName || user?.username || "U")
             .slice(0, 2)
             .toUpperCase(),
         }}
