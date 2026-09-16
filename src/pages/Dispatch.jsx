@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { TypeIcon, Band } from '../components/ui';
 import { LINKS, SITES, TODAY, FLEET_VEHICLES } from '../data/mockData';
-import { getSiteKit, createDispatch, getDispatches } from '../services/api';
+import { getSiteKit, createDispatch, getDispatches, getGatePass } from '../services/api';
 
 // Picks a reasonable icon for a consumable line based on its model/name —
 // purely cosmetic, has no bearing on the actual decrement logic.
@@ -38,6 +38,7 @@ export function Dispatch({ assets, onDispatch }) {
   const [dispatchTime, setDispatchTime] = useState(null);
   const [dispatchError, setDispatchError] = useState(null);
   const [firing, setFiring] = useState(false);
+  const [gatePass, setGatePass] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,6 +138,16 @@ export function Dispatch({ assets, onDispatch }) {
       setKit(updatedKit); // reflects the decremented component quantities
       setWaybill(dispatch.waybillId);
       setDispatchTime(new Date(dispatch.dispatchedAt));
+
+      // Fetch full gate pass data
+      try {
+        const gp = await getGatePass(dispatch._id);
+        setGatePass(gp);
+      } catch (err) {
+        console.error("Failed to fetch gate pass:", err);
+        // Non-fatal — dispatch still succeeded
+      }
+
       onDispatch(serUnits.map(a => a.uid));
     } catch (err) {
       const details = err.response?.data?.details;
@@ -364,7 +375,7 @@ export function Dispatch({ assets, onDispatch }) {
             } : {})
           }}>
             {(waybill || dispatched) ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span className="pill" style={{ color: "var(--teal)", fontSize: 12, padding: "6px 12px" }}>
                     <FileText size={14} />
@@ -383,19 +394,19 @@ export function Dispatch({ assets, onDispatch }) {
                   <div>
                     <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Vehicle</div>
                     <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
-                      {selectedVehicle?.plate || 'KDB-118J'}
+                      {gatePass?.vehicle?.plate || selectedVehicle?.plate || 'KDB-118J'}
                     </div>
                     <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
-                      {selectedVehicle?.make || 'Toyota Hilux'} · {selectedVehicle?.type || 'Pickup'}
+                      {gatePass?.vehicle?.make || selectedVehicle?.make || 'Toyota Hilux'} · {gatePass?.vehicle?.type || selectedVehicle?.type || 'Pickup'}
                     </div>
                   </div>
                   <div>
                     <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Driver</div>
                     <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
-                      {selectedVehicle?.driver || 'D. Mwangi'}
+                      {gatePass?.driver?.name || selectedVehicle?.driver || 'D. Mwangi'}
                     </div>
                     <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
-                      {selectedVehicle?.phone || ''}
+                      {gatePass?.driver?.phone || selectedVehicle?.phone || ''}
                     </div>
                   </div>
                   <div>
@@ -408,6 +419,46 @@ export function Dispatch({ assets, onDispatch }) {
                     </div>
                   </div>
                 </div>
+                {gatePass && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    {gatePass.assets && gatePass.assets.length > 0 && (
+                      <div style={{
+                        padding: "12px 14px",
+                        background: "rgba(255,255,255,.02)",
+                        border: "1px solid var(--line)",
+                        borderRadius: 10
+                      }}>
+                        <div className="faint" style={{ fontSize: 10, marginBottom: 8, textTransform: "uppercase", fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
+                          Assets ({gatePass.assets.length})
+                        </div>
+                        {gatePass.assets.map((a, i) => (
+                          <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.assets.length - 1 ? 6 : 0 }}>
+                            <span style={{ fontWeight: 600 }}>{a.serial}</span>
+                            <div className="faint" style={{ fontSize: 10 }}>{a.type} · {a.model}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {gatePass.consumables && gatePass.consumables.length > 0 && (
+                      <div style={{
+                        padding: "12px 14px",
+                        background: "rgba(255,255,255,.02)",
+                        border: "1px solid var(--line)",
+                        borderRadius: 10
+                      }}>
+                        <div className="faint" style={{ fontSize: 10, marginBottom: 8, textTransform: "uppercase", fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
+                          Consumables ({gatePass.consumables.length})
+                        </div>
+                        {gatePass.consumables.map((c, i) => (
+                          <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.consumables.length - 1 ? 6 : 0 }}>
+                            <span style={{ fontWeight: 600 }}>{c.qty} {c.unit}</span>
+                            <div className="faint" style={{ fontSize: 10 }}>{c.type} · {c.model}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <>
