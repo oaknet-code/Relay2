@@ -267,6 +267,47 @@ export const allocateSiteKit = async (kitId) => {
 };
 
 /**
+ * Staging
+ */
+export const listStaging = async (params = {}) => {
+  const { data } = await axiosInstance.get("/api/staging", { params });
+  return data;
+};
+
+export const listAwaitingStaging = async (params = {}) => {
+  const { data } = await axiosInstance.get("/api/staging/awaiting", { params });
+  return data;
+};
+
+export const checkInKit = async (kitId) => {
+  const { data } = await axiosInstance.post(`/api/staging/${kitId}/checkin`);
+  return data;
+};
+
+export const updateQA = async (stagingRecordId, qaData) => {
+  const { data } = await axiosInstance.patch(
+    `/api/staging/${stagingRecordId}/qa`,
+    qaData
+  );
+  return data;
+};
+
+export const completeStaging = async (stagingRecordId) => {
+  const { data } = await axiosInstance.post(
+    `/api/staging/${stagingRecordId}/complete`
+  );
+  return data;
+};
+
+/**
+ * Gate Pass (Dispatch)
+ */
+export const getGatePass = async (dispatchId) => {
+  const { data } = await axiosInstance.get(`/api/dispatch/${dispatchId}/gatepass`);
+  return data;
+};
+
+/**
  * Logout - Clear all stored credentials
  */
 export const logout = () => {
@@ -315,9 +356,16 @@ export const api = {
   deleteSiteKit,
   allocateSiteKit,
   importSiteKitsExcel,
+  // Staging
+  listStaging,
+  listAwaitingStaging,
+  checkInKit,
+  updateQA,
+  completeStaging,
   // Dispatch
   createDispatch,
   getDispatches,
+  getGatePass,
   // Field Ops
   syncFieldOps,
   getFieldOpsReports,

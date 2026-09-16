@@ -1,166 +1,200 @@
-import React, { useState } from 'react';
-import { ShieldCheck, CheckCircle2, Circle, ArrowRight, Lock, Cpu, Signal, Navigation, Activity } from 'lucide-react';
-import { TypeIcon, Band } from '../components/ui';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, CheckCircle2, Loader2, AlertTriangle } from 'lucide-react';
+import { listAwaitingStaging, listStaging, checkInKit, updateQA, completeStaging } from '../services/api';
 
-const CHECK_DEFS = [
-  { key: "firmware", label: "Firmware updated", sub: "Image v9.4.2 flashed + verified", ico: Cpu },
-  { key: "frequency", label: "Frequency pre-set", sub: "Tx/Rx channel plan loaded", ico: Signal },
-  { key: "ip", label: "IP address configured", sub: "Mgmt + radio interface", ico: Navigation },
-  { key: "bench", label: "Back-to-back bench test passed", sub: "BER + Rx level within spec", ico: Activity },
+const QA_TESTS = [
+  { name: "Firmware Check", key: "firmware" },
+  { name: "Frequency Set", key: "frequency" },
+  { name: "IP Config", key: "ip" },
+  { name: "Bench Test", key: "bench" },
 ];
 
-export function StagingBay({ assets, setAssets }) {
-  const queue = assets.filter(a => a.checks && a.state === "stocked");
-  const promoted = assets.filter(a => a.checks && a.state !== "stocked");
+export function StagingBay() {
+  const [awaiting, setAwaiting] = useState([]);
+  const [staging, setStaging] = useState([]);
+  const [activeKit, setActiveKit] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const toggle = (uid, key) => {
-    setAssets(prev => prev.map(a => 
-      a.uid === uid 
-        ? { ...a, checks: { ...a.checks, [key]: !a.checks[key] } }
-        : a
-    ));
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [awaitingData, stagingData] = await Promise.all([
+        listAwaitingStaging(),
+        listStaging(),
+      ]);
+      setAwaiting(awaitingData);
+      setStaging(stagingData.filter(s => s.status !== "STAGED"));
+    } catch (err) {
+      setError("Failed to load staging data");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const promote = (uid) => {
-    setAssets(prev => prev.map(a => 
-      a.uid === uid 
-        ? { ...a, state: "staged", loc: "Staging Bay 01 · READY", cfg: a.cfg || 3 }
-        : a
-    ));
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleCheckIn = async (kit) => {
+    try {
+      const stagingRecord = await checkInKit(kit.kitId);
+      setActiveKit(stagingRecord);
+      await loadData();
+    } catch (err) {
+      setError(err.response?.data?.message || "Check-in failed");
+    }
   };
 
-  const allDone = (c) => CHECK_DEFS.every(d => c[d.key]);
+  const handleCompleteStaging = async () => {
+    if (!activeKit) return;
+    try {
+      await completeStaging(activeKit._id);
+      setActiveKit(null);
+      await loadData();
+    } catch (err) {
+      setError(err.response?.data?.message || "Staging completion failed");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: "center", padding: 60 }}>
+        <Loader2 size={24} className="spin" style={{ marginBottom: 12 }} />
+        <div>Loading staging data…</div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="view-head">
         <span className="tagchip">
           <ShieldCheck size={11} />
-          Step 2 · Pre-Staging & Configuration Gates
+          Step 2 · Staging & QA
         </span>
         <h2>Staging Bay</h2>
         <p>
-          Microwave units cannot ship raw. Every gate below must pass before an asset transitions 
-          from <b>Stocked → Staged</b> — shipping the wrong frequency to a tower risks regulatory 
-          violation and a wasted crew climb.
+          Configure and test equipment before dispatch. Check in a kit, run QA checklist, and mark as staged.
         </p>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-        {queue.map(a => {
-          const done = allDone(a.checks);
-          const n = CHECK_DEFS.filter(d => a.checks[d.key]).length;
-          
-          return (
-            <div className="panel" key={a.uid}>
-              <div className="panel-h">
-                <span style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 8,
-                  display: "grid",
-                  placeItems: "center",
-                  background: "var(--panel3)",
-                  color: "var(--amber)"
-                }}>
-                  <TypeIcon t={a.type} />
-                </span>
-                <div>
-                  <h3 style={{ lineHeight: 1.1 }}>{a.serial}</h3>
-                  <div className="faint mono" style={{ fontSize: 10 }}>
-                    {a.model} · End {a.end} · {a.link}
-                  </div>
-                </div>
-                <span className="ph-r" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Band b={a.band} />
-                </span>
-              </div>
-              
-              <div className="panel-b">
-                <div style={{ 
-                  display: "flex", 
-                  justifyContent: "space-between", 
-                  alignItems: "center", 
-                  marginBottom: 11 
-                }}>
-                  <span className="faint" style={{ fontSize: 11 }}>
-                    {n}/{CHECK_DEFS.length} gates passed
-                  </span>
-                  <div style={{ flex: 1, maxWidth: 140, marginLeft: 12 }}>
-                    <div className="prog">
-                      <span style={{ width: `${n / 4 * 100}%` }} />
+      {error && (
+        <div style={{
+          marginBottom: 20,
+          padding: "12px 14px",
+          background: "rgba(255,90,90,.1)",
+          border: "1px solid rgba(255,90,90,.25)",
+          borderRadius: 10,
+          color: "var(--red)",
+          fontSize: 13,
+          display: "flex",
+          gap: 8,
+          alignItems: "center"
+        }}>
+          <AlertTriangle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {!activeKit && (
+        <div>
+          <h3 style={{ marginBottom: 16 }}>Kits Awaiting Staging</h3>
+          {awaiting.length === 0 ? (
+            <div className="panel" style={{ textAlign: "center", padding: 40, color: "var(--faint)" }}>
+              No kits awaiting staging
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))" }}>
+              {awaiting.map(kit => (
+                <div key={kit._id} className="panel">
+                  <div className="panel-h">
+                    <div>
+                      <h3>{kit.kitId}</h3>
+                      <div className="faint" style={{ fontSize: 11 }}>{kit.name}</div>
                     </div>
                   </div>
-                </div>
-                
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {CHECK_DEFS.map(d => (
-                    <button 
-                      key={d.key} 
-                      className={`chk ${a.checks[d.key] ? "on" : ""}`} 
-                      onClick={() => toggle(a.uid, d.key)}
+                  <div className="panel-b">
+                    <div style={{ marginBottom: 12, fontSize: 12 }}>
+                      <strong>{kit.components?.length || 0}</strong> components
+                    </div>
+                    <button
+                      className="btn teal"
+                      onClick={() => handleCheckIn(kit)}
+                      style={{ width: "100%" }}
                     >
-                      {a.checks[d.key] ? 
-                        <CheckCircle2 size={18} className="cbox" /> : 
-                        <Circle size={18} className="cbox" />
-                      }
-                      <div style={{ flex: 1 }}>
-                        <div className="ctxt">{d.label}</div>
-                        <div className="csub">{d.sub}</div>
-                      </div>
-                      <d.ico size={15} style={{ color: "var(--faint)" }} />
+                      Check In for Staging
                     </button>
-                  ))}
+                  </div>
                 </div>
-                
-                <button 
-                  className={`btn ${done ? "teal" : ""}`} 
-                  disabled={!done} 
-                  onClick={() => promote(a.uid)} 
-                  style={{ width: "100%", marginTop: 13, justifyContent: "center" }}
-                >
-                  {done ? 
-                    <><ArrowRight size={15} /> Promote to Staged for Site</> : 
-                    <><Lock size={14} /> Pass all gates to release</>
-                  }
-                </button>
-              </div>
+              ))}
             </div>
-          );
-        })}
-        
-        {queue.length === 0 && (
-          <div className="panel">
-            <div className="panel-b faint" style={{ textAlign: "center", padding: 28 }}>
-              Staging queue clear — all units released. ✓
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      {promoted.length > 0 && (
-        <div className="panel" style={{ marginTop: 16 }}>
+      {activeKit && (
+        <div className="panel" style={{ maxWidth: 600 }}>
           <div className="panel-h">
-            <CheckCircle2 size={15} style={{ color: "var(--teal)" }} />
-            <h3>Released this session</h3>
+            <div>
+              <h3>QA Checklist — {activeKit.kitId}</h3>
+              <div className="faint" style={{ fontSize: 11 }}>Checked in by staging team</div>
+            </div>
           </div>
           <div className="panel-b">
-            {promoted.map(a => (
-              <div 
-                key={a.uid} 
+            <div style={{ marginBottom: 16 }}>
+              {QA_TESTS.map(test => (
+                <label key={test.key} style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    defaultChecked={false}
+                    style={{ cursor: "pointer" }}
+                  />
+                  <span>{test.name}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="btn teal"
+                onClick={handleCompleteStaging}
+                style={{ flex: 1 }}
+              >
+                Complete Staging
+              </button>
+              <button
+                className="btn"
+                onClick={() => setActiveKit(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {staging.length > 0 && (
+        <div className="panel" style={{ marginTop: 20 }}>
+          <div className="panel-h">
+            <CheckCircle2 size={15} style={{ color: "var(--teal)" }} />
+            <h3>In Progress</h3>
+          </div>
+          <div className="panel-b">
+            {staging.map(record => (
+              <div
+                key={record._id}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 10,
-                  padding: "7px 0",
+                  justifyContent: "space-between",
+                  padding: "8px 0",
                   borderBottom: "1px solid var(--line)"
                 }}
               >
-                <CheckCircle2 size={15} style={{ color: "var(--teal)" }} />
-                <span className="mono" style={{ fontSize: 12 }}>{a.serial}</span>
-                <span className="muted" style={{ fontSize: 12 }}>{a.model}</span>
-                <span style={{ marginLeft: "auto" }}>
-                  <span className="pill" style={{ color: "var(--teal)" }}>Staged</span>
+                <span>{record.kitId}</span>
+                <span style={{ fontSize: 11, color: "var(--faint)" }}>
+                  {record.status === "CHECKED_IN" ? "Checked In" : "QA In Progress"}
                 </span>
               </div>
             ))}
