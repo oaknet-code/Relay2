@@ -66,6 +66,11 @@ export function Dispatch({ assets, onDispatch }) {
         const latest = records[0]; // API returns newest first
         setWaybill(latest.waybillId);
         setDispatchTime(new Date(latest.dispatchedAt));
+        // Also restore the full gate pass so the Download button reappears
+        // after a refresh — not just the waybill id/time.
+        getGatePass(latest._id)
+          .then(gp => { if (!cancelled) setGatePass(gp); })
+          .catch(() => { /* non-fatal — download button just stays hidden */ });
       })
       .catch(() => { /* non-fatal — form just stays available */ });
     return () => { cancelled = true; };

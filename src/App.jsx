@@ -161,7 +161,7 @@ export default function App() {
         return <MissionControl assets={assets} />;
 
       case "links":
-        return <LinksView />;
+        return <LinksView canEdit={hasWriteAccess} />;
 
       case "inventory":
         return <InventoryView />;
