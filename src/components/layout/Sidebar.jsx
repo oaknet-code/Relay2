@@ -1,5 +1,6 @@
 import React from "react";
 import { RadioTower, LogOut, Settings, X } from "lucide-react";
+import { NAV_GROUPS } from "../../utils/navigation";
 
 export function Sidebar({
   navigation,
@@ -63,20 +64,29 @@ export function Sidebar({
           </button>
         </div>
 
-        <div className="nav-label">Rollout pipeline</div>
-        <div className="nav">
-          {navigation.map((n) => (
-            <button
-              key={n.id}
-              className={`nav-item ${currentTab === n.id ? "on" : ""}`}
-              onClick={() => onTabChange(n.id)}
-            >
-              <n.ico size={17} className="ni-ico" />
-              {n.label}
-              <span className="nav-step">{n.step}</span>
-            </button>
-          ))}
-        </div>
+        {NAV_GROUPS.map((group) => {
+          const items = navigation.filter((n) => n.group === group.id);
+          if (items.length === 0) return null;
+
+          return (
+            <React.Fragment key={group.id}>
+              <div className="nav-label">{group.label}</div>
+              <div className="nav">
+                {items.map((n) => (
+                  <button
+                    key={n.id}
+                    className={`nav-item ${currentTab === n.id ? "on" : ""}`}
+                    onClick={() => onTabChange(n.id)}
+                  >
+                    <n.ico size={17} className="ni-ico" />
+                    {n.label}
+                    {n.step && <span className="nav-step">{n.step}</span>}
+                  </button>
+                ))}
+              </div>
+            </React.Fragment>
+          );
+        })}
 
         <div className="sb-foot">
           <div className="avatar">{user?.initials || "WM"}</div>
