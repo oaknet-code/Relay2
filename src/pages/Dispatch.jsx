@@ -40,6 +40,7 @@ export function Dispatch({ assets, onDispatch }) {
   const [firing, setFiring] = useState(false);
   const [gatePass, setGatePass] = useState(null);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,21 +169,54 @@ export function Dispatch({ assets, onDispatch }) {
     });
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadGatePass = async (format) => {
     if (!gatePass) return;
     setDownloadingPDF(true);
+    setShowDownloadMenu(false);
     try {
-      const blob = await downloadGatePassPDF(gatePass.dispatch);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `gatepass-${gatePass.gatePassNumber}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      let blob, filename;
+
+      if (format === 'pdf') {
+        blob = await downloadGatePassPDF(gatePass.dispatch);
+        filename = `gatepass-${gatePass.gatePassNumber}.pdf`;
+      } else if (format === 'json') {
+        blob = new Blob([JSON.stringify(gatePass, null, 2)], { type: 'application/json' });
+        filename = `gatepass-${gatePass.gatePassNumber}.json`;
+      } else if (format === 'csv') {
+        // Simple CSV export: header row + asset/consumable rows
+        let csv = 'Gate Pass Report\n';
+        csv += `Gate Pass Number,${gatePass.gatePassNumber}\n`;
+        csv += `Kit ID,${gatePass.kitId}\n`;
+        csv += `Link ID,${gatePass.linkId || 'N/A'}\n`;
+        csv += `Vehicle,${gatePass.vehicle?.plate || 'N/A'}\n`;
+        csv += `Driver,${gatePass.driver?.name || 'N/A'}\n`;
+        csv += `Dispatched At,${new Date(gatePass.dispatchedAt).toISOString()}\n`;
+        csv += '\nASSETS\n';
+        csv += 'Serial,Type,Model\n';
+        (gatePass.assets || []).forEach(a => {
+          csv += `"${a.serial}","${a.type}","${a.model}"\n`;
+        });
+        csv += '\nCONSUMABLES\n';
+        csv += 'Type,Model,Qty,Unit\n';
+        (gatePass.consumables || []).forEach(c => {
+          csv += `"${c.type}","${c.model}",${c.qty},"${c.unit}"\n`;
+        });
+        blob = new Blob([csv], { type: 'text/csv' });
+        filename = `gatepass-${gatePass.gatePassNumber}.csv`;
+      }
+
+      if (blob && filename) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
     } catch (err) {
-      setDispatchError("Failed to download gate pass PDF");
+      setDispatchError(`Failed to download gate pass as ${format.toUpperCase()}`);
       console.error(err);
     } finally {
       setDownloadingPDF(false);
@@ -404,18 +438,87 @@ export function Dispatch({ assets, onDispatch }) {
                     Gate pass {waybill || "GP-2207"} generated
                   </span>
                   {gatePass && (
-                    <button
-                      className="btn sm teal"
-                      onClick={handleDownloadPDF}
-                      disabled={downloadingPDF}
-                      style={{ marginLeft: "auto" }}
-                    >
-                      {downloadingPDF ? (
-                        <><Loader2 size={13} className="spin" /> Downloading...</>
-                      ) : (
-                        <><FileText size={13} /> Download PDF</>
+                    <div style={{ marginLeft: "auto", position: "relative" }}>
+                      <button
+                        className="btn sm teal"
+                        onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                        disabled={downloadingPDF}
+                      >
+                        {downloadingPDF ? (
+                          <><Loader2 size={13} className="spin" /> Downloading...</>
+                        ) : (
+                          <><FileText size={13} /> Download ({showDownloadMenu ? '↑' : '↓'})</>
+                        )}
+                      </button>
+                      {showDownloadMenu && !downloadingPDF && (
+                        <div style={{
+                          position: "absolute",
+                          top: "100%",
+                          right: 0,
+                          marginTop: 6,
+                          background: "var(--bg)",
+                          border: "1px solid var(--line)",
+                          borderRadius: 8,
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                          zIndex: 100,
+                          minWidth: 140
+                        }}>
+                          <button
+                            onClick={() => handleDownloadGatePass('pdf')}
+                            style={{
+                              width: "100%",
+                              padding: "10px 14px",
+                              textAlign: "left",
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              color: "var(--ink)",
+                              borderBottom: "1px solid var(--line)"
+                            }}
+                            onMouseOver={(e) => e.target.style.background = "rgba(51, 220, 174, 0.08)"}
+                            onMouseOut={(e) => e.target.style.background = "transparent"}
+                          >
+                            📄 PDF (printable)
+                          </button>
+                          <button
+                            onClick={() => handleDownloadGatePass('csv')}
+                            style={{
+                              width: "100%",
+                              padding: "10px 14px",
+                              textAlign: "left",
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              color: "var(--ink)",
+                              borderBottom: "1px solid var(--line)"
+                            }}
+                            onMouseOver={(e) => e.target.style.background = "rgba(51, 220, 174, 0.08)"}
+                            onMouseOut={(e) => e.target.style.background = "transparent"}
+                          >
+                            📊 CSV (spreadsheet)
+                          </button>
+                          <button
+                            onClick={() => handleDownloadGatePass('json')}
+                            style={{
+                              width: "100%",
+                              padding: "10px 14px",
+                              textAlign: "left",
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              color: "var(--ink)"
+                            }}
+                            onMouseOver={(e) => e.target.style.background = "rgba(51, 220, 174, 0.08)"}
+                            onMouseOut={(e) => e.target.style.background = "transparent"}
+                          >
+                            { } JSON (data)
+                          </button>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   )}
                 </div>
                 <div style={{
