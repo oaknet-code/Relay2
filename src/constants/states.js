@@ -17,12 +17,35 @@ export const BAND_COLORS = {
   "E-band 80 GHz": "var(--beb)"
 };
 
+// Map backend asset/link status enums to UI display values
+export const STATUS_TO_UI = {
+  STOCKED: "stocked",
+  ALLOCATED: "stocked",
+  STAGING: "staged",
+  QA_PASSED: "staged",
+  STAGED: "staged",
+  DISPATCHED: "dispatched",
+  IN_TRANSIT: "dispatched",
+  ARRIVED: "dispatched",
+  FIELD_INSTALLATION: "installed",
+  INSTALLED: "installed",
+  COMMISSIONED: "installed",
+  LIVE: "installed",
+  MAINTENANCE: "stocked",
+  RETIRED: "retired",
+};
+
 export const LINK_STATUS = {
-  live: { label: "Live", c: "var(--teal)" },
-  staged: { label: "Staged · Ready", c: "var(--violet)" },
-  bom_incomplete: { label: "BOM Incomplete", c: "var(--red)" },
-  dispatched: { label: "Dispatched", c: "var(--amber)" },
-  staging: { label: "In Staging", c: "var(--blue)" }
+  PLANNED: { label: "Planned", c: "var(--steel)" },
+  KIT_ASSIGNED: { label: "Kit Assigned", c: "var(--blue)" },
+  STAGING: { label: "Staging", c: "var(--blue)" },
+  DISPATCHED: { label: "Dispatched", c: "var(--amber)" },
+  IN_TRANSIT: { label: "In Transit", c: "var(--amber)" },
+  INSTALLING: { label: "Installing", c: "var(--violet)" },
+  INSTALLED: { label: "Installed", c: "var(--teal)" },
+  COMMISSIONED: { label: "Commissioned", c: "var(--teal)" },
+  LIVE: { label: "Live", c: "var(--teal)" },
+  MAINTENANCE: { label: "Maintenance", c: "var(--amber2)" }
 };
 
 export const USER_ROLES = {

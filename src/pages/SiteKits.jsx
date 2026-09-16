@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Package, Plus, Search, Filter, Eye, Wrench, Upload, Loader2,
-  AlertTriangle, CheckCircle2, Trash2, Edit, X, ChevronDown, ChevronUp
+  AlertTriangle, CheckCircle2, Trash2, Edit, X, ChevronDown, ChevronUp, Zap
 } from 'lucide-react';
 import { Band, StatePill, Dot } from '../components/ui';
-import { getSiteKits, importSiteKitsExcel } from '../services/api';
+import { getSiteKits, createSiteKit, updateSiteKit, deleteSiteKit, allocateSiteKit, importSiteKitsExcel, getLinks } from '../services/api';
 
 function timeAgo(dateStr) {
   if (!dateStr) return "—";
@@ -20,16 +20,20 @@ function timeAgo(dateStr) {
 
 function fromApiKit(k) {
   return {
-    id: k.kitId || k.id,
+    id: k._id,
+    kitId: k.kitId,
     name: k.name,
     band: k.band,
     status: k.status,
-    sites: k.sites || [],
+    linkId: k.link?._id,
+    linkName: k.link?.linkId,
     components: (k.components || []).map(c => ({
+      _id: c._id,
       type: c.type,
       model: c.model,
-      qty: c.qtyRequired || c.qty,
-      available: c.qtyAvailable || c.available,
+      qtyRequired: c.qtyRequired,
+      qtyAvailable: c.qtyAvailable || 0,
+      sourceType: c.sourceType || "consumable",
     })),
     lastUpdated: timeAgo(k.updatedAt || k.createdAt),
     createdAt: k.createdAt || new Date().toISOString().split("T")[0],
@@ -37,10 +41,12 @@ function fromApiKit(k) {
 }
 
 const KIT_STATUS = {
-  ready: { label: "Ready", c: "var(--teal)" },
-  incomplete: { label: "Incomplete", c: "var(--red)" },
-  pending: { label: "Pending Parts", c: "var(--amber)" },
-  dispatched: { label: "Dispatched", c: "var(--violet)" }
+  DRAFT: { label: "Draft", c: "var(--steel)" },
+  READY_FOR_STAGING: { label: "Ready for Staging", c: "var(--teal)" },
+  STAGING: { label: "Staging", c: "var(--blue)" },
+  STAGED: { label: "Staged", c: "var(--violet)" },
+  DISPATCHED: { label: "Dispatched", c: "var(--amber)" },
+  INSTALLED: { label: "Installed", c: "var(--teal)" }
 };
 
 export function SiteKits({ canEdit = true }) {
@@ -48,6 +54,7 @@ export function SiteKits({ canEdit = true }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [kits, setKits] = useState([]);
+  const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -59,49 +66,25 @@ export function SiteKits({ canEdit = true }) {
 
   const [formData, setFormData] = useState({
     name: "",
-    band: "4GHz",
-    status: "incomplete",
-    sites: "",
-    components: [{ type: "IDU", model: "", qty: 0, available: 0 }],
+    band: "",
+    linkId: "",
+    components: [{ type: "IDU", model: "", qtyRequired: 0, sourceType: "consumable" }],
   });
-
-  const loadKitsFromStorage = () => {
-    try {
-      const stored = localStorage.getItem("relay_kits");
-      return stored ? JSON.parse(stored) : [];
-    } catch (e) {
-      console.error("Failed to load kits from storage:", e);
-      return [];
-    }
-  };
-
-  const saveKitsToStorage = (kitsToSave) => {
-    try {
-      localStorage.setItem("relay_kits", JSON.stringify(kitsToSave));
-    } catch (e) {
-      console.error("Failed to save kits to storage:", e);
-    }
-  };
 
   const loadKits = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Try to load from API first
-      try {
-        const data = await getSiteKits();
-        const normalizedKits = data.map(fromApiKit);
-        setKits(normalizedKits);
-        saveKitsToStorage(normalizedKits);
-      } catch (apiErr) {
-        // Fall back to localStorage
-        const storedKits = loadKitsFromStorage();
-        setKits(storedKits);
-      }
+      const [kitsData, linksData] = await Promise.all([
+        getSiteKits(),
+        getLinks()
+      ]);
+      const normalizedKits = kitsData.map(fromApiKit);
+      setKits(normalizedKits);
+      setLinks(linksData);
     } catch (err) {
       setError("Failed to load kits");
-      const storedKits = loadKitsFromStorage();
-      setKits(storedKits);
+      console.error("Load error:", err);
     } finally {
       setLoading(false);
     }
@@ -131,10 +114,9 @@ export function SiteKits({ canEdit = true }) {
   const resetForm = () => {
     setFormData({
       name: "",
-      band: "4GHz",
-      status: "incomplete",
-      sites: "",
-      components: [{ type: "IDU", model: "", qty: 0, available: 0 }],
+      band: "",
+      linkId: "",
+      components: [{ type: "IDU", model: "", qtyRequired: 0, sourceType: "consumable" }],
     });
     setEditingKit(null);
   };
@@ -153,9 +135,8 @@ export function SiteKits({ canEdit = true }) {
     setFormData({
       name: kit.name,
       band: kit.band,
-      status: kit.status,
-      sites: kit.sites.join(", "),
-      components: kit.components || [{ type: "IDU", model: "", qty: 0, available: 0 }],
+      linkId: kit.linkId || "",
+      components: kit.components || [{ type: "IDU", model: "", qtyRequired: 0, sourceType: "consumable" }],
     });
     setView("edit");
   };
@@ -171,7 +152,7 @@ export function SiteKits({ canEdit = true }) {
     const newComponents = [...formData.components];
     newComponents[index] = {
       ...newComponents[index],
-      [field]: field === "type" || field === "model" ? value : parseInt(value) || 0
+      [field]: (field === "type" || field === "model" || field === "sourceType") ? value : parseInt(value) || 0
     };
     setFormData(prev => ({
       ...prev,
@@ -182,7 +163,7 @@ export function SiteKits({ canEdit = true }) {
   const addComponent = () => {
     setFormData(prev => ({
       ...prev,
-      components: [...prev.components, { type: "ODU", model: "", qty: 0, available: 0 }]
+      components: [...prev.components, { type: "ODU", model: "", qtyRequired: 0, sourceType: "consumable" }]
     }));
   };
 
@@ -200,53 +181,60 @@ export function SiteKits({ canEdit = true }) {
     setSuccess("");
 
     try {
-      if (!formData.name || !formData.band) {
-        setError("Kit name and band are required");
+      if (!formData.name || !formData.band || !formData.linkId) {
+        setError("Kit name, band, and link are required");
         setIsSubmitting(false);
         return;
       }
 
-      let updatedKits;
-      const kitData = {
-        id: editingKit?.id || Date.now().toString(),
+      const kitPayload = {
         name: formData.name,
-        kitId: editingKit?.id || `KIT-${Date.now()}`,
         band: formData.band,
-        status: formData.status,
-        sites: formData.sites.split(",").map(s => s.trim()).filter(s => s),
-        components: formData.components,
-        createdAt: editingKit?.createdAt || new Date().toISOString().split("T")[0],
-        updatedAt: new Date().toISOString().split("T")[0],
+        linkId: formData.linkId,
+        components: formData.components.map(c => ({
+          type: c.type,
+          model: c.model,
+          qtyRequired: c.qtyRequired,
+          sourceType: c.sourceType,
+        })),
       };
 
       if (editingKit) {
-        updatedKits = kits.map(k => k.id === editingKit.id ? kitData : k);
+        await updateSiteKit(editingKit.kitId, kitPayload);
         setSuccess("Kit updated successfully!");
       } else {
-        updatedKits = [kitData, ...kits];
+        // Generate a unique kit ID
+        const timestamp = Date.now().toString().slice(-6);
+        kitPayload.kitId = `KIT-${timestamp}`;
+        await createSiteKit(kitPayload);
         setSuccess("Kit created successfully!");
       }
 
-      saveKitsToStorage(updatedKits);
-      setKits(updatedKits);
+      await loadKits();
       resetForm();
       setView("list");
     } catch (err) {
-      setError("Failed to save kit");
+      const message = err.response?.data?.message || "Failed to save kit";
+      setError(message);
+      console.error("Submit error:", err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteKit = (kitId, kitName) => {
-    if (!window.confirm(`Are you sure you want to delete kit "${kitName}"? This cannot be undone.`)) {
+  const handleDeleteKit = async (kit) => {
+    if (!window.confirm(`Are you sure you want to delete kit "${kit.name}"? This cannot be undone.`)) {
       return;
     }
 
-    const updatedKits = kits.filter(k => k.id !== kitId);
-    saveKitsToStorage(updatedKits);
-    setKits(updatedKits);
-    setSuccess("Kit deleted successfully!");
+    try {
+      await deleteSiteKit(kit.kitId);
+      await loadKits();
+      setSuccess("Kit deleted successfully!");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to delete kit");
+      console.error("Delete error:", err);
+    }
   };
 
   const filteredKits = kits.filter(kit => {
@@ -343,44 +331,40 @@ export function SiteKits({ canEdit = true }) {
                   className="form-input"
                   value={formData.band}
                   onChange={(e) => handleFormChange("band", e.target.value)}
+                  required
                 >
-                  <option value="4GHz">4 GHz</option>
-                  <option value="6GHz">6 GHz</option>
-                  <option value="8GHz">8 GHz</option>
-                  <option value="11GHz">11 GHz</option>
-                  <option value="13GHz">13 GHz</option>
-                  <option value="15GHz">15 GHz</option>
+                  <option value="">— Select Band —</option>
+                  <option value="4 GHz">4 GHz</option>
+                  <option value="6 GHz">6 GHz</option>
+                  <option value="8 GHz">8 GHz</option>
+                  <option value="11 GHz">11 GHz</option>
+                  <option value="13 GHz">13 GHz</option>
+                  <option value="15 GHz">15 GHz</option>
+                  <option value="18 GHz">18 GHz</option>
+                  <option value="23 GHz">23 GHz</option>
                 </select>
               </div>
 
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 6, color: "var(--muted)" }}>
-                  Status
+                  Link *
                 </label>
                 <select
                   className="form-input"
-                  value={formData.status}
-                  onChange={(e) => handleFormChange("status", e.target.value)}
+                  value={formData.linkId}
+                  onChange={(e) => handleFormChange("linkId", e.target.value)}
+                  required
                 >
-                  <option value="ready">Ready</option>
-                  <option value="incomplete">Incomplete</option>
-                  <option value="pending">Pending Parts</option>
-                  <option value="dispatched">Dispatched</option>
+                  <option value="">— Select Link —</option>
+                  {links
+                    .filter(l => !editingKit || l._id === editingKit.linkId || l.status === "PLANNED")
+                    .map(l => (
+                      <option key={l._id} value={l._id}>
+                        {l.linkId} {l.status === "KIT_ASSIGNED" && editingKit?.linkId !== l._id ? "(has kit)" : ""}
+                      </option>
+                    ))}
                 </select>
               </div>
-            </div>
-
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 6, color: "var(--muted)" }}>
-                Sites (comma-separated)
-              </label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g. Site A, Site B, Site C"
-                value={formData.sites}
-                onChange={(e) => handleFormChange("sites", e.target.value)}
-              />
             </div>
 
             <div>
@@ -419,7 +403,7 @@ export function SiteKits({ canEdit = true }) {
                 {formData.components.map((comp, idx) => (
                   <div key={idx} style={{
                     display: "grid",
-                    gridTemplateColumns: "120px 1fr 80px 80px 40px",
+                    gridTemplateColumns: "100px 1fr 100px 80px 40px",
                     gap: 8,
                     alignItems: "flex-end",
                     padding: 12,
@@ -435,9 +419,8 @@ export function SiteKits({ canEdit = true }) {
                     >
                       <option value="IDU">IDU</option>
                       <option value="ODU">ODU</option>
-                      <option value="Dish">Dish</option>
-                      <option value="Cable">Cable</option>
-                      <option value="Connector">Connector</option>
+                      <option value="DISH">DISH</option>
+                      <option value="OTHER">Other</option>
                     </select>
 
                     <input
@@ -449,23 +432,23 @@ export function SiteKits({ canEdit = true }) {
                       style={{ fontSize: 12 }}
                     />
 
-                    <input
-                      type="number"
+                    <select
                       className="form-input"
-                      placeholder="Qty"
-                      min="0"
-                      value={comp.qty}
-                      onChange={(e) => handleComponentChange(idx, "qty", e.target.value)}
+                      value={comp.sourceType}
+                      onChange={(e) => handleComponentChange(idx, "sourceType", e.target.value)}
                       style={{ fontSize: 12 }}
-                    />
+                    >
+                      <option value="serialized">Serialized</option>
+                      <option value="consumable">Consumable</option>
+                    </select>
 
                     <input
                       type="number"
                       className="form-input"
-                      placeholder="Available"
+                      placeholder="Qty Req'd"
                       min="0"
-                      value={comp.available}
-                      onChange={(e) => handleComponentChange(idx, "available", e.target.value)}
+                      value={comp.qtyRequired}
+                      onChange={(e) => handleComponentChange(idx, "qtyRequired", e.target.value)}
                       style={{ fontSize: 12 }}
                     />
 
@@ -674,7 +657,7 @@ export function SiteKits({ canEdit = true }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <Band band={kit.band} />
                 <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                  {kit.sites.length > 0 ? kit.sites.join(" ⟷ ") : "No sites"}
+                  {kit.linkName || "No link assigned"}
                 </div>
               </div>
 
@@ -693,15 +676,15 @@ export function SiteKits({ canEdit = true }) {
                       borderBottom: i < kit.components.length - 1 ? "1px solid var(--line)" : "none"
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <Dot c={comp.available >= comp.qty ? "var(--teal)" : "var(--red)"} />
+                        <Dot c={comp.qtyAvailable >= comp.qtyRequired ? "var(--teal)" : "var(--red)"} />
                         <span style={{ fontFamily: "var(--mono)" }}>{comp.type}</span>
                         <span>{comp.model}</span>
                       </div>
                       <div style={{
                         fontFamily: "var(--mono)",
-                        color: comp.available >= comp.qty ? "var(--teal)" : "var(--red)"
+                        color: comp.qtyAvailable >= comp.qtyRequired ? "var(--teal)" : "var(--red)"
                       }}>
-                        {comp.available}/{comp.qty}
+                        {comp.qtyAvailable}/{comp.qtyRequired}
                       </div>
                     </div>
                   ))}
@@ -731,7 +714,7 @@ export function SiteKits({ canEdit = true }) {
                       </button>
                       <button
                         className="btn sm"
-                        onClick={() => handleDeleteKit(kit.id, kit.name)}
+                        onClick={() => handleDeleteKit(kit)}
                         style={{ background: "rgba(255,95,95,.15)", color: "var(--red)" }}
                       >
                         <Trash2 size={14} />

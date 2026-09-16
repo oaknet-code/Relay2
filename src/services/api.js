@@ -145,6 +145,128 @@ export const getFieldOpsReports = async (jobId) => {
 };
 
 /**
+ * Inventory — Assets
+ */
+export const getAssets = async (params = {}) => {
+  const { data } = await axiosInstance.get("/api/inventory/assets", { params });
+  return data;
+};
+
+export const getAsset = async (id) => {
+  const { data } = await axiosInstance.get(`/api/inventory/assets/${id}`);
+  return data;
+};
+
+export const createAsset = async (payload) => {
+  const { data } = await axiosInstance.post("/api/inventory/assets", payload);
+  return data;
+};
+
+export const updateAsset = async (id, payload) => {
+  const { data } = await axiosInstance.put(`/api/inventory/assets/${id}`, payload);
+  return data;
+};
+
+export const updateAssetStatus = async (id, status, reason) => {
+  const { data } = await axiosInstance.patch(`/api/inventory/assets/${id}/status`, {
+    status,
+    reason,
+  });
+  return data;
+};
+
+export const deleteAsset = async (id) => {
+  const { data } = await axiosInstance.delete(`/api/inventory/assets/${id}`);
+  return data;
+};
+
+export const getAssetAudit = async (id) => {
+  const { data } = await axiosInstance.get(`/api/inventory/assets/${id}/audit`);
+  return data;
+};
+
+/**
+ * Inventory — Consumables
+ */
+export const getConsumables = async (params = {}) => {
+  const { data } = await axiosInstance.get("/api/inventory/consumables", { params });
+  return data;
+};
+
+export const createConsumable = async (payload) => {
+  const { data } = await axiosInstance.post("/api/inventory/consumables", payload);
+  return data;
+};
+
+export const updateConsumable = async (id, payload) => {
+  const { data } = await axiosInstance.put(`/api/inventory/consumables/${id}`, payload);
+  return data;
+};
+
+export const restockConsumable = async (id, delta) => {
+  const { data } = await axiosInstance.patch(`/api/inventory/consumables/${id}/stock`, {
+    delta,
+  });
+  return data;
+};
+
+/**
+ * Links
+ */
+export const getLinks = async (params = {}) => {
+  const { data } = await axiosInstance.get("/api/links", { params });
+  return data;
+};
+
+export const getLink = async (linkId) => {
+  const { data } = await axiosInstance.get(`/api/links/${linkId}`);
+  return data;
+};
+
+export const createLink = async (payload) => {
+  const { data } = await axiosInstance.post("/api/links", payload);
+  return data;
+};
+
+export const updateLink = async (linkId, payload) => {
+  const { data } = await axiosInstance.put(`/api/links/${linkId}`, payload);
+  return data;
+};
+
+export const updateLinkStatus = async (linkId, status) => {
+  const { data } = await axiosInstance.patch(`/api/links/${linkId}/status`, { status });
+  return data;
+};
+
+export const deleteLink = async (linkId) => {
+  const { data } = await axiosInstance.delete(`/api/links/${linkId}`);
+  return data;
+};
+
+/**
+ * Site Kits — new write operations
+ */
+export const createSiteKit = async (payload) => {
+  const { data } = await axiosInstance.post("/api/sitekits", payload);
+  return data;
+};
+
+export const updateSiteKit = async (kitId, payload) => {
+  const { data } = await axiosInstance.put(`/api/sitekits/${kitId}`, payload);
+  return data;
+};
+
+export const deleteSiteKit = async (kitId) => {
+  const { data } = await axiosInstance.delete(`/api/sitekits/${kitId}`);
+  return data;
+};
+
+export const allocateSiteKit = async (kitId) => {
+  const { data } = await axiosInstance.post(`/api/sitekits/${kitId}/allocate`);
+  return data;
+};
+
+/**
  * Logout - Clear all stored credentials
  */
 export const logout = () => {
@@ -165,11 +287,38 @@ export const api = {
   put: (endpoint, payload, config) =>
     axiosInstance.put(endpoint, payload, config),
   delete: (endpoint, config) => axiosInstance.delete(endpoint, config),
+  // Assets
+  getAssets,
+  getAsset,
+  createAsset,
+  updateAsset,
+  updateAssetStatus,
+  deleteAsset,
+  getAssetAudit,
+  // Consumables
+  getConsumables,
+  createConsumable,
+  updateConsumable,
+  restockConsumable,
+  // Links
+  getLinks,
+  getLink,
+  createLink,
+  updateLink,
+  updateLinkStatus,
+  deleteLink,
+  // Site Kits
   getSiteKits,
   getSiteKit,
+  createSiteKit,
+  updateSiteKit,
+  deleteSiteKit,
+  allocateSiteKit,
   importSiteKitsExcel,
+  // Dispatch
   createDispatch,
   getDispatches,
+  // Field Ops
   syncFieldOps,
   getFieldOpsReports,
 };

@@ -1,11 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Boxes } from 'lucide-react';
 import { StatePill, TypeIcon, Band } from '../components/ui';
+import { getAssets } from '../services/api';
+import { STATUS_TO_UI } from '../constants/states';
 
-export function InventoryView({ assets }) {
+export function InventoryView() {
+  const [assets, setAssets] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [fState, setFState] = useState("all");
   const [fType, setFType] = useState("all");
+
+  // Fetch assets from backend on mount
+  useEffect(() => {
+    const loadAssets = async () => {
+      try {
+        const data = await getAssets();
+        const mapped = data.map(a => ({
+          uid: a._id,
+          serial: a.serialNumber,
+          type: a.assetType,
+          model: a.model,
+          band: a.band,
+          state: STATUS_TO_UI[a.status] || "other",
+          loc: a.location,
+          link: a.link?.linkId || null,
+          tag: a.macAddress || null,
+        }));
+        setAssets(mapped);
+      } catch (err) {
+        console.error("Failed to load assets:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAssets();
+  }, []);
 
   const filteredAssets = assets.filter(a => {
     if (fState !== "all" && a.state !== fState) return false;
