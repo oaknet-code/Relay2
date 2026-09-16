@@ -307,6 +307,13 @@ export const getGatePass = async (dispatchId) => {
   return data;
 };
 
+export const downloadGatePassPDF = async (dispatchId) => {
+  const response = await axiosInstance.get(`/api/dispatch/${dispatchId}/gatepass/pdf`, {
+    responseType: "blob",
+  });
+  return response.data;
+};
+
 /**
  * Logout - Clear all stored credentials
  */
@@ -366,6 +373,7 @@ export const api = {
   createDispatch,
   getDispatches,
   getGatePass,
+  downloadGatePassPDF,
   // Field Ops
   syncFieldOps,
   getFieldOpsReports,

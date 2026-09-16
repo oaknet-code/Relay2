@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { TypeIcon, Band } from '../components/ui';
 import { LINKS, SITES, TODAY, FLEET_VEHICLES } from '../data/mockData';
-import { getSiteKit, createDispatch, getDispatches, getGatePass } from '../services/api';
+import { getSiteKit, createDispatch, getDispatches, getGatePass, downloadGatePassPDF } from '../services/api';
 
 // Picks a reasonable icon for a consumable line based on its model/name —
 // purely cosmetic, has no bearing on the actual decrement logic.
@@ -39,6 +39,7 @@ export function Dispatch({ assets, onDispatch }) {
   const [dispatchError, setDispatchError] = useState(null);
   const [firing, setFiring] = useState(false);
   const [gatePass, setGatePass] = useState(null);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,6 +166,27 @@ export function Dispatch({ assets, onDispatch }) {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit', hour12: false
     });
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!gatePass) return;
+    setDownloadingPDF(true);
+    try {
+      const blob = await downloadGatePassPDF(gatePass.dispatch);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gatepass-${gatePass.gatePassNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setDispatchError("Failed to download gate pass PDF");
+      console.error(err);
+    } finally {
+      setDownloadingPDF(false);
+    }
   };
 
   return (
@@ -381,6 +403,20 @@ export function Dispatch({ assets, onDispatch }) {
                     <FileText size={14} />
                     Gate pass {waybill || "GP-2207"} generated
                   </span>
+                  {gatePass && (
+                    <button
+                      className="btn sm teal"
+                      onClick={handleDownloadPDF}
+                      disabled={downloadingPDF}
+                      style={{ marginLeft: "auto" }}
+                    >
+                      {downloadingPDF ? (
+                        <><Loader2 size={13} className="spin" /> Downloading...</>
+                      ) : (
+                        <><FileText size={13} /> Download PDF</>
+                      )}
+                    </button>
+                  )}
                 </div>
                 <div style={{
                   display: "grid",
