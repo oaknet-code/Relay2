@@ -68,6 +68,43 @@ export const loginUser = async (credentials) => {
 export const login = loginUser;
 
 /**
+ * Client accounts (admin-only)
+ */
+export const registerClient = async ({ username, email, company }) => {
+  try {
+    const { data } = await axiosInstance.post("/api/auth/register-client", {
+      username,
+      email,
+      company: company || undefined,
+    });
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to create client account";
+    throw new Error(message);
+  }
+};
+
+export const listClients = async () => {
+  try {
+    const { data } = await axiosInstance.get("/api/auth/clients");
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to load client accounts";
+    throw new Error(message);
+  }
+};
+
+export const setClientStatus = async (id, status) => {
+  try {
+    const { data } = await axiosInstance.patch(`/api/auth/clients/${id}/status`, { status });
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to update client status";
+    throw new Error(message);
+  }
+};
+
+/**
  * Change Password
  */
 export const changePassword = async (passwordData) => {
@@ -329,6 +366,9 @@ export const api = {
   login: loginUser,
   logout,
   changePassword,
+  registerClient,
+  listClients,
+  setClientStatus,
   get: (endpoint, config) => axiosInstance.get(endpoint, config),
   post: (endpoint, payload, config) =>
     axiosInstance.post(endpoint, payload, config),
