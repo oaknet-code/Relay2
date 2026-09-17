@@ -454,6 +454,14 @@ export function SiteKits({ canEdit = true }) {
     return (
       <div className="view">
         <div className="view-head">
+          <button
+            className="btn sm"
+            onClick={() => { resetForm(); setView("list"); }}
+            style={{ marginBottom: 12 }}
+          >
+            <ArrowLeft size={13} />
+            Back to Site Kits
+          </button>
           <div className="tagchip">
             <Package size={11} />
             {editingKit ? "Edit Kit" : "New Kit"}
