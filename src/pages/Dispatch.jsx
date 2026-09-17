@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
+import {
   Truck, ScanLine, ListChecks, CheckCircle2, FileText, Plus, Minus,
-  Cable, ShieldCheck, Package, Boxes, User, Clock, ChevronDown, Loader2, AlertTriangle
+  Cable, ShieldCheck, Package, Boxes, User, Clock, ChevronDown, Loader2, AlertTriangle, ArrowLeft
 } from 'lucide-react';
 import { TypeIcon, Band } from '../components/ui';
 import { LINKS, SITES, TODAY, FLEET_VEHICLES } from '../data/mockData';
-import { getSiteKit, createDispatch, getDispatches, getGatePass, downloadGatePassPDF } from '../services/api';
+import { getSiteKits, getSiteKit, createDispatch, getDispatches, getGatePass, downloadGatePassPDF } from '../services/api';
 
 // Picks a reasonable icon for a consumable line based on its model/name —
 // purely cosmetic, has no bearing on the actual decrement logic.
@@ -17,18 +17,53 @@ function consumableIcon(label = "") {
   return Boxes;
 }
 
-// Convention: a link's kit is looked up as "KIT-<linkId>" (e.g. MW-02 -> KIT-MW-02).
-// Make sure your Site Kits Excel sheet's kit_id column follows this for the
-// kit that's meant to supply this link.
-const kitIdForLink = (linkId) => `KIT-${linkId}`;
+// A kit's id doesn't reliably tell you its link id verbatim — some kits are
+// stored as "KIT-MW01" (no hyphen) and others as "KIT-MW-02" (hyphenated) —
+// so this strips the "KIT-" prefix and inserts the hyphen back if it's missing,
+// to match the hyphenated link ids ("MW-01") used by the path-profile mock data.
+const linkIdFromKitId = (kitId = "") => {
+  const raw = kitId.replace(/^KIT-/i, "");
+  return raw.includes("-") ? raw : raw.replace(/^([A-Za-z]+)(\d+)$/, "$1-$2");
+};
 
 export function Dispatch({ assets, onDispatch }) {
-  const job = LINKS.find(l => l.id === "MW-02");
-  const serUnits = assets.filter(a => a.link === "MW-02" && (a.state === "staged" || a.state === "dispatched"));
+  // ── Kits ready for dispatch (status STAGED) ──────────────────
+  const [kits, setKits] = useState([]);
+  const [kitsLoading, setKitsLoading] = useState(true);
+  const [kitsError, setKitsError] = useState(null);
+  const [selectedKitId, setSelectedKitId] = useState(null); // e.g. "KIT-MW-02"
+
+  useEffect(() => {
+    let cancelled = false;
+    setKitsLoading(true);
+    setKitsError(null);
+    getSiteKits()
+      .then(all => {
+        if (cancelled) return;
+        // Some legacy records were written with lowercase statuses —
+        // compare case-insensitively so they still show up here.
+        setKits(all.filter(k => String(k.status).toUpperCase() === "STAGED"));
+      })
+      .catch(err => { if (!cancelled) setKitsError(err.response?.data?.message || "Couldn't load site kits."); })
+      .finally(() => { if (!cancelled) setKitsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectedKitSummary = kits.find(k => k.kitId === selectedKitId) || null;
+  const linkId = selectedKitId ? linkIdFromKitId(selectedKitId) : null;
+  // Falls back to a minimal stand-in when the link isn't in the path-profile
+  // mock data, so the rest of the page still has something to render against.
+  const job = linkId
+    ? (LINKS.find(l => l.id === linkId) || { id: linkId, a: null, b: null, band: selectedKitSummary?.band, path: null, dish: null })
+    : null;
+
+  const serUnits = linkId
+    ? assets.filter(a => a.link === linkId && (a.state === "staged" || a.state === "dispatched"))
+    : [];
   const dispatched = serUnits.length > 0 && serUnits.every(a => a.state === "dispatched");
 
   const [kit, setKit] = useState(null);
-  const [kitLoading, setKitLoading] = useState(true);
+  const [kitLoading, setKitLoading] = useState(false);
   const [kitError, setKitError] = useState(null);
 
   const [verified, setVerified] = useState({});
@@ -43,15 +78,16 @@ export function Dispatch({ assets, onDispatch }) {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
 
   useEffect(() => {
+    if (!selectedKitId) { setKit(null); return; }
     let cancelled = false;
     setKitLoading(true);
     setKitError(null);
-    getSiteKit(kitIdForLink(job.id))
+    getSiteKit(selectedKitId)
       .then(data => { if (!cancelled) setKit(data); })
-      .catch(err => { if (!cancelled) setKitError(err.response?.data?.message || "Couldn't load this link's kit."); })
+      .catch(err => { if (!cancelled) setKitError(err.response?.data?.message || "Couldn't load this kit."); })
       .finally(() => { if (!cancelled) setKitLoading(false); });
     return () => { cancelled = true; };
-  }, [job.id]);
+  }, [selectedKitId]);
 
   // If this link was already dispatched in a previous session, the server
   // still knows even after a page refresh wipes local component state —
@@ -59,8 +95,9 @@ export function Dispatch({ assets, onDispatch }) {
   // of re-presenting the form (which would just get rejected as
   // out-of-stock anyway).
   useEffect(() => {
+    if (!linkId) return;
     let cancelled = false;
-    getDispatches({ linkId: job.id })
+    getDispatches({ linkId })
       .then(records => {
         if (cancelled || !records.length) return;
         const latest = records[0]; // API returns newest first
@@ -74,7 +111,7 @@ export function Dispatch({ assets, onDispatch }) {
       })
       .catch(() => { /* non-fatal — form just stays available */ });
     return () => { cancelled = true; };
-  }, [job.id]);
+  }, [linkId]);
 
   // Available vehicles: exclude those in maintenance
   const availableVehicles = useMemo(
@@ -112,6 +149,20 @@ export function Dispatch({ assets, onDispatch }) {
   // line is no longer required to enable the button.
   const anySelected = serUnits.some(a => verified[a.uid]) || consReq.some(c => (counts[c.k] || 0) > 0);
   const ready = !!kit && anySelected && !!selectedVehicle && !dispatched;
+
+  const changeKit = () => {
+    setSelectedKitId(null);
+    setKit(null);
+    setKitError(null);
+    setVerified({});
+    setCounts({});
+    setWaybill(null);
+    setSelectedVehicleId('');
+    setDispatchTime(null);
+    setDispatchError(null);
+    setGatePass(null);
+    setShowDownloadMenu(false);
+  };
 
   const fire = async () => {
     if (!kit) return;
@@ -233,26 +284,112 @@ export function Dispatch({ assets, onDispatch }) {
     }
   };
 
+  // ── Step 1: pick which staged kit to dispatch ────────────────
+  if (!selectedKitId) {
+    return (
+      <div>
+        <div className="view-head">
+          <span className="tagchip">
+            <Truck size={11} />
+            Step 3 · Dispatch
+          </span>
+          <h2>Dispatch</h2>
+          <p>
+            Pick a kit that's staged and ready to go — scan/count its items, assign a vehicle,
+            and generate its waybill &amp; gate pass.
+          </p>
+        </div>
+
+        {kitsLoading && (
+          <div style={{ textAlign: "center", padding: 60, color: "var(--faint)" }}>
+            <Loader2 size={24} className="spin" style={{ marginBottom: 12 }} />
+            <div style={{ fontSize: 12 }}>Loading staged kits…</div>
+          </div>
+        )}
+
+        {!kitsLoading && kitsError && (
+          <div style={{
+            textAlign: "center", padding: 40, color: "var(--red)",
+            background: "rgba(255,90,90,.05)", border: "1px solid rgba(255,90,90,.25)", borderRadius: 14
+          }}>
+            <AlertTriangle size={24} style={{ marginBottom: 10 }} />
+            <div style={{ fontSize: 13 }}>{kitsError}</div>
+          </div>
+        )}
+
+        {!kitsLoading && !kitsError && (
+          kits.length === 0 ? (
+            <div className="panel" style={{ textAlign: "center", padding: 40, color: "var(--faint)" }}>
+              No kits are staged and ready for dispatch yet.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+              {kits.map(k => (
+                <div key={k._id} className="panel">
+                  <div className="panel-h">
+                    <Boxes size={15} className="ph-ico" />
+                    <div>
+                      <h3>{k.kitId}</h3>
+                      <div className="faint" style={{ fontSize: 11 }}>{k.name}</div>
+                    </div>
+                    <span className="ph-r" style={{ marginLeft: "auto" }}>
+                      <Band b={k.band} />
+                    </span>
+                  </div>
+                  <div className="panel-b">
+                    <div style={{ marginBottom: 12, fontSize: 12 }}>
+                      <strong>{k.components?.length || 0}</strong> components
+                    </div>
+                    <button className="btn amber" style={{ width: "100%" }} onClick={() => setSelectedKitId(k.kitId)}>
+                      <Truck size={14} />
+                      Dispatch this kit
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+      </div>
+    );
+  }
+
+  // ── Step 2: scan/count/generate for the selected kit ─────────
   return (
     <div>
       <div className="view-head">
+        <button
+          className="btn sm"
+          onClick={changeKit}
+          style={{ marginBottom: 12 }}
+        >
+          <ArrowLeft size={13} />
+          Change kit
+        </button>
         <span className="tagchip">
           <Truck size={11} />
           Step 3 · Dynamic BOM Pick-List
         </span>
         <h2>Dispatch · {job.id}</h2>
-        <p>
-          Pick-list auto-populated from the path profile for{" "}
-          <b>{SITES[job.a].name} → {SITES[job.b].name}</b> ({job.path}) — a long hop, 
-          so the engineering BOM specifies <b>{job.dish}</b> dishes. High-value units are{" "}
-          <b>scanned to verify</b>; consumables are <b>counted to verify</b>.
-        </p>
+        {job.a && job.b ? (
+          <p>
+            Pick-list auto-populated from the path profile for{" "}
+            <b>{SITES[job.a].name} → {SITES[job.b].name}</b> ({job.path}) — a long hop,
+            so the engineering BOM specifies <b>{job.dish}</b> dishes. High-value units are{" "}
+            <b>scanned to verify</b>; consumables are <b>counted to verify</b>.
+          </p>
+        ) : (
+          <p>
+            Pick-list for <b>{selectedKitSummary?.name || job.id}</b>. High-value units are{" "}
+            <b>scanned to verify</b>; consumables are <b>counted to verify</b>.
+          </p>
+        )}
       </div>
 
       {kitLoading && (
         <div style={{ textAlign: "center", padding: 60, color: "var(--faint)" }}>
           <Loader2 size={24} className="spin" style={{ marginBottom: 12 }} />
-          <div style={{ fontSize: 12 }}>Loading kit {kitIdForLink(job.id)}…</div>
+          <div style={{ fontSize: 12 }}>Loading kit {selectedKitId}…</div>
         </div>
       )}
 
@@ -263,9 +400,6 @@ export function Dispatch({ assets, onDispatch }) {
         }}>
           <AlertTriangle size={24} style={{ marginBottom: 10 }} />
           <div style={{ fontSize: 13 }}>{kitError}</div>
-          <div className="faint" style={{ fontSize: 11.5, marginTop: 6 }}>
-            Import a Site Kits sheet with kit_id "{kitIdForLink(job.id)}" first.
-          </div>
         </div>
       )}
 
@@ -276,13 +410,13 @@ export function Dispatch({ assets, onDispatch }) {
           <h3>{kit.name}</h3>
           <Band b={job.band} />
           <span className="ph-r" style={{ marginLeft: "auto" }}>
-            {(dispatched || waybill) ? 
-              "Gate pass issued" : 
+            {(dispatched || waybill) ?
+              "Gate pass issued" :
               `${serN}/${serUnits.length} scanned · ${consReq.filter(c => (counts[c.k] || 0) >= c.req).length}/${consReq.length} counted`
             }
           </span>
         </div>
-        
+
         <div className="panel-b">
           <div className="split">
             <div>
@@ -316,8 +450,11 @@ export function Dispatch({ assets, onDispatch }) {
                   </div>
                 );
               })}
+              {serUnits.length === 0 && (
+                <div className="faint" style={{ fontSize: 11.5 }}>No serialized units staged for this link.</div>
+              )}
             </div>
-            
+
             <div>
               <div className="up faint" style={{ fontSize: 10, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
                 <ListChecks size={13} /> Count to verify · consumables
@@ -564,7 +701,7 @@ export function Dispatch({ assets, onDispatch }) {
                       {dispatchTime ? fmtTime(dispatchTime) : TODAY}
                     </div>
                     <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
-                      {SITES[job.a].name} → {SITES[job.b].name}
+                      {job.a && job.b ? `${SITES[job.a].name} → ${SITES[job.b].name}` : job.id}
                     </div>
                   </div>
                 </div>
