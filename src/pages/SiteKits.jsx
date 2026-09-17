@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Package, Plus, Search, Filter, Eye, Wrench, Upload, Loader2,
-  AlertTriangle, CheckCircle2, Trash2, Edit, X, ChevronDown, ChevronUp, Zap
+  AlertTriangle, CheckCircle2, Trash2, Edit, X, ChevronDown, ChevronUp, Zap,
+  ArrowLeft, Truck
 } from 'lucide-react';
 import { Band, StatePill, Dot } from '../components/ui';
-import { getSiteKits, createSiteKit, updateSiteKit, deleteSiteKit, allocateSiteKit, importSiteKitsExcel, getLinks } from '../services/api';
+import { getSiteKits, createSiteKit, updateSiteKit, deleteSiteKit, allocateSiteKit, importSiteKitsExcel, getLinks, checkInKit } from '../services/api';
 
 function timeAgo(dateStr) {
   if (!dateStr) return "—";
@@ -42,12 +43,41 @@ function fromApiKit(k) {
 
 const KIT_STATUS = {
   DRAFT: { label: "Draft", c: "var(--steel)" },
-  READY_FOR_STAGING: { label: "Ready for Staging", c: "var(--teal)" },
+  READY_FOR_STAGING: { label: "Awaiting Staging", c: "var(--teal)" },
   STAGING: { label: "Staging", c: "var(--blue)" },
   STAGED: { label: "Staged", c: "var(--violet)" },
   DISPATCHED: { label: "Dispatched", c: "var(--amber)" },
   INSTALLED: { label: "Installed", c: "var(--teal)" }
 };
+
+function ComponentsTable({ components }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {components.map((comp, i) => (
+        <div key={i} style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "6px 0",
+          fontSize: 11,
+          borderBottom: i < components.length - 1 ? "1px solid var(--line)" : "none"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Dot c={comp.qtyAvailable >= comp.qtyRequired ? "var(--teal)" : "var(--red)"} />
+            <span style={{ fontFamily: "var(--mono)" }}>{comp.type}</span>
+            <span>{comp.model}</span>
+          </div>
+          <div style={{
+            fontFamily: "var(--mono)",
+            color: comp.qtyAvailable >= comp.qtyRequired ? "var(--teal)" : "var(--red)"
+          }}>
+            {comp.qtyAvailable}/{comp.qtyRequired}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function SiteKits({ canEdit = true }) {
   const [view, setView] = useState("list"); // list, create, edit
@@ -63,6 +93,11 @@ export function SiteKits({ canEdit = true }) {
   const [editingKit, setEditingKit] = useState(null);
   const [success, setSuccess] = useState("");
   const fileInputRef = useRef(null);
+
+  const [viewingKit, setViewingKit] = useState(null);
+  const [sendingToStaging, setSendingToStaging] = useState(false);
+  const [detailsError, setDetailsError] = useState("");
+  const [detailsSuccess, setDetailsSuccess] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -139,6 +174,31 @@ export function SiteKits({ canEdit = true }) {
       components: kit.components || [{ type: "IDU", model: "", qtyRequired: 0, sourceType: "consumable" }],
     });
     setView("edit");
+  };
+
+  const startView = (kit) => {
+    setError("");
+    setSuccess("");
+    setDetailsError("");
+    setDetailsSuccess("");
+    setViewingKit(kit);
+    setView("details");
+  };
+
+  const handleSendToStaging = async (kit) => {
+    setSendingToStaging(true);
+    setDetailsError("");
+    setDetailsSuccess("");
+    try {
+      await checkInKit(kit.kitId);
+      setDetailsSuccess("Kit checked in to the Staging Bay.");
+      setViewingKit(prev => (prev ? { ...prev, status: "STAGING" } : prev));
+      await loadKits();
+    } catch (err) {
+      setDetailsError(err.response?.data?.message || "Failed to send kit to staging.");
+    } finally {
+      setSendingToStaging(false);
+    }
   };
 
   const handleFormChange = (field, value) => {
@@ -245,6 +305,149 @@ export function SiteKits({ canEdit = true }) {
     const matchesFilter = filterStatus === "all" || kit.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
+
+  // DETAILS VIEW
+  if (view === "details" && viewingKit) {
+    const isAwaitingStaging = viewingKit.status === "READY_FOR_STAGING";
+    const isPastStaging = ["STAGING", "STAGED", "DISPATCHED", "INSTALLED"].includes(viewingKit.status);
+
+    return (
+      <div className="view">
+        <div className="view-head">
+          <div className="tagchip">
+            <Package size={11} />
+            Kit Details
+          </div>
+          <h2>{viewingKit.kitId}</h2>
+          <p>{viewingKit.name}</p>
+        </div>
+
+        <div style={{ maxWidth: "700px" }}>
+          {detailsError && (
+            <div style={{
+              marginBottom: 20,
+              padding: "12px 14px",
+              background: "rgba(255,90,90,.1)",
+              border: "1px solid rgba(255,90,90,.25)",
+              borderRadius: 10,
+              color: "var(--red)",
+              fontSize: 13,
+              display: "flex",
+              gap: 8,
+              alignItems: "flex-start"
+            }}>
+              <AlertTriangle size={16} style={{ marginTop: 1 }} />
+              <span>{detailsError}</span>
+            </div>
+          )}
+
+          {detailsSuccess && (
+            <div style={{
+              marginBottom: 20,
+              padding: "12px 14px",
+              background: "rgba(51,220,174,.1)",
+              border: "1px solid rgba(51,220,174,.25)",
+              borderRadius: 10,
+              color: "var(--teal)",
+              fontSize: 13,
+              display: "flex",
+              gap: 8,
+              alignItems: "center"
+            }}>
+              <CheckCircle2 size={16} />
+              <span>{detailsSuccess}</span>
+            </div>
+          )}
+
+          <div className="panel" style={{ marginBottom: 16 }}>
+            <div className="panel-h">
+              <Package size={16} className="ph-ico" />
+              <h3>Overview</h3>
+              <div className="ph-r">
+                <StatePill state={viewingKit.status} meta={KIT_STATUS} />
+              </div>
+            </div>
+            <div className="panel-b">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Band
+                  </div>
+                  <Band band={viewingKit.band} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Link
+                  </div>
+                  <div style={{ fontSize: 12.5 }}>{viewingKit.linkName || "No link assigned"}</div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                  Kit Components
+                </div>
+                <ComponentsTable components={viewingKit.components} />
+              </div>
+
+              {isAwaitingStaging && (
+                <div style={{
+                  padding: "12px 14px",
+                  borderRadius: 10,
+                  background: "rgba(51,220,174,.06)",
+                  border: "1px solid rgba(51,220,174,.25)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12
+                }}>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--teal)" }}>
+                      Awaiting Staging
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--faint)" }}>
+                      All components are stocked — this kit is ready to check in to the Staging Bay.
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <button
+                      className="btn sm"
+                      style={{ background: "var(--teal)", color: "#06111f", whiteSpace: "nowrap" }}
+                      disabled={sendingToStaging}
+                      onClick={() => handleSendToStaging(viewingKit)}
+                    >
+                      {sendingToStaging ? <Loader2 size={14} className="spin" /> : <Truck size={14} />}
+                      {sendingToStaging ? "Sending…" : "Send to Staging"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {viewingKit.status === "DRAFT" && (
+                <div style={{ fontSize: 11.5, color: "var(--faint)" }}>
+                  This kit is still in draft — every component needs enough stock allocated before it becomes eligible for staging.
+                </div>
+              )}
+
+              {isPastStaging && (
+                <div style={{ fontSize: 11.5, color: "var(--faint)" }}>
+                  This kit has already moved past staging — check the Staging Bay or Dispatch screens for next steps.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button
+            className="btn ghost"
+            onClick={() => { setView("list"); setViewingKit(null); }}
+          >
+            <ArrowLeft size={14} />
+            Back to Kits
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // CREATE/EDIT VIEW
   if (view === "create" || view === "edit") {
@@ -666,30 +869,7 @@ export function SiteKits({ canEdit = true }) {
                 <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                   Kit Components
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {kit.components.map((comp, i) => (
-                    <div key={i} style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "6px 0",
-                      fontSize: 11,
-                      borderBottom: i < kit.components.length - 1 ? "1px solid var(--line)" : "none"
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <Dot c={comp.qtyAvailable >= comp.qtyRequired ? "var(--teal)" : "var(--red)"} />
-                        <span style={{ fontFamily: "var(--mono)" }}>{comp.type}</span>
-                        <span>{comp.model}</span>
-                      </div>
-                      <div style={{
-                        fontFamily: "var(--mono)",
-                        color: comp.qtyAvailable >= comp.qtyRequired ? "var(--teal)" : "var(--red)"
-                      }}>
-                        {comp.qtyAvailable}/{comp.qtyRequired}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <ComponentsTable components={kit.components} />
               </div>
 
               <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center" }}>
@@ -699,6 +879,7 @@ export function SiteKits({ canEdit = true }) {
                 <div style={{ display: "flex", gap: 6 }}>
                   <button
                     className="btn ghost sm"
+                    onClick={() => startView(kit)}
                   >
                     <Eye size={14} />
                     View
