@@ -76,6 +76,7 @@ export function Dispatch({ assets, onDispatch }) {
   const [gatePass, setGatePass] = useState(null);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [showWaybillDetails, setShowWaybillDetails] = useState(false);
 
   useEffect(() => {
     if (!selectedKitId) { setKit(null); return; }
@@ -162,6 +163,7 @@ export function Dispatch({ assets, onDispatch }) {
     setDispatchError(null);
     setGatePass(null);
     setShowDownloadMenu(false);
+    setShowWaybillDetails(false);
   };
 
   const fire = async () => {
@@ -350,6 +352,197 @@ export function Dispatch({ assets, onDispatch }) {
             </div>
           )
         )}
+      </div>
+    );
+  }
+
+  // ── Waybill details screen ────────────────────────────────────
+  if (showWaybillDetails && (waybill || dispatched) && gatePass) {
+    return (
+      <div>
+        <div className="view-head">
+          <button
+            className="btn sm"
+            onClick={() => setShowWaybillDetails(false)}
+            style={{ marginBottom: 12 }}
+          >
+            <ArrowLeft size={13} />
+            Back to Dispatch
+          </button>
+          <span className="tagchip">
+            <FileText size={11} />
+            Waybill
+          </span>
+          <h2>Waybill · {gatePass.gatePassNumber}</h2>
+          <p>Gate pass for <b>{gatePass.kitId}</b> · {gatePass.linkId || job.id}</p>
+        </div>
+
+        <div className="panel" style={{ maxWidth: 760 }}>
+          <div className="panel-h">
+            <FileText size={15} className="ph-ico" />
+            <h3>{gatePass.gatePassNumber}</h3>
+            <div className="ph-r" style={{ marginLeft: "auto", position: "relative" }}>
+              <button
+                className="btn sm teal"
+                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                disabled={downloadingPDF}
+              >
+                {downloadingPDF ? (
+                  <><Loader2 size={13} className="spin" /> Downloading...</>
+                ) : (
+                  <><FileText size={13} /> Download ({showDownloadMenu ? '↑' : '↓'})</>
+                )}
+              </button>
+              {showDownloadMenu && !downloadingPDF && (
+                <div style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  marginTop: 6,
+                  background: "var(--bg)",
+                  border: "1px solid var(--line)",
+                  borderRadius: 8,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                  zIndex: 100,
+                  minWidth: 140
+                }}>
+                  <button
+                    onClick={() => handleDownloadGatePass('pdf')}
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      textAlign: "left",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      color: "var(--ink)",
+                      borderBottom: "1px solid var(--line)"
+                    }}
+                    onMouseOver={(e) => e.target.style.background = "rgba(51, 220, 174, 0.08)"}
+                    onMouseOut={(e) => e.target.style.background = "transparent"}
+                  >
+                    📄 PDF (printable)
+                  </button>
+                  <button
+                    onClick={() => handleDownloadGatePass('csv')}
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      textAlign: "left",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      color: "var(--ink)",
+                      borderBottom: "1px solid var(--line)"
+                    }}
+                    onMouseOver={(e) => e.target.style.background = "rgba(51, 220, 174, 0.08)"}
+                    onMouseOut={(e) => e.target.style.background = "transparent"}
+                  >
+                    📊 CSV (spreadsheet)
+                  </button>
+                  <button
+                    onClick={() => handleDownloadGatePass('json')}
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      textAlign: "left",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      color: "var(--ink)"
+                    }}
+                    onMouseOver={(e) => e.target.style.background = "rgba(51, 220, 174, 0.08)"}
+                    onMouseOut={(e) => e.target.style.background = "transparent"}
+                  >
+                    { } JSON (data)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="panel-b" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 12,
+              padding: "12px 14px",
+              background: "rgba(51, 220, 174, 0.04)",
+              border: "1px solid rgba(51, 220, 174, 0.18)",
+              borderRadius: 10
+            }}>
+              <div>
+                <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Vehicle</div>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
+                  {gatePass.vehicle?.plate || '—'}
+                </div>
+                <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
+                  {gatePass.vehicle?.make || ''} {gatePass.vehicle?.type ? `· ${gatePass.vehicle.type}` : ''}
+                </div>
+              </div>
+              <div>
+                <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Driver</div>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
+                  {gatePass.driver?.name || '—'}
+                </div>
+                <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
+                  {gatePass.driver?.phone || ''}
+                </div>
+              </div>
+              <div>
+                <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Issued</div>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
+                  {gatePass.dispatchedAt ? fmtTime(new Date(gatePass.dispatchedAt)) : (dispatchTime ? fmtTime(dispatchTime) : TODAY)}
+                </div>
+                <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
+                  {job.a && job.b ? `${SITES[job.a].name} → ${SITES[job.b].name}` : job.id}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {gatePass.assets && gatePass.assets.length > 0 && (
+                <div style={{
+                  padding: "12px 14px",
+                  background: "rgba(255,255,255,.02)",
+                  border: "1px solid var(--line)",
+                  borderRadius: 10
+                }}>
+                  <div className="faint" style={{ fontSize: 10, marginBottom: 8, textTransform: "uppercase", fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
+                    Assets ({gatePass.assets.length})
+                  </div>
+                  {gatePass.assets.map((a, i) => (
+                    <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.assets.length - 1 ? 6 : 0 }}>
+                      <span style={{ fontWeight: 600 }}>{a.serial}</span>
+                      <div className="faint" style={{ fontSize: 10 }}>{a.type} · {a.model}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {gatePass.consumables && gatePass.consumables.length > 0 && (
+                <div style={{
+                  padding: "12px 14px",
+                  background: "rgba(255,255,255,.02)",
+                  border: "1px solid var(--line)",
+                  borderRadius: 10
+                }}>
+                  <div className="faint" style={{ fontSize: 10, marginBottom: 8, textTransform: "uppercase", fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
+                    Consumables ({gatePass.consumables.length})
+                  </div>
+                  {gatePass.consumables.map((c, i) => (
+                    <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.consumables.length - 1 ? 6 : 0 }}>
+                      <span style={{ fontWeight: 600 }}>{c.qty} {c.unit}</span>
+                      <div className="faint" style={{ fontSize: 10 }}>{c.type} · {c.model}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -578,174 +771,21 @@ export function Dispatch({ assets, onDispatch }) {
             } : {})
           }}>
             {(waybill || dispatched) ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span className="pill" style={{ color: "var(--teal)", fontSize: 12, padding: "6px 12px" }}>
-                    <FileText size={14} />
-                    Gate pass {waybill || "GP-2207"} generated
-                  </span>
-                  {gatePass && (
-                    <div style={{ marginLeft: "auto", position: "relative" }}>
-                      <button
-                        className="btn sm teal"
-                        onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                        disabled={downloadingPDF}
-                      >
-                        {downloadingPDF ? (
-                          <><Loader2 size={13} className="spin" /> Downloading...</>
-                        ) : (
-                          <><FileText size={13} /> Download ({showDownloadMenu ? '↑' : '↓'})</>
-                        )}
-                      </button>
-                      {showDownloadMenu && !downloadingPDF && (
-                        <div style={{
-                          position: "absolute",
-                          top: "100%",
-                          right: 0,
-                          marginTop: 6,
-                          background: "var(--bg)",
-                          border: "1px solid var(--line)",
-                          borderRadius: 8,
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                          zIndex: 100,
-                          minWidth: 140
-                        }}>
-                          <button
-                            onClick={() => handleDownloadGatePass('pdf')}
-                            style={{
-                              width: "100%",
-                              padding: "10px 14px",
-                              textAlign: "left",
-                              background: "transparent",
-                              border: "none",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              color: "var(--ink)",
-                              borderBottom: "1px solid var(--line)"
-                            }}
-                            onMouseOver={(e) => e.target.style.background = "rgba(51, 220, 174, 0.08)"}
-                            onMouseOut={(e) => e.target.style.background = "transparent"}
-                          >
-                            📄 PDF (printable)
-                          </button>
-                          <button
-                            onClick={() => handleDownloadGatePass('csv')}
-                            style={{
-                              width: "100%",
-                              padding: "10px 14px",
-                              textAlign: "left",
-                              background: "transparent",
-                              border: "none",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              color: "var(--ink)",
-                              borderBottom: "1px solid var(--line)"
-                            }}
-                            onMouseOver={(e) => e.target.style.background = "rgba(51, 220, 174, 0.08)"}
-                            onMouseOut={(e) => e.target.style.background = "transparent"}
-                          >
-                            📊 CSV (spreadsheet)
-                          </button>
-                          <button
-                            onClick={() => handleDownloadGatePass('json')}
-                            style={{
-                              width: "100%",
-                              padding: "10px 14px",
-                              textAlign: "left",
-                              background: "transparent",
-                              border: "none",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              color: "var(--ink)"
-                            }}
-                            onMouseOver={(e) => e.target.style.background = "rgba(51, 220, 174, 0.08)"}
-                            onMouseOut={(e) => e.target.style.background = "transparent"}
-                          >
-                            { } JSON (data)
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
-                  gap: 12,
-                  padding: "12px 14px",
-                  background: "rgba(51, 220, 174, 0.04)",
-                  border: "1px solid rgba(51, 220, 174, 0.18)",
-                  borderRadius: 10
-                }}>
-                  <div>
-                    <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Vehicle</div>
-                    <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
-                      {gatePass?.vehicle?.plate || selectedVehicle?.plate || 'KDB-118J'}
-                    </div>
-                    <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
-                      {gatePass?.vehicle?.make || selectedVehicle?.make || 'Toyota Hilux'} · {gatePass?.vehicle?.type || selectedVehicle?.type || 'Pickup'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Driver</div>
-                    <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
-                      {gatePass?.driver?.name || selectedVehicle?.driver || 'D. Mwangi'}
-                    </div>
-                    <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
-                      {gatePass?.driver?.phone || selectedVehicle?.phone || ''}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Issued</div>
-                    <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
-                      {dispatchTime ? fmtTime(dispatchTime) : TODAY}
-                    </div>
-                    <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
-                      {job.a && job.b ? `${SITES[job.a].name} → ${SITES[job.b].name}` : job.id}
-                    </div>
-                  </div>
-                </div>
-                {gatePass && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    {gatePass.assets && gatePass.assets.length > 0 && (
-                      <div style={{
-                        padding: "12px 14px",
-                        background: "rgba(255,255,255,.02)",
-                        border: "1px solid var(--line)",
-                        borderRadius: 10
-                      }}>
-                        <div className="faint" style={{ fontSize: 10, marginBottom: 8, textTransform: "uppercase", fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
-                          Assets ({gatePass.assets.length})
-                        </div>
-                        {gatePass.assets.map((a, i) => (
-                          <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.assets.length - 1 ? 6 : 0 }}>
-                            <span style={{ fontWeight: 600 }}>{a.serial}</span>
-                            <div className="faint" style={{ fontSize: 10 }}>{a.type} · {a.model}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {gatePass.consumables && gatePass.consumables.length > 0 && (
-                      <div style={{
-                        padding: "12px 14px",
-                        background: "rgba(255,255,255,.02)",
-                        border: "1px solid var(--line)",
-                        borderRadius: 10
-                      }}>
-                        <div className="faint" style={{ fontSize: 10, marginBottom: 8, textTransform: "uppercase", fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
-                          Consumables ({gatePass.consumables.length})
-                        </div>
-                        {gatePass.consumables.map((c, i) => (
-                          <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.consumables.length - 1 ? 6 : 0 }}>
-                            <span style={{ fontWeight: 600 }}>{c.qty} {c.unit}</span>
-                            <div className="faint" style={{ fontSize: 10 }}>{c.type} · {c.model}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              gatePass ? (
+                <button
+                  className="pill"
+                  style={{ color: "var(--teal)", fontSize: 12, padding: "6px 12px", cursor: "pointer", border: "1px solid rgba(51,220,174,.35)", background: "rgba(51,220,174,.06)" }}
+                  onClick={() => setShowWaybillDetails(true)}
+                >
+                  <FileText size={14} />
+                  Gate pass {waybill} generated — View details
+                </button>
+              ) : (
+                <span className="pill" style={{ color: "var(--teal)", fontSize: 12, padding: "6px 12px" }}>
+                  <FileText size={14} />
+                  Gate pass {waybill || "GP-2207"} generated
+                </span>
+              )
             ) : (
               <>
                 <button className="btn amber" disabled={!ready || firing} onClick={fire}>
