@@ -192,6 +192,7 @@ export function SiteKits({ canEdit = true }) {
         band: formData.band,
         linkId: formData.linkId,
         components: formData.components.map(c => ({
+          _id: c._id,
           type: c.type,
           model: c.model,
           qtyRequired: c.qtyRequired,
