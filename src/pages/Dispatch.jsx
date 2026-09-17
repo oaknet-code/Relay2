@@ -105,8 +105,13 @@ export function Dispatch({ assets, onDispatch }) {
 
   const serDone = serUnits.length > 0 && serUnits.every(a => dispatched || verified[a.uid]);
   const consDone = consReq.length === 0 || consReq.every(c => (counts[c.k] || 0) >= c.req);
-  const ready = !!kit && serDone && consDone && !!selectedVehicle && !dispatched;
   const serN = serUnits.filter(a => dispatched || verified[a.uid]).length;
+
+  // Anything selected for dispatch — scanned units or counted consumables —
+  // is enough to raise a waybill/gate pass for. Full completion of every
+  // line is no longer required to enable the button.
+  const anySelected = serUnits.some(a => verified[a.uid]) || consReq.some(c => (counts[c.k] || 0) > 0);
+  const ready = !!kit && anySelected && !!selectedVehicle && !dispatched;
 
   const fire = async () => {
     if (!kit) return;
@@ -611,11 +616,11 @@ export function Dispatch({ assets, onDispatch }) {
                   {firing ? "Dispatching…" : "Generate Waybill & Gate Pass"}
                 </button>
                 <span className="faint" style={{ fontSize: 11.5 }}>
-                  {!selectedVehicle && serDone && consDone
-                    ? "Select a vehicle above to enable."
-                    : ready 
-                      ? "All lines verified — ready to seal manifest." 
-                      : "Verify every serialized + consumable line to enable."
+                  {!anySelected
+                    ? "Scan a unit or count a consumable to enable."
+                    : !selectedVehicle
+                      ? "Select a vehicle above to enable."
+                      : "Ready to seal manifest."
                   }
                 </span>
               </>
