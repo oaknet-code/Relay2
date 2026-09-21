@@ -20,3 +20,11 @@ export const getTokenClaims = () => {
 };
 
 export const getCurrentRole = () => getTokenClaims()?.role || null;
+
+// "warehouse_manager" -> "Warehouse Manager". The role claim is verified
+// (it's signed into the JWT), so it's safe to show as-is.
+export const formatRoleLabel = (role) => (
+  role
+    ? role.split("_").map(word => word[0].toUpperCase() + word.slice(1)).join(" ")
+    : null
+);

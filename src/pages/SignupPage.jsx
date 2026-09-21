@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { 
+import {
   RadioTower, Eye, EyeOff, ArrowRight, ShieldCheck
 } from "lucide-react";
+import { jwtDecode } from "jwt-decode";
 import { api } from "../services/api";
 
 export function LoginPage({ onLoginSuccess }) {
@@ -32,18 +33,21 @@ export function LoginPage({ onLoginSuccess }) {
         password: formData.password
       });
 
-      // Display-only fields (greeting, avatar initials). Deliberately drop
-      // `role` here — it must never end up in global state as a stand-in
-      // for authorization. Access is computed from the JWT's signed claims
-      // (see utils/access.js), not kept alongside this object.
-      const { role: _role, ...displayFields } = response.user || {};
+      const token = response.token;
+      if (!token) {
+        throw new Error("Login response did not include an authentication token.");
+      }
+
+      // Identity and role come exclusively from the signed JWT payload.
+      // response.user is unsigned JSON an attacker could alter in transit or
+      // in memory, so it is never used to build the logged-in identity.
+      const claims = jwtDecode(token);
       const loggedInUser = {
-        ...displayFields,
-        username: response.user?.firstName || "User",
-        displayName: response.user?.firstName || "User",
+        id: claims.id,
+        role: claims.role,
       };
 
-      onLoginSuccess?.(loggedInUser);
+      onLoginSuccess?.(token, loggedInUser);
     } catch (err) {
       setError(err.message || "Login failed. Check your email and password.");
     } finally {

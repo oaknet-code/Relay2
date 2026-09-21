@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { jwtDecode } from "jwt-decode";
 import { Layout } from "./components/layout";
 import { ChangePasswordModal } from "./components/layout/ChangePasswordModal";
 
@@ -17,6 +18,7 @@ import { AssetTracking } from "./pages/AssetTracking";
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
 import { canEdit, getAccessLevel, getAllowedNavigation } from "./utils/access";
+import { formatRoleLabel } from "./utils/auth";
 
 import { SEED_ASSETS, LINKS, POD_INIT } from "./data/mockData";
 
@@ -115,10 +117,22 @@ export default function App() {
   };
 
   /*
-   * Login
+   * Login — decode the JWT directly rather than trusting whatever identity
+   * object the login screen hands up. The token is the only source of
+   * truth; any `user` object built from the unsigned login response body
+   * is ignored here.
    */
-  const onLoginSuccess = (newUser) => {
-    setUser(newUser);
+  const onLoginSuccess = (token) => {
+    if (!token) return;
+
+    let claims;
+    try {
+      claims = jwtDecode(token);
+    } catch {
+      return;
+    }
+
+    setUser({ id: claims.id, role: claims.role });
     setCurrentView("dashboard");
   };
 
@@ -236,18 +250,14 @@ export default function App() {
         liveLinks={liveLinks}
         totalLinks={LINKS.length}
         user={{
-          name:
-            user?.displayName ||
-            user?.username ||
-            user?.first_name ||
-            "User",
+          name: formatRoleLabel(user?.role) || "User",
 
           title:
             getAccessLevel() === "full"
               ? "Full Access"
               : "Client View Only",
 
-          initials: (user?.displayName || user?.username || "U")
+          initials: (formatRoleLabel(user?.role) || "U")
             .slice(0, 2)
             .toUpperCase(),
         }}
