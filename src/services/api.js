@@ -3,35 +3,30 @@ import axios from "axios";
 // Base URL from environment variable or fallback to local development
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-// Create an Axios instance with base configuration
+// Create an Axios instance with base configuration. withCredentials so the
+// browser sends/receives the HttpOnly "token" cookie set by
+// /api/auth/login — there is no token in JS-accessible storage to attach
+// as an Authorization header anymore.
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Request Interceptor: Automatically attach JWT token to headers if available
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
-
-// Response Interceptor: on 401 (invalid/expired token, or account
-// suspended/deleted), clear the stale token and bounce back to login
-// rather than leaving the user stuck looking at a generic error.
+// Response Interceptor: on 401 (invalid/expired session, or account
+// suspended/deleted) on an already-authenticated request, bounce back to
+// login rather than leaving the user stuck looking at a generic error.
+// Excludes /login (a wrong password is also a 401 — show the form's error,
+// don't reload) and /me (a 401 there just means "not logged in yet", the
+// normal state on first load — reloading would loop forever).
+const AUTH_PROBE_PATHS = ["/api/auth/login", "/api/auth/me"];
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+    const isAuthProbe = AUTH_PROBE_PATHS.some((p) => error.config?.url?.includes(p));
+    if (error.response?.status === 401 && !isAuthProbe) {
       if (typeof window !== "undefined") window.location.reload();
     }
     return Promise.reject(error);
@@ -39,7 +34,8 @@ axiosInstance.interceptors.response.use(
 );
 
 /**
- * Real login handler targeting your backend database
+ * Real login handler targeting your backend database. The token is set as
+ * an HttpOnly cookie by the server — never present in this response body.
  */
 export const loginUser = async (credentials) => {
   try {
@@ -47,13 +43,6 @@ export const loginUser = async (credentials) => {
       email: credentials.email || credentials.username,
       password: credentials.password,
     });
-
-    const { token, user } = response.data;
-
-    // Save JWT token only (no user data)
-    if (token) localStorage.setItem("token", token);
-    // Remove user object from localStorage - don't expose PII
-    localStorage.removeItem("user");
 
     return response.data;
   } catch (error) {
@@ -66,6 +55,17 @@ export const loginUser = async (credentials) => {
 
 // Aliased export for compatibility
 export const login = loginUser;
+
+/**
+ * The authenticated session's own profile, including role. This is the
+ * only place the frontend can learn the current role now that it isn't in
+ * the (HttpOnly) token or the login response body — it's re-derived
+ * server-side on every call via the `protect` middleware.
+ */
+export const getMe = async () => {
+  const { data } = await axiosInstance.get("/api/auth/me");
+  return data;
+};
 
 /**
  * Client accounts (admin-only)
@@ -352,11 +352,16 @@ export const downloadGatePassPDF = async (dispatchId) => {
 };
 
 /**
- * Logout - Clear all stored credentials
+ * Logout — the token is an HttpOnly cookie, so client-side JS can't read or
+ * clear it itself; the server has to. Best-effort: still clear local
+ * leftovers even if the request fails (e.g. session already expired).
  */
-export const logout = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user"); // Already removed by login, but ensure it's gone
+export const logout = async () => {
+  try {
+    await axiosInstance.post("/api/auth/logout");
+  } catch {
+    // ignore — proceed to clear local state regardless
+  }
   localStorage.removeItem("relay_clients");
   localStorage.removeItem("relay_kits");
 };
@@ -364,6 +369,7 @@ export const logout = () => {
 // Export full API interface wrapper
 export const api = {
   login: loginUser,
+  getMe,
   logout,
   changePassword,
   registerClient,

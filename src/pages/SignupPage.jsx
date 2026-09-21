@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   RadioTower, Eye, EyeOff, ArrowRight, ShieldCheck
 } from "lucide-react";
-import { jwtDecode } from "jwt-decode";
 import { api } from "../services/api";
 
 export function LoginPage({ onLoginSuccess }) {
@@ -28,26 +27,19 @@ export function LoginPage({ onLoginSuccess }) {
     setError("");
 
     try {
-      const response = await api.login({
+      // The server sets the session token as an HttpOnly cookie — it's
+      // never in this response body, so there's nothing here to read or
+      // trust for identity. Fetch the authenticated profile instead: it's
+      // derived server-side from the cookie via the `protect` middleware,
+      // not from anything the client supplied.
+      await api.login({
         email: formData.email,
         password: formData.password
       });
 
-      const token = response.token;
-      if (!token) {
-        throw new Error("Login response did not include an authentication token.");
-      }
+      const { user } = await api.getMe();
 
-      // Identity and role come exclusively from the signed JWT payload.
-      // response.user is unsigned JSON an attacker could alter in transit or
-      // in memory, so it is never used to build the logged-in identity.
-      const claims = jwtDecode(token);
-      const loggedInUser = {
-        id: claims.id,
-        role: claims.role,
-      };
-
-      onLoginSuccess?.(token, loggedInUser);
+      onLoginSuccess?.(user);
     } catch (err) {
       setError(err.message || "Login failed. Check your email and password.");
     } finally {

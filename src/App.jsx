@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { jwtDecode } from "jwt-decode";
 import { Layout } from "./components/layout";
 import { ChangePasswordModal } from "./components/layout/ChangePasswordModal";
 
@@ -18,7 +17,6 @@ import { AssetTracking } from "./pages/AssetTracking";
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
 import { canEdit, getAccessLevel, getAllowedNavigation } from "./utils/access";
-import { formatRoleLabel } from "./utils/auth";
 
 import { SEED_ASSETS, LINKS, POD_INIT } from "./data/mockData";
 
@@ -39,6 +37,7 @@ export default function App() {
   const [pod, setPod] = useState(POD_INIT);
 
   const [user, setUser] = useState(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
@@ -61,12 +60,30 @@ export default function App() {
   }, []);
 
   /*
-   * Permissions and navigation — derived from the signed JWT claims
-   * (see utils/access.js), never from the login response body or `user`
-   * state, since that JSON is unsigned and can be tampered with client-side.
+   * Session persists in an HttpOnly cookie now, so a page refresh doesn't
+   * have to force a fresh login — ask the server who (if anyone) the
+   * cookie belongs to.
    */
-  const hasWriteAccess = canEdit();
-  const navigation = getAllowedNavigation(NAV_CONFIG);
+  useEffect(() => {
+    api
+      .getMe()
+      .then(({ user: me }) => {
+        setUser(me);
+        setCurrentView("dashboard");
+      })
+      .catch(() => {
+        // No valid session — stay on the login screen.
+      })
+      .finally(() => setIsCheckingSession(false));
+  }, []);
+
+  /*
+   * Permissions and navigation — derived from the authenticated `/me`
+   * profile (see utils/access.js), never from the login response body,
+   * which is unsigned and can be tampered with client-side.
+   */
+  const hasWriteAccess = canEdit(user);
+  const navigation = getAllowedNavigation(NAV_CONFIG, user);
 
   /*
    * Keep current tab valid when permissions/navigation change
@@ -117,30 +134,20 @@ export default function App() {
   };
 
   /*
-   * Login — decode the JWT directly rather than trusting whatever identity
-   * object the login screen hands up. The token is the only source of
-   * truth; any `user` object built from the unsigned login response body
-   * is ignored here.
+   * Login — `user` here comes from GET /api/auth/me (see LoginPage), which
+   * is derived server-side from the HttpOnly session cookie, not from
+   * anything the client supplied.
    */
-  const onLoginSuccess = (token) => {
-    if (!token) return;
-
-    let claims;
-    try {
-      claims = jwtDecode(token);
-    } catch {
-      return;
-    }
-
-    setUser({ id: claims.id, role: claims.role });
+  const onLoginSuccess = (loggedInUser) => {
+    setUser(loggedInUser);
     setCurrentView("dashboard");
   };
 
   /*
    * Logout
    */
-  const onLogout = () => {
-    api.logout();
+  const onLogout = async () => {
+    await api.logout();
     setUser(null);
     setCurrentView("login");
   };
@@ -160,6 +167,14 @@ export default function App() {
    * Current navigation item
    */
   const currentViewObj = navigation.find((item) => item.id === currentTab);
+
+  /*
+   * Don't flash the login form while we're still asking the server whether
+   * the session cookie is valid.
+   */
+  if (isCheckingSession) {
+    return null;
+  }
 
   /*
    * Login screen
@@ -250,16 +265,14 @@ export default function App() {
         liveLinks={liveLinks}
         totalLinks={LINKS.length}
         user={{
-          name: formatRoleLabel(user?.role) || "User",
+          name: user?.firstName || "User",
 
           title:
-            getAccessLevel() === "full"
+            getAccessLevel(user) === "full"
               ? "Full Access"
               : "Client View Only",
 
-          initials: (formatRoleLabel(user?.role) || "U")
-            .slice(0, 2)
-            .toUpperCase(),
+          initials: (user?.firstName || "U").slice(0, 2).toUpperCase(),
         }}
         onLogout={onLogout}
         onChangePassword={() => setIsChangePasswordOpen(true)}

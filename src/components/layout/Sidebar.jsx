@@ -1,7 +1,6 @@
 import React from "react";
 import { RadioTower, LogOut, Settings, X } from "lucide-react";
 import { NAV_GROUPS } from "../../utils/navigation";
-import { getCurrentRole } from "../../utils/auth";
 
 export function Sidebar({
   navigation,
@@ -13,25 +12,21 @@ export function Sidebar({
   isOpen,
   onClose,
 }) {
-  // Clean logout handler
-  const handleLogoutClick = (e) => {
+  // Logout clears an HttpOnly cookie, which only the server can do — wait
+  // for that request to finish before navigating away, or the browser can
+  // cancel it mid-flight and leave the session cookie intact.
+  const handleLogoutClick = async (e) => {
     e.preventDefault();
 
-    // 1. Clear local storage items
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
-    localStorage.clear();
-
-    // 2. Execute parent component's logout prop if provided
     if (typeof onLogout === "function") {
       try {
-        onLogout();
+        await onLogout();
       } catch (err) {
         console.error("Logout handler error:", err);
       }
     }
 
-    // 3. Force reload/redirect to reset application state to login
+    // Force reload/redirect to reset application state to login
     window.location.href = "/";
   };
 
@@ -113,7 +108,7 @@ export function Sidebar({
                 textOverflow: "ellipsis",
               }}
             >
-              {user?.title || getCurrentRole() || "Warehouse Manager"}
+              {user?.title || "Warehouse Manager"}
             </div>
           </div>
 
