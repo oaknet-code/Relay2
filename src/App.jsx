@@ -59,10 +59,12 @@ export default function App() {
   }, []);
 
   /*
-   * Permissions and navigation
+   * Permissions and navigation — derived from the signed JWT claims
+   * (see utils/access.js), never from the login response body or `user`
+   * state, since that JSON is unsigned and can be tampered with client-side.
    */
-  const hasWriteAccess = canEdit(user);
-  const navigation = getAllowedNavigation(NAV_CONFIG, user);
+  const hasWriteAccess = canEdit();
+  const navigation = getAllowedNavigation(NAV_CONFIG);
 
   /*
    * Keep current tab valid when permissions/navigation change
@@ -241,7 +243,7 @@ export default function App() {
             "User",
 
           title:
-            getAccessLevel(user) === "full"
+            getAccessLevel() === "full"
               ? "Full Access"
               : "Client View Only",
 

@@ -1,6 +1,7 @@
 import React from "react";
 import { RadioTower, LogOut, Settings, X } from "lucide-react";
 import { NAV_GROUPS } from "../../utils/navigation";
+import { getCurrentRole } from "../../utils/auth";
 
 export function Sidebar({
   navigation,
@@ -112,7 +113,7 @@ export function Sidebar({
                 textOverflow: "ellipsis",
               }}
             >
-              {user?.title || user?.role || "Warehouse Manager"}
+              {user?.title || getCurrentRole() || "Warehouse Manager"}
             </div>
           </div>
 

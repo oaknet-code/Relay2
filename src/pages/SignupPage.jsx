@@ -3,7 +3,6 @@ import {
   RadioTower, Eye, EyeOff, ArrowRight, ShieldCheck
 } from "lucide-react";
 import { api } from "../services/api";
-import { getAccessLevel } from "../utils/access";
 
 export function LoginPage({ onLoginSuccess }) {
   const [formData, setFormData] = useState({
@@ -33,11 +32,15 @@ export function LoginPage({ onLoginSuccess }) {
         password: formData.password
       });
 
+      // Display-only fields (greeting, avatar initials). Deliberately drop
+      // `role` here — it must never end up in global state as a stand-in
+      // for authorization. Access is computed from the JWT's signed claims
+      // (see utils/access.js), not kept alongside this object.
+      const { role: _role, ...displayFields } = response.user || {};
       const loggedInUser = {
-        ...response.user,
+        ...displayFields,
         username: response.user?.firstName || "User",
         displayName: response.user?.firstName || "User",
-        accessLevel: getAccessLevel(response.user)
       };
 
       onLoginSuccess?.(loggedInUser);
