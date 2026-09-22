@@ -1,7 +1,9 @@
 import axios from "axios";
 
-// Base URL from environment variable or fallback to local development
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+// Base URL from environment variable or fallback to local development.
+// Exported so pages can build absolute URLs for server-hosted assets (e.g.
+// Site Work photos), which live on the API origin, not the frontend's.
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // Create an Axios instance with base configuration. withCredentials so the
 // browser sends/receives the HttpOnly "token" cookie set by
@@ -68,38 +70,70 @@ export const getMe = async () => {
 };
 
 /**
- * Client accounts (admin-only)
+ * User management (admin-only) — creates either a client or a
+ * field_worker account.
  */
-export const registerClient = async ({ username, email, company }) => {
+export const createUser = async ({ username, email, company, role }) => {
   try {
-    const { data } = await axiosInstance.post("/api/auth/register-client", {
+    const { data } = await axiosInstance.post("/api/auth/users", {
       username,
       email,
       company: company || undefined,
+      role,
     });
     return data;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to create client account";
+    const message = error.response?.data?.message || "Failed to create account";
     throw new Error(message);
   }
 };
 
-export const listClients = async () => {
+export const listUsers = async () => {
   try {
-    const { data } = await axiosInstance.get("/api/auth/clients");
+    const { data } = await axiosInstance.get("/api/auth/users");
     return data;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load client accounts";
+    const message = error.response?.data?.message || "Failed to load accounts";
     throw new Error(message);
   }
 };
 
-export const setClientStatus = async (id, status) => {
+export const setUserStatus = async (id, status) => {
   try {
-    const { data } = await axiosInstance.patch(`/api/auth/clients/${id}/status`, { status });
+    const { data } = await axiosInstance.patch(`/api/auth/users/${id}/status`, { status });
     return data;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to update client status";
+    const message = error.response?.data?.message || "Failed to update account status";
+    throw new Error(message);
+  }
+};
+
+/**
+ * Site Work — progress submissions with photos.
+ */
+export const createSiteWork = async ({ title, description, images }) => {
+  try {
+    const formData = new FormData();
+    formData.append("title", title);
+    if (description) formData.append("description", description);
+    images.forEach((file) => formData.append("images", file));
+
+    const { data } = await axiosInstance.post("/api/site-work", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to submit site work";
+    throw new Error(message);
+  }
+};
+
+export const getSiteWork = async () => {
+  try {
+    const { data } = await axiosInstance.get("/api/site-work");
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to load site work submissions";
     throw new Error(message);
   }
 };
@@ -372,9 +406,9 @@ export const api = {
   getMe,
   logout,
   changePassword,
-  registerClient,
-  listClients,
-  setClientStatus,
+  createUser,
+  listUsers,
+  setUserStatus,
   get: (endpoint, config) => axiosInstance.get(endpoint, config),
   post: (endpoint, payload, config) =>
     axiosInstance.post(endpoint, payload, config),
@@ -423,6 +457,9 @@ export const api = {
   // Field Ops
   syncFieldOps,
   getFieldOpsReports,
+  // Site Work
+  createSiteWork,
+  getSiteWork,
 };
 
 export default api;

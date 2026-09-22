@@ -10,13 +10,14 @@ import { SiteKits } from "./pages/SiteKits";
 import { StagingBay } from "./pages/StagingBay";
 import { Dispatch } from "./pages/Dispatch";
 import { FieldOps } from "./pages/FieldOps";
-import { ClientAdmin } from "./pages/ClientAdmin";
+import { UserManagementPage } from "./pages/UserManagementPage";
+import { SiteWorkPage } from "./pages/SiteWorkPage";
 import { FleetManagement } from "./pages/FleetManagement";
 import { AssetTracking } from "./pages/AssetTracking";
 
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
-import { canEdit, getAccessLevel, getAllowedNavigation } from "./utils/access";
+import { canEdit, getAccessLevel, getAllowedNavigation, isAdmin } from "./utils/access";
 
 import { SEED_ASSETS, LINKS, POD_INIT } from "./data/mockData";
 
@@ -86,11 +87,14 @@ export default function App() {
   const navigation = getAllowedNavigation(NAV_CONFIG, user);
 
   /*
-   * Keep current tab valid when permissions/navigation change
+   * Keep current tab valid when permissions/navigation change. Falls back
+   * to the first allowed item rather than a hardcoded "control" — a
+   * field_worker's only allowed tab is "site-work", and "control" isn't in
+   * their navigation at all, so a hardcoded fallback would never resolve.
    */
   useEffect(() => {
-    if (!navigation.some((item) => item.id === currentTab)) {
-      setCurrentTab("control");
+    if (!navigation.some((item) => item.id === currentTab) && navigation.length > 0) {
+      setCurrentTab(navigation[0].id);
     }
   }, [currentTab, navigation]);
 
@@ -240,12 +244,15 @@ export default function App() {
           <MissionControl assets={assets} />
         );
 
-      case "clients":
-        return hasWriteAccess ? (
-          <ClientAdmin />
+      case "users":
+        return isAdmin(user) ? (
+          <UserManagementPage />
         ) : (
           <MissionControl assets={assets} />
         );
+
+      case "site-work":
+        return <SiteWorkPage user={user} />;
 
       default:
         return <MissionControl assets={assets} />;
@@ -270,7 +277,9 @@ export default function App() {
           title:
             getAccessLevel(user) === "full"
               ? "Full Access"
-              : "Client View Only",
+              : getAccessLevel(user) === "field_worker"
+                ? "Field Worker"
+                : "Client View Only",
 
           initials: (user?.firstName || "U").slice(0, 2).toUpperCase(),
         }}

@@ -12,16 +12,21 @@ import {
   Check,
   KeyRound,
 } from "lucide-react";
-import { listClients, registerClient, setClientStatus } from "../services/api";
+import { listUsers, createUser, setUserStatus } from "../services/api";
+
+const ROLE_LABELS = {
+  client: "Client",
+  field_worker: "Site Worker",
+};
 
 function fmtDate(d) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function ClientAdmin() {
+export function UserManagementPage() {
   const [view, setView] = useState("list"); // list, create
-  const [clients, setClients] = useState([]);
+  const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [listError, setListError] = useState("");
@@ -30,25 +35,25 @@ export function ClientAdmin() {
   const [searchTerm, setSearchTerm] = useState("");
   const [busyId, setBusyId] = useState(null);
 
-  const [formData, setFormData] = useState({ username: "", email: "", company: "" });
-  const [createdAccount, setCreatedAccount] = useState(null); // { username, email, temporaryPassword }
+  const [formData, setFormData] = useState({ username: "", email: "", company: "", role: "client" });
+  const [createdAccount, setCreatedAccount] = useState(null); // { username, email, role, temporaryPassword }
   const [copied, setCopied] = useState(false);
 
-  const loadClients = async () => {
+  const loadUsers = async () => {
     setIsLoading(true);
     setListError("");
     try {
-      const data = await listClients();
-      setClients(data);
+      const data = await listUsers();
+      setUsers(data);
     } catch (err) {
-      setListError(err.message || "Failed to load client accounts.");
+      setListError(err.message || "Failed to load accounts.");
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadClients();
+    loadUsers();
   }, []);
 
   const handleChange = (e) => {
@@ -57,7 +62,7 @@ export function ClientAdmin() {
   };
 
   const resetForm = () => {
-    setFormData({ username: "", email: "", company: "" });
+    setFormData({ username: "", email: "", company: "", role: "client" });
     setCreatedAccount(null);
     setCopied(false);
   };
@@ -75,15 +80,16 @@ export function ClientAdmin() {
     setFormError("");
 
     try {
-      const result = await registerClient(formData);
+      const result = await createUser(formData);
       setCreatedAccount({
         username: result.user.username,
         email: result.user.email,
+        role: result.user.role,
         temporaryPassword: result.temporaryPassword,
       });
-      await loadClients();
+      await loadUsers();
     } catch (err) {
-      setFormError(err.message || "Failed to create client account.");
+      setFormError(err.message || "Failed to create account.");
     } finally {
       setIsSubmitting(false);
     }
@@ -97,29 +103,29 @@ export function ClientAdmin() {
     });
   };
 
-  const handleToggleStatus = async (client) => {
-    const nextStatus = client.status === "active" ? "suspended" : "active";
+  const handleToggleStatus = async (user) => {
+    const nextStatus = user.status === "active" ? "suspended" : "active";
     const verb = nextStatus === "suspended" ? "Suspend" : "Reactivate";
-    if (!window.confirm(`${verb} login access for "${client.username}"?`)) return;
+    if (!window.confirm(`${verb} login access for "${user.username}"?`)) return;
 
-    setBusyId(client.id);
+    setBusyId(user.id);
     setActionError("");
     try {
-      const updated = await setClientStatus(client.id, nextStatus);
-      setClients((prev) => prev.map((c) => (c.id === client.id ? updated : c)));
+      const updated = await setUserStatus(user.id, nextStatus);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
     } catch (err) {
-      setActionError(err.message || "Failed to update client status.");
+      setActionError(err.message || "Failed to update account status.");
     } finally {
       setBusyId(null);
     }
   };
 
-  const filteredClients = clients.filter((client) => {
+  const filteredUsers = users.filter((user) => {
     const q = searchTerm.toLowerCase();
     return (
-      client.username.toLowerCase().includes(q) ||
-      client.email.toLowerCase().includes(q) ||
-      (client.company || "").toLowerCase().includes(q)
+      user.username.toLowerCase().includes(q) ||
+      user.email.toLowerCase().includes(q) ||
+      (user.company || "").toLowerCase().includes(q)
     );
   });
 
@@ -130,12 +136,12 @@ export function ClientAdmin() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <h1 style={{ fontSize: "24px", fontWeight: "600", margin: 0 }}>
-              {createdAccount ? "Client Account Created" : "Create Client Account"}
+              {createdAccount ? "Account Created" : "Create Account"}
             </h1>
             <p className="faint" style={{ fontSize: "13px", margin: "4px 0 0" }}>
               {createdAccount
                 ? "Share the password below with them securely — it won't be shown again."
-                : "Give a client a login with limited, read-only access to their own links."}
+                : "Give a client or site worker a login with role-appropriate access."}
             </p>
           </div>
           <button
@@ -161,7 +167,10 @@ export function ClientAdmin() {
                 borderRadius: "8px", color: "var(--teal)", fontSize: "13px", display: "flex", gap: "8px", alignItems: "center",
               }}>
                 <ShieldCheck size={16} />
-                <span>Account created for <b>{createdAccount.username}</b> ({createdAccount.email})</span>
+                <span>
+                  {ROLE_LABELS[createdAccount.role] || createdAccount.role} account created for{" "}
+                  <b>{createdAccount.username}</b> ({createdAccount.email})
+                </span>
               </div>
 
               <div>
@@ -214,6 +223,31 @@ export function ClientAdmin() {
 
               <div>
                 <label style={{ display: "block", fontSize: "12px", fontWeight: "500", marginBottom: "6px", color: "var(--muted)" }}>
+                  Account Type *
+                </label>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  {["client", "field_worker"].map((role) => (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, role }))}
+                      className="btn sm"
+                      style={{
+                        flex: 1,
+                        justifyContent: "center",
+                        background: formData.role === role ? "rgba(255, 176, 32, 0.15)" : "transparent",
+                        border: `1px solid ${formData.role === role ? "var(--amber)" : "var(--line2)"}`,
+                        color: formData.role === role ? "var(--amber)" : "var(--muted)",
+                      }}
+                    >
+                      {ROLE_LABELS[role]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: "500", marginBottom: "6px", color: "var(--muted)" }}>
                   Full Name *
                 </label>
                 <input
@@ -242,19 +276,21 @@ export function ClientAdmin() {
                 />
               </div>
 
-              <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: "500", marginBottom: "6px", color: "var(--muted)" }}>
-                  Company
-                </label>
-                <input
-                  type="text"
-                  name="company"
-                  className="form-input"
-                  placeholder="e.g. Oaknet Business"
-                  value={formData.company}
-                  onChange={handleChange}
-                />
-              </div>
+              {formData.role === "client" && (
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: "500", marginBottom: "6px", color: "var(--muted)" }}>
+                    Company
+                  </label>
+                  <input
+                    type="text"
+                    name="company"
+                    className="form-input"
+                    placeholder="e.g. Oaknet Business"
+                    value={formData.company}
+                    onChange={handleChange}
+                  />
+                </div>
+              )}
 
               <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
                 <button
@@ -264,7 +300,7 @@ export function ClientAdmin() {
                   style={{ flex: 1, justifyContent: "center" }}
                 >
                   {isSubmitting ? <Loader size={14} className="spin" /> : <Plus size={15} />}
-                  {isSubmitting ? "Creating…" : "Create Client Account"}
+                  {isSubmitting ? "Creating…" : `Create ${ROLE_LABELS[formData.role]} Account`}
                 </button>
                 <button type="button" className="btn" onClick={() => { resetForm(); setView("list"); }}>
                   Cancel
@@ -282,13 +318,13 @@ export function ClientAdmin() {
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h1 style={{ fontSize: "24px", fontWeight: "600", margin: 0 }}>Client Accounts</h1>
+          <h1 style={{ fontSize: "24px", fontWeight: "600", margin: 0 }}>User Management</h1>
           <p className="faint" style={{ fontSize: "13px", margin: "4px 0 0" }}>
-            Create logins for clients with limited, read-only access — Mission Control and their own links only.
+            Create and manage client and site worker logins.
           </p>
         </div>
         <button className="btn amber" onClick={startCreate}>
-          <Plus size={16} /> New Client Account
+          <Plus size={16} /> New Account
         </button>
       </div>
 
@@ -320,7 +356,7 @@ export function ClientAdmin() {
         {isLoading ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "300px", gap: "12px" }}>
             <Loader size={24} className="spin" style={{ color: "var(--teal)" }} />
-            <span style={{ fontSize: "13px", color: "var(--muted)" }}>Loading client accounts...</span>
+            <span style={{ fontSize: "13px", color: "var(--muted)" }}>Loading accounts...</span>
           </div>
         ) : listError ? (
           <div style={{
@@ -329,13 +365,13 @@ export function ClientAdmin() {
           }}>
             <AlertTriangle size={24} />
             <span style={{ fontSize: "13px" }}>{listError}</span>
-            <button className="btn sm" onClick={loadClients}>Retry</button>
+            <button className="btn sm" onClick={loadUsers}>Retry</button>
           </div>
-        ) : filteredClients.length === 0 ? (
+        ) : filteredUsers.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "300px", color: "var(--faint)", gap: "12px" }}>
             <Building2 size={32} />
             <span style={{ fontSize: "14px" }}>
-              {clients.length === 0 ? "No client accounts yet. Create one to get started." : "No clients match your search."}
+              {users.length === 0 ? "No accounts yet. Create one to get started." : "No accounts match your search."}
             </span>
           </div>
         ) : (
@@ -345,6 +381,7 @@ export function ClientAdmin() {
                 <tr style={{ borderBottom: "1px solid var(--line2)" }}>
                   <th style={{ padding: "12px 16px", fontWeight: "500", color: "var(--muted)" }}>Name</th>
                   <th style={{ padding: "12px 16px", fontWeight: "500", color: "var(--muted)" }}>Email</th>
+                  <th style={{ padding: "12px 16px", fontWeight: "500", color: "var(--muted)" }}>Role</th>
                   <th style={{ padding: "12px 16px", fontWeight: "500", color: "var(--muted)" }}>Company</th>
                   <th style={{ padding: "12px 16px", fontWeight: "500", color: "var(--muted)" }}>Created</th>
                   <th style={{ padding: "12px 16px", fontWeight: "500", color: "var(--muted)" }}>Status</th>
@@ -352,34 +389,35 @@ export function ClientAdmin() {
                 </tr>
               </thead>
               <tbody>
-                {filteredClients.map((client) => (
-                  <tr key={client.id} style={{ borderBottom: "1px solid var(--line)" }}>
-                    <td style={{ padding: "12px 16px", fontWeight: "500", color: "var(--ink)" }}>{client.username}</td>
-                    <td style={{ padding: "12px 16px", color: "var(--muted)", fontFamily: "var(--mono)", fontSize: "12px" }}>{client.email}</td>
-                    <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{client.company || "—"}</td>
-                    <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{fmtDate(client.createdAt)}</td>
+                {filteredUsers.map((user) => (
+                  <tr key={user.id} style={{ borderBottom: "1px solid var(--line)" }}>
+                    <td style={{ padding: "12px 16px", fontWeight: "500", color: "var(--ink)" }}>{user.username}</td>
+                    <td style={{ padding: "12px 16px", color: "var(--muted)", fontFamily: "var(--mono)", fontSize: "12px" }}>{user.email}</td>
+                    <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{ROLE_LABELS[user.role] || user.role}</td>
+                    <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{user.company || "—"}</td>
+                    <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{fmtDate(user.createdAt)}</td>
                     <td style={{ padding: "12px 16px" }}>
                       <span style={{
                         fontSize: "11px", padding: "4px 10px", borderRadius: "12px",
-                        background: client.status === "active" ? "rgba(51, 220, 174, 0.12)" : "rgba(255, 95, 95, 0.12)",
-                        color: client.status === "active" ? "var(--teal)" : "var(--red)",
+                        background: user.status === "active" ? "rgba(51, 220, 174, 0.12)" : "rgba(255, 95, 95, 0.12)",
+                        color: user.status === "active" ? "var(--teal)" : "var(--red)",
                         fontWeight: "500", textTransform: "capitalize",
                       }}>
-                        {client.status}
+                        {user.status}
                       </span>
                     </td>
                     <td style={{ padding: "12px 16px", textAlign: "right" }}>
                       <button
-                        onClick={() => handleToggleStatus(client)}
-                        disabled={busyId === client.id}
+                        onClick={() => handleToggleStatus(user)}
+                        disabled={busyId === user.id}
                         className="btn sm"
-                        style={client.status === "active"
+                        style={user.status === "active"
                           ? { background: "rgba(255,95,95,.15)", color: "var(--red)" }
                           : { background: "rgba(51,220,174,.15)", color: "var(--teal)" }}
-                        title={client.status === "active" ? "Suspend access" : "Reactivate access"}
+                        title={user.status === "active" ? "Suspend access" : "Reactivate access"}
                       >
-                        {busyId === client.id ? <Loader size={13} className="spin" /> : <Power size={13} />}
-                        {client.status === "active" ? "Suspend" : "Reactivate"}
+                        {busyId === user.id ? <Loader size={13} className="spin" /> : <Power size={13} />}
+                        {user.status === "active" ? "Suspend" : "Reactivate"}
                       </button>
                     </td>
                   </tr>
