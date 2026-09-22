@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import { Layout } from "./components/layout";
 import { ChangePasswordModal } from "./components/layout/ChangePasswordModal";
 
@@ -7,13 +7,7 @@ import { LinksView } from "./pages/LinksView";
 import { InventoryView } from "./pages/InventoryView";
 import { LoginPage } from "./pages/SignupPage";
 import { SiteKits } from "./pages/SiteKits";
-import { StagingBay } from "./pages/StagingBay";
-import { Dispatch } from "./pages/Dispatch";
-import { FieldOps } from "./pages/FieldOps";
-import { UserManagementPage } from "./pages/UserManagementPage";
 import { SiteWorkPage } from "./pages/SiteWorkPage";
-import { FleetManagement } from "./pages/FleetManagement";
-import { AssetTracking } from "./pages/AssetTracking";
 
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
@@ -29,6 +23,24 @@ import "./styles/auth.css";
 import "./styles/fleet.css";
 import "./styles/tracking.css";
 import "./styles/change-password.css";
+
+// These pages are only ever rendered for an admin/full-access session (see
+// the hasWriteAccess/isAdmin checks in renderCurrentView below). Loading
+// them lazily means their code is bundled into separate chunks that a
+// client or field_worker session never fetches — the dynamic import()
+// call itself only fires at the moment one of these actually renders.
+const StagingBay = lazy(() => import("./pages/StagingBay").then((m) => ({ default: m.StagingBay })));
+const Dispatch = lazy(() => import("./pages/Dispatch").then((m) => ({ default: m.Dispatch })));
+const FleetManagement = lazy(() => import("./pages/FleetManagement").then((m) => ({ default: m.FleetManagement })));
+const FieldOps = lazy(() => import("./pages/FieldOps").then((m) => ({ default: m.FieldOps })));
+const AssetTracking = lazy(() => import("./pages/AssetTracking").then((m) => ({ default: m.AssetTracking })));
+const UserManagementPage = lazy(() =>
+  import("./pages/UserManagementPage").then((m) => ({ default: m.UserManagementPage }))
+);
+
+function ChunkLoading() {
+  return <div style={{ padding: 24, color: "var(--muted)", fontSize: 13 }}>Loading...</div>;
+}
 
 export default function App() {
   const [currentView, setCurrentView] = useState("login");
@@ -286,7 +298,7 @@ export default function App() {
         onLogout={onLogout}
         onChangePassword={() => setIsChangePasswordOpen(true)}
       >
-        {renderCurrentView()}
+        <Suspense fallback={<ChunkLoading />}>{renderCurrentView()}</Suspense>
       </Layout>
 
       {isChangePasswordOpen && (
