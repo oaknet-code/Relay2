@@ -1,4 +1,5 @@
 import axios from "axios";
+import { verifySignedProfile } from "../utils/verifyProfile";
 
 // Base URL from environment variable or fallback to local development.
 // Exported so pages can build absolute URLs for server-hosted assets (e.g.
@@ -66,7 +67,15 @@ export const login = loginUser;
  */
 export const getMe = async () => {
   const { data } = await axiosInstance.get("/api/auth/me");
-  return data;
+  // Only the signed copy is trusted — the plain `data.user` can be edited
+  // by an intercepting proxy. A tampered or unsigned response throws, and
+  // the server-side cookie is cleared so the session can't be reused.
+  try {
+    return { user: await verifySignedProfile(data?.signed) };
+  } catch (err) {
+    await logout();
+    throw err;
+  }
 };
 
 /**

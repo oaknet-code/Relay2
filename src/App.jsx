@@ -73,21 +73,13 @@ export default function App() {
   }, []);
 
   /*
-   * Session persists in an HttpOnly cookie now, so a page refresh doesn't
-   * have to force a fresh login — ask the server who (if anyone) the
-   * cookie belongs to.
+   * A page load or refresh always ends the session: clear the HttpOnly
+   * cookie server-side and start on the login screen. The login form stays
+   * hidden until the logout finishes, so it can't race a fresh login and
+   * wipe the new cookie.
    */
   useEffect(() => {
-    api
-      .getMe()
-      .then(({ user: me }) => {
-        setUser(me);
-        setCurrentView("dashboard");
-      })
-      .catch(() => {
-        // No valid session — stay on the login screen.
-      })
-      .finally(() => setIsCheckingSession(false));
+    api.logout().finally(() => setIsCheckingSession(false));
   }, []);
 
   /*
@@ -185,8 +177,8 @@ export default function App() {
   const currentViewObj = navigation.find((item) => item.id === currentTab);
 
   /*
-   * Don't flash the login form while we're still asking the server whether
-   * the session cookie is valid.
+   * Don't show the login form until the on-load logout has cleared the
+   * previous session's cookie.
    */
   if (isCheckingSession) {
     return null;
