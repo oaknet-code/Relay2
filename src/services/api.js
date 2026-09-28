@@ -147,6 +147,29 @@ export const getSiteWork = async () => {
   }
 };
 
+// Admin-only: delete a whole submission and its photos.
+export const deleteSiteWork = async (id) => {
+  try {
+    const { data } = await axiosInstance.delete(`/api/site-work/${id}`);
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to delete the submission";
+    throw new Error(message);
+  }
+};
+
+// Admin-only: delete one photo. imageId = last segment of its imageUrl.
+// Deleting the last photo deletes the submission (data.deletedReport).
+export const deleteSiteWorkImage = async (id, imageId) => {
+  try {
+    const { data } = await axiosInstance.delete(`/api/site-work/${id}/images/${encodeURIComponent(imageId)}`);
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to delete the photo";
+    throw new Error(message);
+  }
+};
+
 /**
  * Change Password
  */
@@ -476,6 +499,8 @@ export const api = {
   // Site Work
   createSiteWork,
   getSiteWork,
+  deleteSiteWork,
+  deleteSiteWorkImage,
 };
 
 export default api;
