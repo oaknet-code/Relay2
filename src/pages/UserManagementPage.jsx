@@ -80,7 +80,12 @@ export function UserManagementPage() {
     setFormError("");
 
     try {
-      const result = await createUser(formData);
+      // Company belongs to site workers only — don't send a value typed
+      // before switching the role to Client.
+      const result = await createUser({
+        ...formData,
+        company: formData.role === "field_worker" ? formData.company : undefined,
+      });
       setCreatedAccount({
         username: result.user.username,
         email: result.user.email,
@@ -276,7 +281,7 @@ export function UserManagementPage() {
                 />
               </div>
 
-              {formData.role === "client" && (
+              {formData.role === "field_worker" && (
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "500", marginBottom: "6px", color: "var(--muted)" }}>
                     Company
@@ -288,6 +293,7 @@ export function UserManagementPage() {
                     placeholder="e.g. Oaknet Business"
                     value={formData.company}
                     onChange={handleChange}
+                    required
                   />
                 </div>
               )}
