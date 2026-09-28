@@ -407,50 +407,52 @@ export function MissionControl({ assets }) {
                 )}
               </div>
               <div style={{ height: 1, background: "var(--line)", margin: "16px 0" }} />
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Link</th>
-                    <th>Path</th>
-                    <th>Band</th>
-                    <th>BOM</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {LINKS.map(l => (
-                    <tr key={l.id}>
-                      <td className="mono">
-                        {l.id}
-                        <div className="faint" style={{ fontSize: 10 }}>
-                          {l.a.split("-")[0]}→{l.b.split("-")[0]}
-                        </div>
-                      </td>
-                      <td className="mono muted">{l.path}</td>
-                      <td><Band b={l.band} /></td>
-                      <td>
-                        {l.bomReady ? (
-                          <span className="pill" style={{ color: "var(--teal)" }}>
-                            <CheckCircle2 size={12} />
-                            100%
-                          </span>
-                        ) : (
-                          <span className="pill" style={{ color: "var(--red)" }}>
-                            <AlertTriangle size={12} />
-                            Short
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <span className="pill" style={{ color: LINK_STATUS[l.status].c }}>
-                          <Dot c={LINK_STATUS[l.status].c} />
-                          {LINK_STATUS[l.status].label}
-                        </span>
-                      </td>
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Link</th>
+                      <th>Path</th>
+                      <th>Band</th>
+                      <th>BOM</th>
+                      <th>Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {LINKS.map(l => (
+                      <tr key={l.id}>
+                        <td className="mono">
+                          {l.id}
+                          <div className="faint" style={{ fontSize: 10 }}>
+                            {l.a.split("-")[0]}→{l.b.split("-")[0]}
+                          </div>
+                        </td>
+                        <td className="mono muted">{l.path}</td>
+                        <td><Band b={l.band} /></td>
+                        <td>
+                          {l.bomReady ? (
+                            <span className="pill" style={{ color: "var(--teal)" }}>
+                              <CheckCircle2 size={12} />
+                              100%
+                            </span>
+                          ) : (
+                            <span className="pill" style={{ color: "var(--red)" }}>
+                              <AlertTriangle size={12} />
+                              Short
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <span className="pill" style={{ color: LINK_STATUS[l.status].c }}>
+                            <Dot c={LINK_STATUS[l.status].c} />
+                            {LINK_STATUS[l.status].label}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

@@ -73,7 +73,7 @@ export function LinksView({ canEdit = true }) {
               <span className="faint" style={{ flex: 1, color: u ? "inherit" : "var(--faint)" }}>
                 {u ? u.serialNumber : "— not assigned —"}
               </span>
-              {live ? <CheckCircle2 size={13} /> : (u ? <Dot c={STATE_META[u.status?.toLowerCase?.() || "stocked"].c} /> : <Circle size={11} />)}
+              {live ? <CheckCircle2 size={13} /> : (u ? <Dot c={(STATE_META[u.status?.toLowerCase?.()] || STATE_META.stocked).c} /> : <Circle size={11} />)}
             </div>
           );
         })}

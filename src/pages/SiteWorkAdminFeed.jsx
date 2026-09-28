@@ -180,6 +180,7 @@ export function SiteWorkAdminFeed() {
                         />
                       </a>
                       <button
+                        className="photo-del"
                         title="Delete photo"
                         aria-label="Delete photo"
                         disabled={deletingKey !== null}

@@ -614,7 +614,7 @@ export function SiteKits({ canEdit = true }) {
 
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {formData.components.map((comp, idx) => (
-                  <div key={idx} style={{
+                  <div key={idx} className="kit-comp-row" style={{
                     display: "grid",
                     gridTemplateColumns: "100px 1fr 100px 80px 40px",
                     gap: 8,

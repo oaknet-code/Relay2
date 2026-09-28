@@ -97,7 +97,7 @@ export function InventoryView() {
         </div>
         
         <div className="panel-b">
-          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
             <FilterChip v="all" set={setFState} cur={fState}>All States</FilterChip>
             <FilterChip v="stocked" set={setFState} cur={fState}>Stocked</FilterChip>
             <FilterChip v="staged" set={setFState} cur={fState}>Staged</FilterChip>
@@ -105,7 +105,7 @@ export function InventoryView() {
             <FilterChip v="installed" set={setFState} cur={fState}>Installed</FilterChip>
           </div>
           
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <FilterChip v="all" set={setFType} cur={fType}>All Types</FilterChip>
             <FilterChip v="IDU" set={setFType} cur={fType}>IDU</FilterChip>
             <FilterChip v="ODU" set={setFType} cur={fType}>ODU</FilterChip>
@@ -120,7 +120,7 @@ export function InventoryView() {
           <h3>Serialized Assets</h3>
           <span className="ph-r">{filteredAssets.length} items</span>
         </div>
-        <div>
+        <div className="tbl-wrap">
           <table className="tbl">
             <thead>
               <tr>
