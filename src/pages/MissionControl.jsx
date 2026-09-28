@@ -188,7 +188,7 @@ export function MissionControl({ assets }) {
       <div className="view-head">
         <span className="tagchip">
           <Gauge size={11} />
-          Step 6 · Project Success Metrics
+          Project Success Metrics
         </span>
         <h2>Mission Control</h2>
         <p>

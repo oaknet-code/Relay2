@@ -63,7 +63,7 @@ export function InventoryView() {
       <div className="view-head">
         <span className="tagchip">
           <Boxes size={11} />
-          Step 1 / 2 · Asset & Consumable Master
+          Asset & Consumable Master
         </span>
         <h2>Inventory</h2>
         <p>

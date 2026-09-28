@@ -29,7 +29,6 @@ import "./styles/change-password.css";
 // them lazily means their code is bundled into separate chunks that a
 // client or field_worker session never fetches — the dynamic import()
 // call itself only fires at the moment one of these actually renders.
-const StagingBay = lazy(() => import("./pages/StagingBay").then((m) => ({ default: m.StagingBay })));
 const Dispatch = lazy(() => import("./pages/Dispatch").then((m) => ({ default: m.Dispatch })));
 const FleetManagement = lazy(() => import("./pages/FleetManagement").then((m) => ({ default: m.FleetManagement })));
 const FieldOps = lazy(() => import("./pages/FieldOps").then((m) => ({ default: m.FieldOps })));
@@ -207,13 +206,6 @@ export default function App() {
 
       case "kits":
         return <SiteKits canEdit={hasWriteAccess} />;
-
-      case "staging":
-        return hasWriteAccess ? (
-          <StagingBay assets={assets} setAssets={setAssets} />
-        ) : (
-          <MissionControl assets={assets} />
-        );
 
       case "dispatch":
         return hasWriteAccess ? (

@@ -150,7 +150,7 @@ export function FieldOps({ assets, pod, setPod, onInstall }) {
       <div className="view-head">
         <span className="tagchip">
           <Smartphone size={11} />
-          Step 4 · Field Module · Offline + Two-Stage PoD
+          Field Module · Offline + Two-Stage PoD
         </span>
         <h2>Field Ops · {job.id}</h2>
         <p>

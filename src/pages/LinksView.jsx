@@ -319,7 +319,7 @@ export function LinksView({ canEdit = true }) {
       <div className="view-head">
         <span className="tagchip">
           <Antenna size={11} />
-          Step 1 · Link Identity Mapping
+          Link Identity Mapping
         </span>
         <h2>Microwave Links</h2>
         <p>

@@ -346,6 +346,12 @@ export const allocateSiteKit = async (kitId) => {
   return data;
 };
 
+// Marks the kit ready for Dispatch (replaces the old Staging Bay step).
+export const sendKitToDispatch = async (kitId) => {
+  const { data } = await axiosInstance.post(`/api/sitekits/${kitId}/send-to-dispatch`);
+  return data;
+};
+
 /**
  * Staging
  */
@@ -451,6 +457,7 @@ export const api = {
   updateSiteKit,
   deleteSiteKit,
   allocateSiteKit,
+  sendKitToDispatch,
   importSiteKitsExcel,
   // Staging
   listStaging,

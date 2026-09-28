@@ -197,7 +197,7 @@ export function FleetManagement() {
       <div className="view-head">
         <span className="tagchip">
           <MapPin size={11} />
-          Step 5 · Fleet Tracking
+          Fleet Tracking
         </span>
         <h2>Fleet Management</h2>
         <p>

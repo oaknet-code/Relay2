@@ -5,7 +5,7 @@ import {
   ArrowLeft, Truck
 } from 'lucide-react';
 import { Band, StatePill, Dot } from '../components/ui';
-import { getSiteKits, createSiteKit, updateSiteKit, deleteSiteKit, allocateSiteKit, importSiteKitsExcel, getLinks, checkInKit } from '../services/api';
+import { getSiteKits, createSiteKit, updateSiteKit, deleteSiteKit, allocateSiteKit, importSiteKitsExcel, getLinks, sendKitToDispatch } from '../services/api';
 
 function timeAgo(dateStr) {
   if (!dateStr) return "—";
@@ -43,9 +43,10 @@ function fromApiKit(k) {
 
 const KIT_STATUS = {
   DRAFT: { label: "Draft", c: "var(--steel)" },
-  READY_FOR_STAGING: { label: "Awaiting Staging", c: "var(--teal)" },
-  STAGING: { label: "Staging", c: "var(--blue)" },
-  STAGED: { label: "Staged", c: "var(--violet)" },
+  READY_FOR_STAGING: { label: "Ready", c: "var(--teal)" },
+  // Legacy: kits checked in to the (removed) Staging Bay — still sendable.
+  STAGING: { label: "Ready", c: "var(--teal)" },
+  STAGED: { label: "Sent to Dispatch", c: "var(--violet)" },
   DISPATCHED: { label: "Dispatched", c: "var(--amber)" },
   INSTALLED: { label: "Installed", c: "var(--teal)" }
 };
@@ -95,7 +96,7 @@ export function SiteKits({ canEdit = true }) {
   const fileInputRef = useRef(null);
 
   const [viewingKit, setViewingKit] = useState(null);
-  const [sendingToStaging, setSendingToStaging] = useState(false);
+  const [sendingToDispatch, setSendingToDispatch] = useState(false);
   const [detailsError, setDetailsError] = useState("");
   const [detailsSuccess, setDetailsSuccess] = useState("");
 
@@ -185,19 +186,19 @@ export function SiteKits({ canEdit = true }) {
     setView("details");
   };
 
-  const handleSendToStaging = async (kit) => {
-    setSendingToStaging(true);
+  const handleSendToDispatch = async (kit) => {
+    setSendingToDispatch(true);
     setDetailsError("");
     setDetailsSuccess("");
     try {
-      await checkInKit(kit.kitId);
-      setDetailsSuccess("Kit checked in to the Staging Bay.");
-      setViewingKit(prev => (prev ? { ...prev, status: "STAGING" } : prev));
+      await sendKitToDispatch(kit.kitId);
+      setDetailsSuccess("Kit sent to Dispatch.");
+      setViewingKit(prev => (prev ? { ...prev, status: "STAGED" } : prev));
       await loadKits();
     } catch (err) {
-      setDetailsError(err.response?.data?.message || "Failed to send kit to staging.");
+      setDetailsError(err.response?.data?.message || "Failed to send kit to dispatch.");
     } finally {
-      setSendingToStaging(false);
+      setSendingToDispatch(false);
     }
   };
 
@@ -308,8 +309,8 @@ export function SiteKits({ canEdit = true }) {
 
   // DETAILS VIEW
   if (view === "details" && viewingKit) {
-    const isAwaitingStaging = viewingKit.status === "READY_FOR_STAGING";
-    const isPastStaging = ["STAGING", "STAGED", "DISPATCHED", "INSTALLED"].includes(viewingKit.status);
+    const isReadyForDispatch = ["READY_FOR_STAGING", "STAGING"].includes(viewingKit.status);
+    const isSentToDispatch = ["STAGED", "DISPATCHED", "INSTALLED"].includes(viewingKit.status);
 
     return (
       <div className="view">
@@ -390,7 +391,7 @@ export function SiteKits({ canEdit = true }) {
                 <ComponentsTable components={viewingKit.components} />
               </div>
 
-              {isAwaitingStaging && (
+              {isReadyForDispatch && (
                 <div style={{
                   padding: "12px 14px",
                   borderRadius: 10,
@@ -403,21 +404,21 @@ export function SiteKits({ canEdit = true }) {
                 }}>
                   <div>
                     <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--teal)" }}>
-                      Awaiting Staging
+                      Ready for Dispatch
                     </div>
                     <div style={{ fontSize: 11, color: "var(--faint)" }}>
-                      All components are stocked — this kit is ready to check in to the Staging Bay.
+                      All components are stocked — this kit is ready to send to Dispatch.
                     </div>
                   </div>
                   {canEdit && (
                     <button
                       className="btn sm"
                       style={{ background: "var(--teal)", color: "#06111f", whiteSpace: "nowrap" }}
-                      disabled={sendingToStaging}
-                      onClick={() => handleSendToStaging(viewingKit)}
+                      disabled={sendingToDispatch}
+                      onClick={() => handleSendToDispatch(viewingKit)}
                     >
-                      {sendingToStaging ? <Loader2 size={14} className="spin" /> : <Truck size={14} />}
-                      {sendingToStaging ? "Sending…" : "Send to Staging"}
+                      {sendingToDispatch ? <Loader2 size={14} className="spin" /> : <Truck size={14} />}
+                      {sendingToDispatch ? "Sending…" : "Send to Dispatch"}
                     </button>
                   )}
                 </div>
@@ -425,13 +426,13 @@ export function SiteKits({ canEdit = true }) {
 
               {viewingKit.status === "DRAFT" && (
                 <div style={{ fontSize: 11.5, color: "var(--faint)" }}>
-                  This kit is still in draft — every component needs enough stock allocated before it becomes eligible for staging.
+                  This kit is still in draft — every component needs enough stock allocated before it becomes eligible for dispatch.
                 </div>
               )}
 
-              {isPastStaging && (
+              {isSentToDispatch && (
                 <div style={{ fontSize: 11.5, color: "var(--faint)" }}>
-                  This kit has already moved past staging — check the Staging Bay or Dispatch screens for next steps.
+                  This kit has already been sent to Dispatch — check the Dispatch screen for next steps.
                 </div>
               )}
             </div>

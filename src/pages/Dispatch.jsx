@@ -293,7 +293,7 @@ export function Dispatch({ assets, onDispatch }) {
         <div className="view-head">
           <span className="tagchip">
             <Truck size={11} />
-            Step 3 · Dispatch
+            Dispatch
           </span>
           <h2>Dispatch</h2>
           <p>
@@ -561,7 +561,7 @@ export function Dispatch({ assets, onDispatch }) {
         </button>
         <span className="tagchip">
           <Truck size={11} />
-          Step 3 · Dynamic BOM Pick-List
+          Dynamic BOM Pick-List
         </span>
         <h2>Dispatch · {job.id}</h2>
         {job.a && job.b ? (
