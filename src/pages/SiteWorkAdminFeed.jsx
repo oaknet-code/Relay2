@@ -10,7 +10,8 @@ function fmtDate(d) {
 }
 
 // imageUrls are relative paths served by the API origin (e.g.
-// "/uploads/sitework/xyz.jpg"), not the frontend's own origin.
+// "/media/site-work/<id>", stored in MongoDB), not the frontend's own
+// origin. The session cookie rides along with the <img> request.
 function imageSrc(relativeUrl) {
   return `${API_BASE_URL}${relativeUrl}`;
 }
