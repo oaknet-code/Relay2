@@ -1,12 +1,37 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Building2, Search, Plus, ArrowLeft, ChevronRight, Loader2, AlertTriangle,
-  CheckCircle2, Pencil, Trash2, Package, Inbox, X, Info,
+  CheckCircle2, Pencil, Trash2, Package, Inbox, X, Info, MapPin, ExternalLink,
 } from "lucide-react";
 import { getSites, createSite, updateSite, deleteSite } from "../services/api";
 import { SiteKits } from "./SiteKits";
 
 const fmtDate = (d) => new Date(d).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const hasGps = (s) => typeof s?.latitude === "number" && typeof s?.longitude === "number";
+const fmtCoord = (n) => Number(n).toFixed(6);
+const mapsUrl = (s) => `https://www.google.com/maps?q=${s.latitude},${s.longitude}`;
+
+// Small read-only map with a pin at the site (Leaflet is loaded globally in
+// index.html; OpenStreetMap tiles, darkened like the other maps).
+function SiteMap({ latitude, longitude, label }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const L = window.L;
+    if (!L || !ref.current) return;
+    const map = L.map(ref.current, { center: [latitude, longitude], zoom: 11, scrollWheelZoom: false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+    L.circleMarker([latitude, longitude], {
+      radius: 8, color: "#ffffff", weight: 2, fillColor: "#33dcae", fillOpacity: 0.95,
+    }).addTo(map).bindTooltip(label, { permanent: true, direction: "top", offset: [0, -8], className: "map-tooltip" });
+    const t = setTimeout(() => map.invalidateSize(), 150);
+    return () => { clearTimeout(t); map.remove(); };
+  }, [latitude, longitude, label]);
+  return <div ref={ref} className="site-map" role="img" aria-label={`Map of ${label}`} />;
+}
+
 const UNASSIGNED = { unassigned: true, siteId: "—", name: "Unassigned kits" };
 const apiMessage = (err, fallback) => err.response?.data?.message || fallback;
 
@@ -104,6 +129,17 @@ export function SitesPage({ canEdit = false }) {
       const payload = {};
       if (editing.name.trim() !== openSite.name) payload.name = editing.name.trim();
       if (editing.siteId.trim() !== openSite.siteId) payload.siteId = editing.siteId.trim();
+      const lat = editing.latitude.trim(), lng = editing.longitude.trim();
+      if (!lat !== !lng) {
+        setFormError("Enter both latitude and longitude, or leave both empty.");
+        setBusy(false);
+        return;
+      }
+      const newLat = lat ? Number(lat) : null, newLng = lng ? Number(lng) : null;
+      if (newLat !== (openSite.latitude ?? null) || newLng !== (openSite.longitude ?? null)) {
+        payload.latitude = newLat;
+        payload.longitude = newLng;
+      }
       if (Object.keys(payload).length) await updateSite(openSite.siteId, payload);
       await loadSites();
       setEditing(null);
@@ -186,7 +222,12 @@ export function SitesPage({ canEdit = false }) {
               <h3>Site information</h3>
               {canEdit && !editing && (
                 <div className="ph-r" style={{ display: "flex", gap: 8 }}>
-                  <button className="btn ghost sm" onClick={() => setEditing({ name: openSite.name, siteId: openSite.siteId })}>
+                  <button className="btn ghost sm" onClick={() => setEditing({
+                    name: openSite.name,
+                    siteId: openSite.siteId,
+                    latitude: hasGps(openSite) ? String(openSite.latitude) : "",
+                    longitude: hasGps(openSite) ? String(openSite.longitude) : "",
+                  })}>
                     <Pencil size={13} /> Edit
                   </button>
                   <button
@@ -214,6 +255,16 @@ export function SitesPage({ canEdit = false }) {
                     <input className="form-input" value={editing.name}
                       onChange={(e) => setEditing(p => ({ ...p, name: e.target.value }))} required maxLength={120} />
                   </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)", width: 150 }}>
+                    Latitude
+                    <input className="form-input" type="number" step="any" min={-90} max={90} placeholder="e.g. 0.530083"
+                      value={editing.latitude} onChange={(e) => setEditing(p => ({ ...p, latitude: e.target.value }))} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)", width: 150 }}>
+                    Longitude
+                    <input className="form-input" type="number" step="any" min={-180} max={180} placeholder="e.g. 38.518389"
+                      value={editing.longitude} onChange={(e) => setEditing(p => ({ ...p, longitude: e.target.value }))} />
+                  </label>
                   <button className="btn amber" type="submit" disabled={busy}>
                     {busy ? <Loader2 size={14} className="spin" /> : <CheckCircle2 size={14} />} Save
                   </button>
@@ -233,8 +284,31 @@ export function SitesPage({ canEdit = false }) {
                       </button>
                     </dd>
                   </div>
+                  <div>
+                    <dt>GPS</dt>
+                    <dd>
+                      {hasGps(openSite) ? (
+                        <>
+                          <span className="mono">{fmtCoord(openSite.latitude)}, {fmtCoord(openSite.longitude)}</span>
+                          <a className="site-maplink" href={mapsUrl(openSite)} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink size={11} /> Open in Google Maps
+                          </a>
+                        </>
+                      ) : (
+                        <span className="faint">Not set{canEdit ? " — add it with Edit" : ""}</span>
+                      )}
+                    </dd>
+                  </div>
                   {openSite.updatedAt && <div><dt>Last updated</dt><dd>{fmtDate(openSite.updatedAt)}</dd></div>}
                 </dl>
+              )}
+              {!editing && hasGps(openSite) && (
+                <SiteMap
+                  key={`${openSite.latitude},${openSite.longitude}`}
+                  latitude={openSite.latitude}
+                  longitude={openSite.longitude}
+                  label={`${openSite.siteId} · ${openSite.name}`}
+                />
               )}
             </div>
           </div>
@@ -385,6 +459,7 @@ export function SitesPage({ canEdit = false }) {
                 <tr>
                   <th style={{ width: 90 }}>Site ID</th>
                   <th>Site name</th>
+                  <th style={{ width: 190 }}>GPS</th>
                   <th style={{ width: 90, textAlign: "right" }}>Kits</th>
                   <th style={{ width: 40 }} aria-label="Open" />
                 </tr>
@@ -398,6 +473,7 @@ export function SitesPage({ canEdit = false }) {
                         <Inbox size={13} style={{ color: "var(--amber)" }} /> Unassigned kits
                       </button>
                     </td>
+                    <td />
                     <td className="mono" style={{ textAlign: "right", color: "var(--amber)" }}>{unassignedCount}</td>
                     <td><ChevronRight size={14} className="faint" /></td>
                   </tr>
@@ -410,6 +486,11 @@ export function SitesPage({ canEdit = false }) {
                         {s.name}
                       </button>
                     </td>
+                    <td className="mono" style={{ fontSize: 11.5 }}>
+                      {hasGps(s)
+                        ? <span style={{ color: "var(--muted)" }}><MapPin size={11} style={{ verticalAlign: -1, marginRight: 4, color: "var(--teal)" }} />{fmtCoord(s.latitude)}, {fmtCoord(s.longitude)}</span>
+                        : <span className="faint">—</span>}
+                    </td>
                     <td className="mono" style={{ textAlign: "right" }}>
                       {s.kitCount ? <span><Package size={11} style={{ verticalAlign: -1, marginRight: 4 }} />{s.kitCount}</span> : <span className="faint">0</span>}
                     </td>
@@ -417,7 +498,7 @@ export function SitesPage({ canEdit = false }) {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={4} className="faint" style={{ textAlign: "center", padding: 24 }}>No sites match "{search}".</td></tr>
+                  <tr><td colSpan={5} className="faint" style={{ textAlign: "center", padding: 24 }}>No sites match "{search}".</td></tr>
                 )}
               </tbody>
             </table>
