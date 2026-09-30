@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Building2, Search, Plus, ArrowLeft, ChevronRight, Loader2, AlertTriangle,
-  CheckCircle2, Pencil, Trash2, Package, Inbox, X,
+  CheckCircle2, Pencil, Trash2, Package, Inbox, X, Info,
 } from "lucide-react";
 import { getSites, createSite, updateSite, deleteSite } from "../services/api";
 import { SiteKits } from "./SiteKits";
 
+const fmtDate = (d) => new Date(d).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const UNASSIGNED = { unassigned: true, siteId: "—", name: "Unassigned kits" };
 const apiMessage = (err, fallback) => err.response?.data?.message || fallback;
 
@@ -34,6 +35,7 @@ export function SitesPage({ canEdit = false }) {
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState(null); // Site _id, "unassigned", or null for the list
+  const [siteTab, setSiteTab] = useState("kits"); // "overview" | "kits" inside an open site
 
   const [showCreate, setShowCreate] = useState(false);
   const [newSite, setNewSite] = useState({ name: "", siteId: "" });
@@ -66,6 +68,9 @@ export function SitesPage({ canEdit = false }) {
     if (!q) return sites;
     return sites.filter(s => s.siteId.includes(q) || s.name.toLowerCase().includes(q));
   }, [sites, search]);
+
+  // Opening a site always lands on its Site Kits tab.
+  useEffect(() => { setSiteTab("kits"); setEditing(null); }, [openId]);
 
   const openSite = openId === "unassigned" ? UNASSIGNED : sites.find(s => s._id === openId) || null;
 
@@ -122,8 +127,11 @@ export function SitesPage({ canEdit = false }) {
     }
   };
 
-  // ── Site detail: header + that site's kits ─────────────────────
+  // ── Site detail: Overview | Site Kits tabs ────────────────────
   if (openSite) {
+    const kitCount = openSite.unassigned ? unassignedCount : openSite.kitCount;
+    const tab = openSite.unassigned ? "kits" : siteTab; // Unassigned has no overview
+
     return (
       <div className="view">
         <button
@@ -139,63 +147,114 @@ export function SitesPage({ canEdit = false }) {
             {openSite.unassigned ? <Inbox size={11} /> : <Building2 size={11} />}
             {openSite.unassigned ? "Not filed under a site" : `Site ${openSite.siteId}`}
           </span>
+          <h2>{openSite.name}</h2>
+          {openSite.unassigned && (
+            <p>Kits created before sites existed. Open a kit and choose its site to file it.</p>
+          )}
+        </div>
 
-          {editing ? (
-            <form onSubmit={handleSaveEdit} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                Site ID
-                <input className="form-input" style={{ width: 110 }} value={editing.siteId}
-                  onChange={(e) => setEditing(p => ({ ...p, siteId: e.target.value }))} required pattern="\d{3,6}" />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)", flex: "1 1 220px" }}>
-                Site name
-                <input className="form-input" value={editing.name}
-                  onChange={(e) => setEditing(p => ({ ...p, name: e.target.value }))} required maxLength={120} />
-              </label>
-              <button className="btn amber" type="submit" disabled={busy}>
-                {busy ? <Loader2 size={14} className="spin" /> : <CheckCircle2 size={14} />} Save
-              </button>
-              <button className="btn ghost" type="button" onClick={() => { setEditing(null); setFormError(""); }}>
-                Cancel
-              </button>
-            </form>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <h2 style={{ margin: 0 }}>{openSite.name}</h2>
-              {canEdit && !openSite.unassigned && (
-                <>
+        {!openSite.unassigned && (
+          <div className="tab-buttons site-tabs" role="tablist" aria-label="Site sections">
+            <button
+              role="tab"
+              aria-selected={tab === "overview"}
+              className={`tab-btn ${tab === "overview" ? "active" : ""}`}
+              onClick={() => setSiteTab("overview")}
+            >
+              <Info size={12} style={{ marginRight: 5 }} /> Overview
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab === "kits"}
+              className={`tab-btn ${tab === "kits" ? "active" : ""}`}
+              onClick={() => setSiteTab("kits")}
+            >
+              <Package size={12} style={{ marginRight: 5 }} /> Site Kits ({kitCount})
+            </button>
+          </div>
+        )}
+
+        {formError && <Banner kind="error">{formError}</Banner>}
+
+        {tab === "overview" && (
+          <div className="panel" style={{ maxWidth: 720 }}>
+            <div className="panel-h">
+              <Info size={15} className="ph-ico" />
+              <h3>Site information</h3>
+              {canEdit && !editing && (
+                <div className="ph-r" style={{ display: "flex", gap: 8 }}>
                   <button className="btn ghost sm" onClick={() => setEditing({ name: openSite.name, siteId: openSite.siteId })}>
                     <Pencil size={13} /> Edit
                   </button>
                   <button
                     className="btn ghost sm"
                     style={{ color: "var(--red)" }}
-                    disabled={busy || openSite.kitCount > 0}
-                    title={openSite.kitCount > 0 ? "Move or delete this site's kits first" : "Delete site"}
+                    disabled={busy || kitCount > 0}
+                    title={kitCount > 0 ? "Move or delete this site's kits first" : "Delete site"}
                     onClick={handleDelete}
                   >
                     <Trash2 size={13} /> Delete
                   </button>
-                </>
+                </div>
               )}
             </div>
-          )}
-          <p>
-            {openSite.unassigned
-              ? "Kits created before sites existed. Open a kit and choose its site to file it."
-              : `${openSite.kitCount} kit${openSite.kitCount === 1 ? "" : "s"} at this site.`}
-          </p>
-        </div>
+            <div className="panel-b">
+              {editing ? (
+                <form onSubmit={handleSaveEdit} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)" }}>
+                    Site ID
+                    <input className="form-input" style={{ width: 110 }} value={editing.siteId}
+                      onChange={(e) => setEditing(p => ({ ...p, siteId: e.target.value }))} required pattern="\d{3,6}" />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)", flex: "1 1 220px" }}>
+                    Site name
+                    <input className="form-input" value={editing.name}
+                      onChange={(e) => setEditing(p => ({ ...p, name: e.target.value }))} required maxLength={120} />
+                  </label>
+                  <button className="btn amber" type="submit" disabled={busy}>
+                    {busy ? <Loader2 size={14} className="spin" /> : <CheckCircle2 size={14} />} Save
+                  </button>
+                  <button className="btn ghost" type="button" onClick={() => { setEditing(null); setFormError(""); }}>
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <dl className="site-facts">
+                  <div><dt>Site ID</dt><dd className="mono" style={{ color: "var(--teal)" }}>{openSite.siteId}</dd></div>
+                  <div><dt>Site name</dt><dd>{openSite.name}</dd></div>
+                  <div>
+                    <dt>Site kits</dt>
+                    <dd>
+                      <button className="site-open" onClick={() => setSiteTab("kits")}>
+                        {kitCount} kit{kitCount === 1 ? "" : "s"} <ChevronRight size={13} />
+                      </button>
+                    </dd>
+                  </div>
+                  {openSite.updatedAt && <div><dt>Last updated</dt><dd>{fmtDate(openSite.updatedAt)}</dd></div>}
+                </dl>
+              )}
+            </div>
+          </div>
+        )}
 
-        {formError && <Banner kind="error">{formError}</Banner>}
-
-        <SiteKits
-          key={openId}
-          canEdit={canEdit}
-          site={openSite}
-          sites={sites}
-          onKitsChanged={loadSites}
-        />
+        {tab === "kits" && (
+          <section aria-label="Site Kits">
+            {!openSite.unassigned && (
+              <div className="site-kits-head">
+                <Package size={15} className="ph-ico" />
+                <h3>Site Kits</h3>
+                <span className="faint">{kitCount} kit{kitCount === 1 ? "" : "s"} at {openSite.name}</span>
+              </div>
+            )}
+            <SiteKits
+              key={openId}
+              canEdit={canEdit}
+              site={openSite}
+              sites={sites}
+              onKitsChanged={loadSites}
+            />
+          </section>
+        )}
       </div>
     );
   }

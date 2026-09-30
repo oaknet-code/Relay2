@@ -1060,3 +1060,51 @@
   outline-offset: 3px;
   border-radius: 4px;
 }
+
+/* Site detail: Overview | Site Kits tabs */
+.site-tabs {
+  display: inline-flex;
+  margin-bottom: 18px;
+}
+
+.site-tabs .tab-btn {
+  font-size: 12.5px;
+  padding: 8px 14px;
+}
+
+.site-kits-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.site-kits-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.site-kits-head .faint {
+  font-size: 12px;
+}
+
+.site-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+
+.site-facts dt {
+  font-size: 10px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 6px;
+}
+
+.site-facts dd {
+  margin: 0;
+  font-size: 13.5px;
+}
