@@ -5,9 +5,28 @@ import {
 } from 'lucide-react';
 import { Ring, StatePill, Band, Dot } from '../components/ui';
 import { STATE_META, LINK_STATUS } from '../constants/states';
-import { LINKS, CONSUMABLES, SITES } from '../data/mockData';
+import { LINKS, SITES } from '../data/mockData';
 
-const cStatus = (c) => c.qty <= 0 ? "out" : (c.qty < c.reorder ? "low" : "ok");
+// Mission Control's sample links use lowercase statuses ("live", "staged",
+// "bom_incomplete"); LINK_STATUS is keyed by the backend's uppercase ones.
+// Looking them up directly returned undefined and crashed the page (BOM
+// List tab, and clicking a site on the map).
+const EXTRA_LINK_STATUS = {
+  STAGED: { label: "Staged", c: "var(--violet)" },
+  BOM_INCOMPLETE: { label: "BOM Short", c: "var(--red)" },
+};
+const linkStatus = (s) => {
+  const key = String(s || "").toUpperCase();
+  return LINK_STATUS[key] || EXTRA_LINK_STATUS[key] || { label: String(s || "—"), c: "var(--faint)" };
+};
+
+// Leaflet draws on canvas/SVG, which can't read CSS variables — resolve
+// "var(--teal)" to its actual colour.
+const cssColor = (c) => {
+  const m = /^var\((--[\w-]+)\)$/.exec(c);
+  if (!m || typeof document === "undefined") return c;
+  return getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || "#8a94a6";
+};
 
 const SITE_COORDS = {
   "NBO-HUB": [-1.2921, 36.8219],
@@ -43,15 +62,6 @@ export function MissionControl({ assets }) {
   const order = ["in_transit", "stocked", "staged", "dispatched", "installed", "maintenance", "quarantine", "retired"];
   const segs = order.filter(k => counts[k]).map(k => ({ k, n: counts[k], c: STATE_META[k].c }));
 
-  const lowStock = CONSUMABLES.filter(c => cStatus(c) !== "ok");
-  const ledger = [
-    { t: "08:42", a: "Gate pass GP-2207 voided — re-pick", who: "j.okoth" },
-    { t: "08:19", a: "AT-1303 → Quarantine (PoST fail)", who: "qc.bay" },
-    { t: "07:55", a: "AT-1504 firmware v9.4.2 verified", who: "eng.staging" },
-    { t: "07:31", a: "MW-04 manifest dispatched · KDJ-402F", who: "warehouse" },
-    { t: "06:58", a: "GRN-8841 received vs PO-4471 (1 short)", who: "stores" }
-  ];
-
   const selectedSiteDetails = useMemo(() => {
     if (!selectedSite) return null;
     const site = SITES[selectedSite];
@@ -85,63 +95,66 @@ export function MissionControl({ assets }) {
     };
   }, [selectedSite, assets]);
 
+  const layersRef = useRef(null);
+
+  // Create the map once each time the Map tab is shown; tear it down when
+  // the tab switches away. (Previously it was destroyed and rebuilt on
+  // every site click, resetting pan/zoom.)
   useEffect(() => {
     if (activeTab !== 'map' || !mapRef.current) return;
     const L = window.L;
     if (!L) return;
 
-    // Initialize Leaflet map if not yet done
-    if (!mapInstanceRef.current) {
-      const map = L.map(mapRef.current, {
-        center: [-2.1, 38.0], // Centered to fit Mount Kenya down to Mombasa
-        zoom: 7,
-        zoomControl: false,
-        attributionControl: false
-      });
-
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-      // CartoDB Dark Matter tile layer for premium dark aesthetic
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19
-      }).addTo(map);
-
-      mapInstanceRef.current = map;
-    }
-
-    const map = mapInstanceRef.current;
-
-    // Clear existing markers and polylines
-    map.eachLayer((layer) => {
-      if (layer instanceof L.CircleMarker || layer instanceof L.Polyline) {
-        map.removeLayer(layer);
-      }
+    const map = L.map(mapRef.current, {
+      center: [-1.6, 37.6], // Mount Kenya down to Mombasa
+      zoom: 7,
+      zoomControl: false,
     });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Draw link lines
+    // OpenStreetMap tiles (no API key; the CARTO basemap now requires one
+    // and was rendering "API KEY REQUIRED" watermarks). Darkened via CSS
+    // (.mc-map .leaflet-tile-pane) to match the console theme.
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(map);
+
+    layersRef.current = L.layerGroup().addTo(map);
+    mapInstanceRef.current = map;
+
+    // The container can still be sizing itself on first paint.
+    const t = setTimeout(() => map.invalidateSize(), 150);
+
+    return () => {
+      clearTimeout(t);
+      map.remove();
+      mapInstanceRef.current = null;
+      layersRef.current = null;
+    };
+  }, [activeTab]);
+
+  // Draw links and site markers; redraws only these layers on selection.
+  useEffect(() => {
+    const L = window.L;
+    const layers = layersRef.current;
+    if (activeTab !== 'map' || !L || !layers) return;
+    layers.clearLayers();
+
     LINKS.forEach(link => {
       const from = SITE_COORDS[link.a];
       const to = SITE_COORDS[link.b];
       if (!from || !to) return;
-
-      const color = LINK_STATUS[link.status]?.c || 'var(--muted)';
       const isLive = link.status === 'live';
-
-      // Map color string to actual hex code
-      const hexColor = color.startsWith('var(') 
-        ? (color.includes('teal') ? '#33dcae' : (color.includes('blue') ? '#5fa8ff' : '#ff5f5f')) 
-        : color;
-
       L.polyline([from, to], {
-        color: hexColor,
+        color: cssColor(linkStatus(link.status).c),
         weight: isLive ? 3 : 1.5,
         dashArray: isLive ? null : '4, 4',
-        opacity: 0.8
-      }).addTo(map);
+        opacity: 0.85,
+      }).addTo(layers);
     });
 
-    // Draw site markers
-    Object.entries(SITES).forEach(([code, site]) => {
+    Object.entries(SITES).forEach(([code]) => {
       const coord = SITE_COORDS[code];
       if (!coord) return;
 
@@ -149,39 +162,27 @@ export function MissionControl({ assets }) {
       const siteLinks = LINKS.filter(l => l.a === code || l.b === code);
       const hasLive = siteLinks.some(l => l.status === 'live');
       const hasStaging = siteLinks.some(l => l.status === 'staging' || l.status === 'staged');
-      const hexColor = hasLive ? '#33dcae' : (hasStaging ? '#5fa8ff' : '#ff5f5f');
+      const fill = cssColor(hasLive ? 'var(--teal)' : (hasStaging ? 'var(--blue)' : 'var(--red)'));
 
       const marker = L.circleMarker(coord, {
-        radius: isSelected ? 9 : 6.5,
-        fillColor: hexColor,
+        radius: isSelected ? 9 : 7,
+        fillColor: fill,
         color: isSelected ? '#ffffff' : '#080b10',
         weight: isSelected ? 2 : 1.5,
         opacity: 1,
         fillOpacity: 0.9,
-        className: `interactive-marker ${isSelected ? 'selected' : ''}`
-      }).addTo(map);
+        className: `interactive-marker ${isSelected ? 'selected' : ''}`,
+      }).addTo(layers);
 
-      // Add permanent code label tooltip
       marker.bindTooltip(code, {
         permanent: true,
         direction: 'top',
         className: `map-tooltip ${isSelected ? 'selected' : ''}`,
-        offset: [0, -8]
+        offset: [0, -8],
       });
-
-      marker.on('click', () => {
-        setSelectedSite(code);
-      });
+      marker.on('click', () => setSelectedSite(code));
     });
-
-    // Cleanup when activeTab toggles away
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, [activeTab, selectedSite, assets]);
+  }, [activeTab, selectedSite]);
 
   return (
     <div>
@@ -265,7 +266,7 @@ export function MissionControl({ assets }) {
         </div>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "1.6fr 1fr", marginTop: 16 }}>
+      <div style={{ marginTop: 16 }}>
         <div className="panel">
           <div className="panel-h" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -291,7 +292,7 @@ export function MissionControl({ assets }) {
           {activeTab === 'map' ? (
             <div className="map-view-container">
               <div className="map-wrapper">
-                <div ref={mapRef} style={{ width: '100%', height: '100%', minHeight: '400px', background: 'var(--bg)' }} />
+                <div ref={mapRef} className="mc-map" style={{ width: '100%', height: '100%', minHeight: '400px', background: 'var(--bg)' }} />
                 
                 <div className="map-legend">
                   <span><Dot c="var(--teal)" /> Active</span>
@@ -321,8 +322,8 @@ export function MissionControl({ assets }) {
                               <div key={l.id} className="sd-link-item">
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                   <span className="mono font-semibold">{l.id}</span>
-                                  <span className="pill" style={{ color: LINK_STATUS[l.status].c, background: `${LINK_STATUS[l.status].c}1a`, border: `1px solid ${LINK_STATUS[l.status].c}33` }}>
-                                    {LINK_STATUS[l.status].label}
+                                  <span className="pill" style={{ color: linkStatus(l.status).c, border: "1px solid var(--line2)" }}>
+                                    {linkStatus(l.status).label}
                                   </span>
                                 </div>
                                 <div className="faint mono" style={{ fontSize: 10, marginTop: 2 }}>
@@ -443,9 +444,9 @@ export function MissionControl({ assets }) {
                           )}
                         </td>
                         <td>
-                          <span className="pill" style={{ color: LINK_STATUS[l.status].c }}>
-                            <Dot c={LINK_STATUS[l.status].c} />
-                            {LINK_STATUS[l.status].label}
+                          <span className="pill" style={{ color: linkStatus(l.status).c }}>
+                            <Dot c={linkStatus(l.status).c} />
+                            {linkStatus(l.status).label}
                           </span>
                         </td>
                       </tr>
@@ -457,46 +458,6 @@ export function MissionControl({ assets }) {
           )}
         </div>
 
-        <div className="panel">
-          <div className="panel-h">
-            <AlertTriangle size={15} className="ph-ico" />
-            <h3>Alerts</h3>
-            <span className="ph-r" style={{ color: lowStock.length ? "var(--red)" : "var(--teal)" }}>
-              {lowStock.length} active
-            </span>
-          </div>
-          <div className="panel-b">
-            {lowStock.map(c => (
-              <div key={c.sku} className="alert">
-                <div className="ai" style={{ color: c.qty <= 0 ? "var(--red)" : "var(--amber)" }}>
-                  {c.qty <= 0 ? <AlertTriangle size={15} /> : <Clock size={15} />}
-                </div>
-                <div>
-                  <div className="at">
-                    {c.qty <= 0 ? "Out of stock" : "Low stock"}: {c.name}
-                  </div>
-                  <div className="as">
-                    {c.qty} {c.unit} remaining · reorder at {c.reorder}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="panel-h" style={{ borderTop: "1px solid var(--line)", marginTop: 16 }}>
-            <Clock size={15} className="ph-ico" />
-            <h3>Activity Log</h3>
-          </div>
-          <div className="panel-b ledger">
-            {ledger.map((e, i) => (
-              <div className="lr" key={i}>
-                <span className="lt">{e.t}</span>
-                <span style={{ flex: 1 }}>{e.a}</span>
-                <span className="lt" style={{ color: "var(--teal2)" }}>@{e.who}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

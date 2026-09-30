@@ -2,7 +2,7 @@ import React from 'react';
 import { Bell, RadioTower, Menu } from 'lucide-react';
 import { Dot } from '../ui/Dot';
 
-export function Topbar({ currentView, liveLinks, totalLinks, onMenuToggle }) {
+export function Topbar({ currentView, liveLinks, totalLinks, onMenuToggle, onBellClick }) {
   return (
     <header className="topbar">
       {/* Hamburger — only shown on mobile via CSS */}
@@ -23,10 +23,13 @@ export function Topbar({ currentView, liveLinks, totalLinks, onMenuToggle }) {
           <RadioTower size={12} />
           {totalLinks} planned
         </span>
-        <button className="iconbtn">
-          <Bell size={16} />
-          <span className="notif-dot" />
-        </button>
+        {/* Opens Notifications (Alerts + Activity Log) for roles that have it. */}
+        {onBellClick && (
+          <button className="iconbtn" onClick={onBellClick} aria-label="Notifications" title="Notifications">
+            <Bell size={16} />
+            <span className="notif-dot" />
+          </button>
+        )}
       </div>
     </header>
   );

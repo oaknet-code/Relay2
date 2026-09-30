@@ -33,6 +33,7 @@ const Dispatch = lazy(() => import("./pages/Dispatch").then((m) => ({ default: m
 const FleetManagement = lazy(() => import("./pages/FleetManagement").then((m) => ({ default: m.FleetManagement })));
 const FieldOps = lazy(() => import("./pages/FieldOps").then((m) => ({ default: m.FieldOps })));
 const AssetTracking = lazy(() => import("./pages/AssetTracking").then((m) => ({ default: m.AssetTracking })));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const UserManagementPage = lazy(() =>
   import("./pages/UserManagementPage").then((m) => ({ default: m.UserManagementPage }))
 );
@@ -243,6 +244,13 @@ export default function App() {
       case "users":
         return isAdmin(user) ? (
           <UserManagementPage />
+        ) : (
+          <MissionControl assets={assets} />
+        );
+
+      case "notifications":
+        return hasWriteAccess ? (
+          <NotificationsPage />
         ) : (
           <MissionControl assets={assets} />
         );

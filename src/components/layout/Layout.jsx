@@ -39,6 +39,11 @@ export function Layout({
           liveLinks={liveLinks}
           totalLinks={totalLinks}
           onMenuToggle={() => setMenuOpen(o => !o)}
+          onBellClick={
+            navigation.some((n) => n.id === "notifications")
+              ? () => handleTabChange("notifications")
+              : undefined
+          }
         />
         <div className="body">
           {children}
