@@ -1035,3 +1035,28 @@
 .mc-map .leaflet-tile-pane {
   filter: brightness(0.68) contrast(1.15) saturate(0.7) hue-rotate(180deg) invert(1);
 }
+
+/* Sites list: whole row opens the site; the name is a real button for
+   keyboard users. */
+.sites-tbl .site-row {
+  cursor: pointer;
+}
+
+.site-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.site-open:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
+  border-radius: 4px;
+}

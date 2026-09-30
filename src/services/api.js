@@ -369,6 +369,35 @@ export const allocateSiteKit = async (kitId) => {
   return data;
 };
 
+/**
+ * Sites — each site holds its Site Kits.
+ */
+export const getSites = async () => {
+  const { data } = await axiosInstance.get("/api/sites");
+  return data; // { sites: [{ _id, siteId, name, kitCount }], unassignedKitCount }
+};
+
+export const createSite = async (payload) => {
+  const { data } = await axiosInstance.post("/api/sites", payload);
+  return data;
+};
+
+export const updateSite = async (siteId, payload) => {
+  const { data } = await axiosInstance.put(`/api/sites/${siteId}`, payload);
+  return data;
+};
+
+export const deleteSite = async (siteId) => {
+  const { data } = await axiosInstance.delete(`/api/sites/${siteId}`);
+  return data;
+};
+
+// Move a kit to a site (Site _id), or null to unassign it.
+export const setKitSite = async (kitId, site) => {
+  const { data } = await axiosInstance.patch(`/api/sitekits/${kitId}/site`, { site });
+  return data;
+};
+
 // Marks the kit ready for Dispatch (replaces the old Staging Bay step).
 export const sendKitToDispatch = async (kitId) => {
   const { data } = await axiosInstance.post(`/api/sitekits/${kitId}/send-to-dispatch`);
@@ -481,7 +510,13 @@ export const api = {
   deleteSiteKit,
   allocateSiteKit,
   sendKitToDispatch,
+  setKitSite,
   importSiteKitsExcel,
+  // Sites
+  getSites,
+  createSite,
+  updateSite,
+  deleteSite,
   // Staging
   listStaging,
   listAwaitingStaging,

@@ -5,7 +5,7 @@ import {
   ArrowLeft, Truck
 } from 'lucide-react';
 import { Band, StatePill, Dot } from '../components/ui';
-import { getSiteKits, createSiteKit, updateSiteKit, deleteSiteKit, allocateSiteKit, importSiteKitsExcel, getLinks, sendKitToDispatch } from '../services/api';
+import { getSiteKits, createSiteKit, updateSiteKit, deleteSiteKit, allocateSiteKit, importSiteKitsExcel, getLinks, sendKitToDispatch, setKitSite } from '../services/api';
 
 function timeAgo(dateStr) {
   if (!dateStr) return "—";
@@ -28,6 +28,7 @@ function fromApiKit(k) {
     status: k.status,
     linkId: k.link?._id,
     linkName: k.link?.linkId,
+    siteRef: k.site?._id || null,
     components: (k.components || []).map(c => ({
       _id: c._id,
       type: c.type,
@@ -80,7 +81,11 @@ function ComponentsTable({ components }) {
   );
 }
 
-export function SiteKits({ canEdit = true }) {
+// Rendered inside the Sites page: `site` is the open site ({ _id, siteId,
+// name }) or { unassigned: true } for kits not yet filed under a site.
+// Without `site` it lists every kit, as before.
+export function SiteKits({ canEdit = true, site = null, sites = [], onKitsChanged }) {
+  const inSite = !!site && !site.unassigned;
   const [view, setView] = useState("list"); // list, create, edit
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -140,6 +145,7 @@ export function SiteKits({ canEdit = true }) {
       const result = await importSiteKitsExcel(file);
       setImportMsg({ ok: true, text: result.message });
       await loadKits();
+      onKitsChanged?.();
     } catch (err) {
       setImportMsg({ ok: false, text: err.response?.data?.message || "Import failed." });
     } finally {
@@ -252,6 +258,7 @@ export function SiteKits({ canEdit = true }) {
         name: formData.name,
         band: formData.band,
         linkId: formData.linkId,
+        ...(inSite && !editingKit ? { site: site._id } : {}),
         components: formData.components.map(c => ({
           _id: c._id,
           type: c.type,
@@ -273,6 +280,7 @@ export function SiteKits({ canEdit = true }) {
       }
 
       await loadKits();
+      onKitsChanged?.();
       resetForm();
       setView("list");
     } catch (err) {
@@ -292,10 +300,30 @@ export function SiteKits({ canEdit = true }) {
     try {
       await deleteSiteKit(kit.kitId);
       await loadKits();
+      onKitsChanged?.();
       setSuccess("Kit deleted successfully!");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to delete kit");
       console.error("Delete error:", err);
+    }
+  };
+
+  const [movingSite, setMovingSite] = useState(false);
+  const handleMoveKit = async (kit, newSiteRef) => {
+    setMovingSite(true);
+    setDetailsError("");
+    setDetailsSuccess("");
+    try {
+      await setKitSite(kit.kitId, newSiteRef || null);
+      const target = sites.find(s => s._id === newSiteRef);
+      setViewingKit(prev => (prev ? { ...prev, siteRef: newSiteRef || null } : prev));
+      setDetailsSuccess(target ? `Kit moved to ${target.siteId} · ${target.name}.` : "Kit is now unassigned.");
+      await loadKits();
+      onKitsChanged?.();
+    } catch (err) {
+      setDetailsError(err.response?.data?.message || "Failed to move the kit.");
+    } finally {
+      setMovingSite(false);
     }
   };
 
@@ -304,7 +332,8 @@ export function SiteKits({ canEdit = true }) {
                          kit.kitId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          kit.band.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === "all" || kit.status === filterStatus;
-    return matchesSearch && matchesFilter;
+    const matchesSite = !site || (site.unassigned ? !kit.siteRef : kit.siteRef === site._id);
+    return matchesSearch && matchesFilter && matchesSite;
   });
 
   // DETAILS VIEW
@@ -383,6 +412,32 @@ export function SiteKits({ canEdit = true }) {
                   <div style={{ fontSize: 12.5 }}>{viewingKit.linkName || "No link assigned"}</div>
                 </div>
               </div>
+
+              {sites.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Site
+                  </div>
+                  {canEdit ? (
+                    <select
+                      className="form-input"
+                      value={viewingKit.siteRef || ""}
+                      disabled={movingSite}
+                      onChange={(e) => handleMoveKit(viewingKit, e.target.value)}
+                      aria-label="Site this kit belongs to"
+                    >
+                      <option value="">Unassigned</option>
+                      {sites.map(s => (
+                        <option key={s._id} value={s._id}>{s.siteId} · {s.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div style={{ fontSize: 12.5 }}>
+                      {(() => { const s = sites.find(x => x._id === viewingKit.siteRef); return s ? `${s.siteId} · ${s.name}` : "Unassigned"; })()}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.1em" }}>
@@ -735,6 +790,7 @@ export function SiteKits({ canEdit = true }) {
   // LIST VIEW
   return (
     <div className="view">
+      {!site && (
       <div className="view-head">
         <div className="tagchip">
           <Package size={11} />
@@ -746,6 +802,7 @@ export function SiteKits({ canEdit = true }) {
           all required components (IDU, ODU, dishes) plus consumables for a complete site deployment.
         </p>
       </div>
+      )}
 
       <div style={{ marginBottom: 24, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 250 }}>
@@ -780,6 +837,7 @@ export function SiteKits({ canEdit = true }) {
               style={{ display: "none" }}
               onChange={handleFileChosen}
             />
+            {!inSite && (
             <button
               className="btn ghost"
               disabled={importing}
@@ -788,6 +846,7 @@ export function SiteKits({ canEdit = true }) {
               {importing ? <Loader2 size={16} className="spin" /> : <Upload size={16} />}
               {importing ? "Importing…" : "Import Excel"}
             </button>
+            )}
             <button className="btn amber" onClick={startCreate}>
               <Plus size={16} />
               New Kit
@@ -933,7 +992,9 @@ export function SiteKits({ canEdit = true }) {
           <Package size={32} style={{ marginBottom: 16, opacity: 0.5 }} />
           <div style={{ fontSize: 14, marginBottom: 4 }}>No kits found</div>
           <div style={{ fontSize: 12 }}>
-            {kits.length === 0
+            {site && !searchTerm && filterStatus === "all"
+              ? (site.unassigned ? "Every kit is filed under a site." : "No kits at this site yet — add one with New Kit.")
+              : kits.length === 0
               ? "Create your first kit or import an Excel sheet to load site kits."
               : (searchTerm || filterStatus !== "all"
                 ? "Try adjusting your search or filter criteria"

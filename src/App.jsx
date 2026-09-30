@@ -6,7 +6,7 @@ import { MissionControl } from "./pages/MissionControl";
 import { LinksView } from "./pages/LinksView";
 import { InventoryView } from "./pages/InventoryView";
 import { LoginPage } from "./pages/SignupPage";
-import { SiteKits } from "./pages/SiteKits";
+import { SitesPage } from "./pages/SitesPage";
 import { SiteWorkPage } from "./pages/SiteWorkPage";
 
 import { api } from "./services/api";
@@ -205,8 +205,8 @@ export default function App() {
       case "inventory":
         return <InventoryView />;
 
-      case "kits":
-        return <SiteKits canEdit={hasWriteAccess} />;
+      case "sites":
+        return <SitesPage canEdit={hasWriteAccess} />;
 
       case "dispatch":
         return hasWriteAccess ? (
