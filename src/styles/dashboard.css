@@ -1136,3 +1136,25 @@
 .site-map .leaflet-tile-pane {
   filter: brightness(0.68) contrast(1.15) saturate(0.7) hue-rotate(180deg) invert(1);
 }
+
+/* Sites list: GPS cell is a link to Google Maps */
+.site-gps-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(51, 220, 174, 0.3);
+  color: var(--teal);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.site-gps-link:hover {
+  background: rgba(51, 220, 174, 0.08);
+}
+
+.site-gps-link:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}

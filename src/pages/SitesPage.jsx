@@ -459,7 +459,7 @@ export function SitesPage({ canEdit = false }) {
                 <tr>
                   <th style={{ width: 90 }}>Site ID</th>
                   <th>Site name</th>
-                  <th style={{ width: 190 }}>GPS</th>
+                  <th style={{ width: 90 }}>GPS</th>
                   <th style={{ width: 90, textAlign: "right" }}>Kits</th>
                   <th style={{ width: 40 }} aria-label="Open" />
                 </tr>
@@ -486,10 +486,24 @@ export function SitesPage({ canEdit = false }) {
                         {s.name}
                       </button>
                     </td>
-                    <td className="mono" style={{ fontSize: 11.5 }}>
-                      {hasGps(s)
-                        ? <span style={{ color: "var(--muted)" }}><MapPin size={11} style={{ verticalAlign: -1, marginRight: 4, color: "var(--teal)" }} />{fmtCoord(s.latitude)}, {fmtCoord(s.longitude)}</span>
-                        : <span className="faint">—</span>}
+                    <td style={{ fontSize: 11.5 }}>
+                      {hasGps(s) ? (
+                        // Link, not the raw numbers; stopPropagation so it
+                        // doesn't also open the site (the row is clickable).
+                        <a
+                          className="site-gps-link"
+                          href={mapsUrl(s)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`${fmtCoord(s.latitude)}, ${fmtCoord(s.longitude)}`}
+                          aria-label={`Open ${s.name} in Google Maps`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MapPin size={11} /> GPS
+                        </a>
+                      ) : (
+                        <span className="faint">—</span>
+                      )}
                     </td>
                     <td className="mono" style={{ textAlign: "right" }}>
                       {s.kitCount ? <span><Package size={11} style={{ verticalAlign: -1, marginRight: 4 }} />{s.kitCount}</span> : <span className="faint">0</span>}
