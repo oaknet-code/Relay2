@@ -29,6 +29,7 @@ function fromApiKit(k) {
     linkId: k.link?._id,
     linkName: k.link?.linkId,
     siteRef: k.site?._id || null,
+    siteLabel: k.site ? `${k.site.siteId} · ${k.site.name}` : null,
     components: (k.components || []).map(c => ({
       _id: c._id,
       type: c.type,
@@ -84,7 +85,7 @@ function ComponentsTable({ components }) {
 // Rendered inside the Sites page: `site` is the open site ({ _id, siteId,
 // name }) or { unassigned: true } for kits not yet filed under a site.
 // Without `site` it lists every kit, as before.
-export function SiteKits({ canEdit = true, site = null, sites = [], onKitsChanged }) {
+export function SiteKits({ canEdit = true, site = null, sites = [], showHeader = true, onKitsChanged }) {
   const inSite = !!site && !site.unassigned;
   const [view, setView] = useState("list"); // list, create, edit
   const [searchTerm, setSearchTerm] = useState("");
@@ -328,7 +329,8 @@ export function SiteKits({ canEdit = true, site = null, sites = [], onKitsChange
   };
 
   const filteredKits = kits.filter(kit => {
-    const matchesSearch = kit.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = (kit.siteLabel || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         kit.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          kit.kitId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          kit.band.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === "all" || kit.status === filterStatus;
@@ -790,7 +792,7 @@ export function SiteKits({ canEdit = true, site = null, sites = [], onKitsChange
   // LIST VIEW
   return (
     <div className="view">
-      {!site && (
+      {!site && showHeader && (
       <div className="view-head">
         <div className="tagchip">
           <Package size={11} />
@@ -931,6 +933,11 @@ export function SiteKits({ canEdit = true, site = null, sites = [], onKitsChange
                 <div style={{ fontSize: 11, color: "var(--muted)" }}>
                   {kit.linkName || "No link assigned"}
                 </div>
+                {!site && (
+                  <div style={{ fontSize: 11, marginLeft: "auto", color: kit.siteLabel ? "var(--teal)" : "var(--amber)" }}>
+                    {kit.siteLabel ? `Site ${kit.siteLabel}` : "Unassigned"}
+                  </div>
+                )}
               </div>
 
               <div style={{ marginBottom: 16 }}>

@@ -37,6 +37,7 @@ export function SitesPage({ canEdit = false }) {
   const [openId, setOpenId] = useState(null); // Site _id, "unassigned", or null for the list
   const [siteTab, setSiteTab] = useState("kits"); // "overview" | "kits" inside an open site
 
+  const [listTab, setListTab] = useState("sites"); // "sites" | "kits" (every kit, all sites)
   const [showCreate, setShowCreate] = useState(false);
   const [newSite, setNewSite] = useState({ name: "", siteId: "" });
   const [editing, setEditing] = useState(null); // { name, siteId } while editing the open site
@@ -71,6 +72,8 @@ export function SitesPage({ canEdit = false }) {
 
   // Opening a site always lands on its Site Kits tab.
   useEffect(() => { setSiteTab("kits"); setEditing(null); }, [openId]);
+
+  const totalKits = sites.reduce((n, s) => n + (s.kitCount || 0), unassignedCount);
 
   const openSite = openId === "unassigned" ? UNASSIGNED : sites.find(s => s._id === openId) || null;
 
@@ -268,9 +271,44 @@ export function SitesPage({ canEdit = false }) {
           Rollout Pipeline
         </span>
         <h2>Sites</h2>
-        <p>Every site in the rollout. Open a site to manage its kits.</p>
+        <p>Every site in the rollout. Open a site to manage its kits, or use Site Kits to see every kit.</p>
       </div>
 
+      <div className="tab-buttons site-tabs" role="tablist" aria-label="Sites sections">
+        <button
+          role="tab"
+          aria-selected={listTab === "sites"}
+          className={`tab-btn ${listTab === "sites" ? "active" : ""}`}
+          onClick={() => setListTab("sites")}
+        >
+          <Building2 size={12} style={{ marginRight: 5 }} /> Sites ({sites.length})
+        </button>
+        <button
+          role="tab"
+          aria-selected={listTab === "kits"}
+          className={`tab-btn ${listTab === "kits" ? "active" : ""}`}
+          onClick={() => setListTab("kits")}
+        >
+          <Package size={12} style={{ marginRight: 5 }} /> Site Kits ({totalKits})
+        </button>
+      </div>
+
+      {listTab === "kits" ? (
+        <section aria-label="All site kits">
+          <div className="site-kits-head">
+            <Package size={15} className="ph-ico" />
+            <h3>All Site Kits</h3>
+            <span className="faint">{totalKits} kit{totalKits === 1 ? "" : "s"} across {sites.length} sites</span>
+          </div>
+          <SiteKits
+            canEdit={canEdit}
+            sites={sites}
+            showHeader={false}
+            onKitsChanged={loadSites}
+          />
+        </section>
+      ) : (
+      <>
       {notice && <Banner kind="ok">{notice}</Banner>}
 
       <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -385,6 +423,8 @@ export function SitesPage({ canEdit = false }) {
             </table>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
