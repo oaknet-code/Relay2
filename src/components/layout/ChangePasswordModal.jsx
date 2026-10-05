@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { ShieldCheck, AlertTriangle } from "lucide-react";
+import { PasswordRules } from "../ui/PasswordRules";
+import { passwordProblem, PASSWORD_MAX_LENGTH } from "../../utils/passwordPolicy";
 import { api } from "../../services/api";
 import "../../styles/change-password.css";
 
@@ -31,8 +33,9 @@ export function ChangePasswordModal({ onClose }) {
       return;
     }
 
-    if (passwords.newPassword.length < 6) {
-      setModalError("New password must be at least 6 characters");
+    const problem = passwordProblem(passwords.newPassword);
+    if (problem) {
+      setModalError(problem);
       return;
     }
 
@@ -121,7 +124,10 @@ export function ChangePasswordModal({ onClose }) {
               onChange={handlePassChange}
               className="change-password-input"
               autoComplete="new-password"
+              maxLength={PASSWORD_MAX_LENGTH}
+              aria-describedby="newPassword-rules"
             />
+            <PasswordRules password={passwords.newPassword} id="newPassword-rules" />
           </div>
 
           <div className="form-group">

@@ -54,7 +54,9 @@
 /* Smooth Scrolling & Prevent Horizontal Overflow */
 html {
   scroll-behavior: smooth;
-  overflow-x: hidden;
+  /* clip (not hidden): hidden turns html/body into scroll containers,
+     which stops the sidebar's position: sticky from working. */
+  overflow-x: clip;
 }
 
 body {
@@ -65,7 +67,7 @@ body {
   font-family: var(--sans);
   font-size: var(--font-size-base);
   line-height: 1.5;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 #root {

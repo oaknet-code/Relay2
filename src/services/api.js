@@ -82,13 +82,14 @@ export const getMe = async () => {
  * User management (admin-only) — creates either a client or a
  * field_worker account.
  */
-export const createUser = async ({ username, email, company, role }) => {
+export const createUser = async ({ username, email, company, role, password }) => {
   try {
     const { data } = await axiosInstance.post("/api/auth/users", {
       username,
       email,
       company: company || undefined,
       role,
+      password,
     });
     return data;
   } catch (error) {
@@ -103,6 +104,28 @@ export const listUsers = async () => {
     return data;
   } catch (error) {
     const message = error.response?.data?.message || "Failed to load accounts";
+    throw new Error(message);
+  }
+};
+
+// Admin-only: edit name/email/role/company of any account.
+export const updateUser = async (id, payload) => {
+  try {
+    const { data } = await axiosInstance.patch(`/api/auth/users/${id}`, payload);
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to update account";
+    throw new Error(message);
+  }
+};
+
+// Admin-only: permanently delete an account.
+export const deleteUser = async (id) => {
+  try {
+    const { data } = await axiosInstance.delete(`/api/auth/users/${id}`);
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to delete account";
     throw new Error(message);
   }
 };
@@ -475,6 +498,8 @@ export const api = {
   changePassword,
   createUser,
   listUsers,
+  updateUser,
+  deleteUser,
   setUserStatus,
   get: (endpoint, config) => axiosInstance.get(endpoint, config),
   post: (endpoint, payload, config) =>
