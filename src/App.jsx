@@ -203,7 +203,7 @@ export default function App() {
         return <LinksView canEdit={hasWriteAccess} />;
 
       case "inventory":
-        return <InventoryView />;
+        return <InventoryView canImport={hasWriteAccess} />;
 
       case "sites":
         return <SitesPage canEdit={hasWriteAccess} />;

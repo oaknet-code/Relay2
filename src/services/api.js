@@ -312,6 +312,24 @@ export const getAssetAudit = async (id) => {
 };
 
 /**
+ * Inventory — project BOQ (bill of quantities)
+ */
+export const getBoqItems = async () => {
+  const { data } = await axiosInstance.get("/api/inventory/boq");
+  return data.items;
+};
+
+// file: a browser File (.xlsx) with sheets "Line 1 BOQ", "Line 2 BOQ", ...
+export const importBoqExcel = async (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await axiosInstance.post("/api/inventory/boq/import", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+};
+
+/**
  * Inventory — Consumables
  */
 export const getConsumables = async (params = {}) => {

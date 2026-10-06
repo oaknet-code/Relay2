@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Search, Boxes } from 'lucide-react';
 import { StatePill, TypeIcon, Band } from '../components/ui';
 import { getAssets } from '../services/api';
+import { BoqInventory } from './BoqInventory';
 import { STATUS_TO_UI } from '../constants/states';
 
-export function InventoryView() {
+export function InventoryView({ canImport = false }) {
+  const [tab, setTab] = useState("boq"); // "boq" | "assets"
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -67,10 +69,21 @@ export function InventoryView() {
         </span>
         <h2>Inventory</h2>
         <p>
-          Serialized units carry frequency-band metadata and a single live lifecycle state; 
-          consumables are tracked by quantity against reorder thresholds.
+          Project equipment from the Line 1 &amp; 2 BOQ, plus serialized units tracked through their lifecycle.
         </p>
       </div>
+
+      <div className="tab-buttons site-tabs" role="tablist" aria-label="Inventory sections">
+        <button role="tab" aria-selected={tab === "boq"} className={`tab-btn ${tab === "boq" ? "active" : ""}`} onClick={() => setTab("boq")}>
+          BOQ Inventory
+        </button>
+        <button role="tab" aria-selected={tab === "assets"} className={`tab-btn ${tab === "assets" ? "active" : ""}`} onClick={() => setTab("assets")}>
+          Serialized Assets ({assets.length})
+        </button>
+      </div>
+
+      {tab === "boq" ? <BoqInventory canImport={canImport} /> : (
+      <>
 
       <div className="panel" style={{ marginBottom: 16 }}>
         <div className="panel-h">
@@ -168,6 +181,8 @@ export function InventoryView() {
           </table>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
