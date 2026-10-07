@@ -9,6 +9,14 @@ import {
 } from "lucide-react";
 import { createSiteWork } from "../services/api";
 
+const ALLOWED_PHOTO = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const MAX_PHOTOS = 10;
+const isAllowedPhoto = (file) => {
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  return Boolean(ALLOWED_PHOTO[ext]) && ALLOWED_PHOTO[ext] === file.type;
+};
+
 // Field worker's submission form. Kept in its own module (not lazy) since
 // every non-admin session that reaches Site Work needs it — splitting it
 // out separately is what lets SiteWorkAdminFeed.jsx be lazy-loaded on its
@@ -21,8 +29,21 @@ export function SiteWorkSubmissionForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
+  // Same rules as the server (which also checks the file's bytes):
+  // JPG/PNG/WebP only, 5 MB each, 10 photos max.
   const handleFileChange = (e) => {
-    setFiles(Array.from(e.target.files || []));
+    const chosen = Array.from(e.target.files || []);
+    e.target.value = "";
+    const rejected = chosen.filter((f) => !isAllowedPhoto(f));
+    const tooBig = chosen.filter((f) => isAllowedPhoto(f) && f.size > MAX_PHOTO_BYTES);
+    const ok = chosen.filter((f) => isAllowedPhoto(f) && f.size <= MAX_PHOTO_BYTES);
+    const problems = [];
+    if (rejected.length) problems.push(`${rejected.map((f) => f.name).join(", ")}: only JPG, PNG or WebP photos are accepted.`);
+    if (tooBig.length) problems.push(`${tooBig.map((f) => f.name).join(", ")}: larger than 5 MB.`);
+    const next = [...files, ...ok].slice(0, MAX_PHOTOS);
+    if (files.length + ok.length > MAX_PHOTOS) problems.push(`At most ${MAX_PHOTOS} photos per report.`);
+    setError(problems.join(" "));
+    setFiles(next);
   };
 
   const removeFile = (index) => {
@@ -132,10 +153,10 @@ export function SiteWorkSubmissionForm() {
             }}
           >
             <Upload size={16} />
-            Tap to choose photos
+            Tap to choose photos (JPG, PNG or WebP · max 5 MB each)
             <input
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
               multiple
               onChange={handleFileChange}
               style={{ display: "none" }}
