@@ -60,6 +60,29 @@ export const loginUser = async (credentials) => {
 export const login = loginUser;
 
 /**
+ * Forgot password — always resolves with the same message whether or not
+ * the email has an account (the server never says which).
+ */
+export const requestPasswordReset = async (email) => {
+  try {
+    const { data } = await axiosInstance.post("/api/auth/forgot-password", { email });
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Couldn't send the reset email. Try again.");
+  }
+};
+
+// Set a new password using the token from the emailed link.
+export const resetPassword = async (token, password) => {
+  try {
+    const { data } = await axiosInstance.post("/api/auth/reset-password", { token, password });
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Couldn't reset the password. Try again.");
+  }
+};
+
+/**
  * The authenticated session's own profile, including role. This is the
  * only place the frontend can learn the current role now that it isn't in
  * the (HttpOnly) token or the login response body — it's re-derived

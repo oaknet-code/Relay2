@@ -54,6 +54,31 @@ export default function App() {
 
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
+  // "Reset password" email links open /#reset-password=<token>. Read it once
+  // and remove it from the address bar/history so it isn't left lying around.
+  const takeResetTokenFromUrl = () => {
+    const m = /^#reset-password=([A-Za-z0-9_-]{20,})$/.exec(window.location.hash);
+    if (!m) return null;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    return m[1];
+  };
+  const [resetToken, setResetToken] = useState(() => (typeof window === "undefined" ? null : takeResetTokenFromUrl()));
+
+  // Link pasted into an already-open tab: only the hash changes, no reload.
+  useEffect(() => {
+    const onHash = () => {
+      const token = takeResetTokenFromUrl();
+      if (!token) return;
+      api.logout().finally(() => {
+        setUser(null);
+        setCurrentView("login");
+        setResetToken(token);
+      });
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
   /*
    * Load application fonts
    */
@@ -188,7 +213,8 @@ export default function App() {
    * Login screen
    */
   if (currentView === "login") {
-    return <LoginPage onLoginSuccess={onLoginSuccess} />;
+    // key: a newly opened reset link remounts the form in "reset" mode.
+    return <LoginPage key={resetToken || "login"} onLoginSuccess={onLoginSuccess} resetToken={resetToken} onResetDone={() => setResetToken(null)} />;
   }
 
   /*
