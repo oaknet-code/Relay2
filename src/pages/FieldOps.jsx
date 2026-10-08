@@ -31,6 +31,11 @@ export function FieldOps({ assets, pod, setPod, onInstall }) {
   const installed = units.filter(a => a.state === "installed").length;
   const allInstalled = units.length > 0 && installed === units.length;
 
+  // Tick / untick an item as received at the tower base. (Was called by
+  // the checklist but never defined, so tapping an item crashed the page.)
+  const toggleReceived = (uid) =>
+    setPod((p) => ({ ...p, manifest: { ...p.manifest, [uid]: !p.manifest?.[uid] } }));
+
   const [queuedCount, setQueuedCount] = useState(() => pendingCount(job.id));
   const hydrated = useRef(false);
 
