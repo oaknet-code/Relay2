@@ -511,8 +511,7 @@ export function SiteKits({ canEdit = true, canReserve = canEdit, site = null, si
             <Package size={11} />
             Kit Details
           </div>
-          <h2>{viewingKit.kitId}</h2>
-          <p>{viewingKit.name}</p>
+          <h2>{viewingKit.name || viewingKit.kitId}</h2>
         </div>
 
         <div style={{ maxWidth: "700px" }}>
@@ -1130,12 +1129,8 @@ export function SiteKits({ canEdit = true, canReserve = canEdit, site = null, si
           <div key={kit.id} className="panel">
             <div className="panel-h">
               <Package size={16} className="ph-ico" />
-              <div>
-                <h3>{kit.kitId}</h3>
-                <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 2 }}>
-                  {kit.name}
-                </div>
-              </div>
+              {/* Titled by kit name, e.g. "ACADEMY – LAMU-001". */}
+              <h3>{kit.name || kit.kitId}</h3>
               <div className="ph-r">
                 <StatePill s={kit.status} meta={KIT_STATUS} />
               </div>
