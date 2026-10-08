@@ -20,6 +20,10 @@ const emptyForm = () => ({
   notes: "",
 });
 
+// Card title: both ends then the link ID, e.g. "ODS Site B - ACADEMY - LAMU-01".
+const linkTitle = (link) =>
+  [link.siteA?.name, link.siteB?.name, link.linkId].filter(Boolean).join(" - ");
+
 // Prefill the form from an existing link. Keeps any GPS/address already on
 // each end, since saving replaces the whole site object.
 const formFromLink = (link) => {
@@ -450,7 +454,7 @@ export function LinksView({ canEdit = true }) {
             <div className="linkcard" key={link._id}>
               <div className="lc-top">
                 <RadioTower size={17} style={{ color: BAND_COLORS[link.band] || "var(--faint)" }} />
-                <span className="lc-id">{link.linkId}</span>
+                <span className="lc-id">{linkTitle(link)}</span>
                 {link.band && <Band b={link.band} />}
                 <span className="pill" style={{ marginLeft: "auto", color: statusMeta.c }}>
                   <Dot c={statusMeta.c} />
