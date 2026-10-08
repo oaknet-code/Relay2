@@ -34,6 +34,7 @@ function fromApiKit(k) {
       _id: c._id,
       type: c.type,
       model: c.model,
+      description: c.description || "",
       qtyRequired: c.qtyRequired,
       qtyAvailable: c.qtyAvailable || 0,
       sourceType: c.sourceType || "consumable",
@@ -53,22 +54,32 @@ const KIT_STATUS = {
   INSTALLED: { label: "Installed", c: "var(--teal)" }
 };
 
-function ComponentsTable({ components }) {
+// `limit` shows only the first few lines (kit cards); the kit's detail view
+// shows them all, with each part's description.
+function ComponentsTable({ components, limit, onShowAll }) {
+  const shown = limit ? components.slice(0, limit) : components;
+  const hidden = components.length - shown.length;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {components.map((comp, i) => (
+      {shown.map((comp, i) => (
         <div key={i} style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          gap: 10,
           padding: "6px 0",
           fontSize: 11,
-          borderBottom: i < components.length - 1 ? "1px solid var(--line)" : "none"
+          borderBottom: i < shown.length - 1 || hidden > 0 ? "1px solid var(--line)" : "none"
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <Dot c={comp.qtyAvailable >= comp.qtyRequired ? "var(--teal)" : "var(--red)"} />
-            <span style={{ fontFamily: "var(--mono)" }}>{comp.type}</span>
-            <span>{comp.model}</span>
+            <span style={{ fontFamily: "var(--mono)", flexShrink: 0 }}>{comp.type}</span>
+            <span style={{ minWidth: 0 }}>
+              {comp.model}
+              {!limit && comp.description && (
+                <span className="faint" style={{ display: "block", fontSize: 10.5, marginTop: 2 }}>{comp.description}</span>
+              )}
+            </span>
           </div>
           <div style={{
             fontFamily: "var(--mono)",
@@ -78,6 +89,11 @@ function ComponentsTable({ components }) {
           </div>
         </div>
       ))}
+      {hidden > 0 && (
+        <button type="button" className="site-open" style={{ fontSize: 11, alignSelf: "flex-start" }} onClick={onShowAll}>
+          +{hidden} more part{hidden === 1 ? "" : "s"} — view all
+        </button>
+      )}
     </div>
   );
 }
@@ -264,6 +280,7 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
           _id: c._id,
           type: c.type,
           model: c.model,
+          description: c.description,
           qtyRequired: c.qtyRequired,
           sourceType: c.sourceType,
         })),
@@ -397,7 +414,7 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
               <Package size={16} className="ph-ico" />
               <h3>Overview</h3>
               <div className="ph-r">
-                <StatePill state={viewingKit.status} meta={KIT_STATUS} />
+                <StatePill s={viewingKit.status} meta={KIT_STATUS} />
               </div>
             </div>
             <div className="panel-b">
@@ -406,7 +423,7 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
                   <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                     Band
                   </div>
-                  <Band band={viewingKit.band} />
+                  <Band b={viewingKit.band} />
                 </div>
                 <div>
                   <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.1em" }}>
@@ -925,12 +942,12 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
                 </div>
               </div>
               <div className="ph-r">
-                <StatePill state={kit.status} meta={KIT_STATUS} />
+                <StatePill s={kit.status} meta={KIT_STATUS} />
               </div>
             </div>
             <div className="panel-b">
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <Band band={kit.band} />
+                <Band b={kit.band} />
                 <div style={{ fontSize: 11, color: "var(--muted)" }}>
                   {kit.linkName || "No link assigned"}
                 </div>
@@ -945,7 +962,7 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
                 <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                   Kit Components
                 </div>
-                <ComponentsTable components={kit.components} />
+                <ComponentsTable components={kit.components} limit={6} onShowAll={() => startView(kit)} />
               </div>
 
               <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center" }}>

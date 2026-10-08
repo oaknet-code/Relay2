@@ -2,8 +2,9 @@ import React from 'react';
 import { Dot } from './Dot';
 import { STATE_META } from '../../constants/states';
 
-export function StatePill({ s }) {
-  const m = STATE_META[s] || { label: s, c: "var(--faint)" };
+// `meta` maps a state to { label, c }; defaults to the asset states.
+export function StatePill({ s, meta = STATE_META }) {
+  const m = meta[s] || { label: s, c: "var(--faint)" };
   
   return (
     <span 
