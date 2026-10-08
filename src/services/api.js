@@ -536,6 +536,26 @@ export const completeStaging = async (stagingRecordId) => {
 };
 
 /**
+ * Fleet — vehicles and drivers (database; managed on the Fleet page)
+ */
+const fleetCall = async (method, url, body) => {
+  try {
+    const { data } = await axiosInstance[method](url, body);
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Fleet request failed");
+  }
+};
+export const getVehicles = () => fleetCall("get", "/api/fleet/vehicles");
+export const createVehicle = (payload) => fleetCall("post", "/api/fleet/vehicles", payload);
+export const updateVehicle = (id, payload) => fleetCall("put", `/api/fleet/vehicles/${id}`, payload);
+export const deleteVehicle = (id) => fleetCall("delete", `/api/fleet/vehicles/${id}`);
+export const getDrivers = () => fleetCall("get", "/api/fleet/drivers");
+export const createDriver = (payload) => fleetCall("post", "/api/fleet/drivers", payload);
+export const updateDriver = (id, payload) => fleetCall("put", `/api/fleet/drivers/${id}`, payload);
+export const deleteDriver = (id) => fleetCall("delete", `/api/fleet/drivers/${id}`);
+
+/**
  * Gate Pass (Dispatch)
  */
 export const getGatePass = async (dispatchId) => {

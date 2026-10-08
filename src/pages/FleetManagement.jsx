@@ -1,195 +1,132 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  MapPin, Truck, Car, Navigation, Fuel, Gauge, Clock, ArrowRight,
-  ParkingCircle, Activity, AlertTriangle, Wrench, CircleDot, Navigation2,
-  Filter, ChevronRight, Zap
-} from 'lucide-react';
+  MapPin,
+  Truck,
+  Car,
+  User,
+  Wrench,
+  CheckCircle2,
+  AlertTriangle,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  Loader2,
+  SatelliteDish,
+} from "lucide-react";
 import {
-  FLEET_VEHICLES, TRIP_HISTORY, PARKING_ZONES, ROUTE_WAYPOINTS
-} from '../data/mockData';
+  getVehicles,
+  createVehicle,
+  updateVehicle,
+  deleteVehicle,
+  getDrivers,
+  createDriver,
+  updateDriver,
+  deleteDriver,
+} from "../services/api";
 
-// ─── Custom Marker Icons ────────────────────────────────────
-const createVehicleIcon = (status, isSelected) => {
-  const colorMap = {
-    moving: '#33dcae',
-    parked: '#5f6e80',
-    idle: '#5fa8ff',
-    maintenance: '#ff5f5f'
-  };
-  const color = colorMap[status] || '#5f6e80';
-  const size = isSelected ? 42 : 34;
-  const innerSize = size - 10;
+// Company vehicles and drivers, from the database. Live tracking (map,
+// speed, fuel, trips) needs GPS trackers, which aren't connected yet — the
+// page says so instead of showing invented positions.
 
-  return L.divIcon({
-    className: 'vehicle-marker-icon',
-    html: `
-      <div class="vehicle-marker ${status}${isSelected ? ' selected' : ''}" style="width:${size}px;height:${size}px;">
-        <div class="vm-inner" style="width:${innerSize}px;height:${innerSize}px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.5 2.8C1.4 11.3 1 12.1 1 13v3c0 .6.4 1 1 1h2"/>
-            <circle cx="7" cy="17" r="2"/>
-            <path d="M9 17h6"/>
-            <circle cx="17" cy="17" r="2"/>
-          </svg>
-        </div>
-      </div>
-    `,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -size / 2 - 4],
-  });
+const VEHICLE_STATUS = {
+  available: { label: "Available", cls: "parked" },
+  in_use: { label: "In use", cls: "moving" },
+  maintenance: { label: "Maintenance", cls: "maintenance" },
 };
+const EMPTY_VEHICLE = { plate: "", make: "", body: "", status: "available", driverId: "", notes: "" };
+const EMPTY_DRIVER = { name: "", phone: "", status: "active" };
 
-const createParkingIcon = () => {
-  return L.divIcon({
-    className: 'parking-marker-icon',
-    html: `
-      <div style="width:28px;height:28px;border-radius:7px;background:rgba(173,139,255,0.18);border:1.5px solid rgba(173,139,255,0.5);display:grid;place-items:center;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ad8bff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="2" width="20" height="20" rx="4"/>
-          <path d="M9 16V8h4a3 3 0 0 1 0 6H9"/>
-        </svg>
-      </div>
-    `,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -18],
-  });
-};
+const labelStyle = { display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)" };
 
-// ─── Map Controller Component ───────────────────────────────
-function MapFlyTo({ center, zoom }) {
-  const map = useMap();
-  useEffect(() => {
-    if (center) {
-      map.flyTo(center, zoom || 14, { duration: 0.8 });
-    }
-  }, [center, zoom, map]);
-  return null;
+function Banner({ ok, children }) {
+  return (
+    <div className={`boq-banner ${ok ? "ok" : "err"}`} role={ok ? "status" : "alert"}>
+      {ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+      <span>{children}</span>
+    </div>
+  );
 }
 
-// ─── Time Helpers ───────────────────────────────────────────
-const timeAgo = (dateStr) => {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-};
+export function FleetManagement({ canEdit = false }) {
+  const [vehicles, setVehicles] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState(null); // { ok, text }
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [vehicleForm, setVehicleForm] = useState(null); // { id?, ...fields } while adding/editing
+  const [driverForm, setDriverForm] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-const fmtDuration = (mins) => {
-  if (mins < 60) return `${mins}m`;
-  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-};
+  const load = async () => {
+    try {
+      const [v, d] = await Promise.all([getVehicles(), getDrivers()]);
+      setVehicles(v);
+      setDrivers(d);
+      setError("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-// ─── Fuel bar color ─────────────────────────────────────────
-const fuelColor = (pct) => {
-  if (pct > 50) return 'var(--teal)';
-  if (pct > 25) return 'var(--amber)';
-  return 'var(--red)';
-};
+  useEffect(() => { load(); }, []);
 
-// ─── Main Component ─────────────────────────────────────────
-export function FleetManagement() {
-  const [vehicles, setVehicles] = useState(FLEET_VEHICLES);
-  const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [tripVehicleFilter, setTripVehicleFilter] = useState('all');
-  const [mapCenter, setMapCenter] = useState(null);
-  const [mapZoom, setMapZoom] = useState(null);
-  const [showRoute, setShowRoute] = useState(null);
-  const tickRef = useRef(0);
-
-  // Simulated real-time movement
-  useEffect(() => {
-    const interval = setInterval(() => {
-      tickRef.current += 1;
-      setVehicles(prev => prev.map(v => {
-        if (v.status !== 'moving') return v;
-        // Subtle random drift to simulate movement
-        const dlat = (Math.random() - 0.48) * 0.0012;
-        const dlng = (Math.random() - 0.48) * 0.0012;
-        const dspd = Math.floor((Math.random() - 0.5) * 8);
-        return {
-          ...v,
-          lat: v.lat + dlat,
-          lng: v.lng + dlng,
-          speed: Math.max(5, Math.min(80, v.speed + dspd)),
-          lastUpdate: new Date().toISOString()
-        };
-      }));
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // KPIs
-  const kpis = useMemo(() => {
-    const active = vehicles.filter(v => v.status === 'moving').length;
-    const totalDistToday = TRIP_HISTORY
-      .filter(t => t.date === '2026-06-29')
-      .reduce((s, t) => s + t.distance, 0);
-    const avgFuel = Math.round(vehicles.reduce((s, v) => s + v.fuel, 0) / vehicles.length);
-    const parked = vehicles.filter(v => v.status === 'parked' || v.status === 'idle').length;
-    return { active, totalDistToday, avgFuel, parked };
-  }, [vehicles]);
-
-  // Filtered vehicles
-  const filteredVehicles = useMemo(() => {
-    if (statusFilter === 'all') return vehicles;
-    return vehicles.filter(v => v.status === statusFilter);
-  }, [vehicles, statusFilter]);
-
-  // Filtered trips
-  const filteredTrips = useMemo(() => {
-    if (tripVehicleFilter === 'all') return TRIP_HISTORY;
-    return TRIP_HISTORY.filter(t => t.vehicleId === tripVehicleFilter);
-  }, [tripVehicleFilter]);
-
-  // Status counts
-  const statusCounts = useMemo(() => ({
+  const counts = useMemo(() => ({
     all: vehicles.length,
-    moving: vehicles.filter(v => v.status === 'moving').length,
-    parked: vehicles.filter(v => v.status === 'parked').length,
-    idle: vehicles.filter(v => v.status === 'idle').length,
-    maintenance: vehicles.filter(v => v.status === 'maintenance').length,
+    available: vehicles.filter((v) => v.status === "available").length,
+    in_use: vehicles.filter((v) => v.status === "in_use").length,
+    maintenance: vehicles.filter((v) => v.status === "maintenance").length,
   }), [vehicles]);
 
-  const handleVehicleSelect = useCallback((v) => {
-    setSelectedVehicle(v.id === selectedVehicle ? null : v.id);
-    if (v.id !== selectedVehicle) {
-      setMapCenter([v.lat, v.lng]);
-      setMapZoom(15);
-      // Show route if vehicle is moving and has waypoints
-      if (v.status === 'moving' && ROUTE_WAYPOINTS[v.id]) {
-        setShowRoute(v.id);
-      } else {
-        setShowRoute(null);
-      }
-    } else {
-      setMapCenter(null);
-      setShowRoute(null);
-    }
-  }, [selectedVehicle]);
+  const filtered = statusFilter === "all" ? vehicles : vehicles.filter((v) => v.status === statusFilter);
+  const activeDrivers = drivers.filter((d) => d.status === "active");
 
-  const handleTripClick = useCallback((trip) => {
-    const vehicle = vehicles.find(v => v.id === trip.vehicleId);
-    if (vehicle) {
-      setSelectedVehicle(vehicle.id);
-      setMapCenter([vehicle.lat, vehicle.lng]);
-      setMapZoom(14);
-      if (ROUTE_WAYPOINTS[vehicle.id]) {
-        setShowRoute(vehicle.id);
-      }
+  const run = async (fn, successText) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await fn();
+      await load();
+      setNotice({ ok: true, text: successText });
+      return true;
+    } catch (err) {
+      setNotice({ ok: false, text: err.message });
+      return false;
+    } finally {
+      setBusy(false);
     }
-  }, [vehicles]);
+  };
 
-  const parkingIcon = useMemo(() => createParkingIcon(), []);
+  const saveVehicle = async (e) => {
+    e.preventDefault();
+    const { id, ...fields } = vehicleForm;
+    const payload = { ...fields, driverId: fields.driverId || null };
+    const ok = await run(
+      () => (id ? updateVehicle(id, payload) : createVehicle(payload)),
+      `${fields.plate.toUpperCase()} ${id ? "updated" : "added to the fleet"}.`
+    );
+    if (ok) setVehicleForm(null);
+  };
+
+  const saveDriver = async (e) => {
+    e.preventDefault();
+    const { id, ...fields } = driverForm;
+    const ok = await run(() => (id ? updateDriver(id, fields) : createDriver(fields)), `Driver ${fields.name} ${id ? "updated" : "added"}.`);
+    if (ok) setDriverForm(null);
+  };
+
+  const removeVehicle = (v) => {
+    if (!window.confirm(`Remove ${v.plate} from the fleet?`)) return;
+    run(() => deleteVehicle(v._id), `${v.plate} removed.`);
+  };
+
+  const removeDriver = (d) => {
+    if (!window.confirm(`Remove driver ${d.name}? They'll be unassigned from any vehicle.`)) return;
+    run(() => deleteDriver(d._id), `Driver ${d.name} removed.`);
+  };
 
   return (
     <div>
@@ -197,361 +134,241 @@ export function FleetManagement() {
       <div className="view-head">
         <span className="tagchip">
           <MapPin size={11} />
-          Fleet Tracking
+          Fleet
         </span>
         <h2>Fleet Management</h2>
-        <p>
-          Real-time vehicle tracking, route visualization, trip history, and parking zone monitoring.
-          Vehicles on active dispatch runs are tracked live with{' '}
-          <b>3-second position updates</b>.
-        </p>
+        <p>Company vehicles and drivers used for dispatch runs.</p>
       </div>
 
       {/* KPI Row */}
       <div className="kpi-row" style={{ marginBottom: 16 }}>
-        <div className="kpi" style={{ '--gl': 'rgba(51, 220, 174, 0.12)' }}>
-          <div className="k-top">
-            <Activity size={14} />
-            ACTIVE VEHICLES
-          </div>
-          <div className="k-val">{kpis.active}</div>
-          <div className="k-sub">of {vehicles.length} fleet total</div>
+        <div className="kpi" style={{ "--gl": "rgba(51, 220, 174, 0.12)" }}>
+          <div className="k-top"><Truck size={14} /> VEHICLES</div>
+          <div className="k-val">{counts.all}</div>
+          <div className="k-sub">in the fleet</div>
         </div>
-        <div className="kpi" style={{ '--gl': 'rgba(95, 168, 255, 0.12)' }}>
-          <div className="k-top">
-            <Navigation2 size={14} />
-            DISTANCE TODAY
-          </div>
-          <div className="k-val">{kpis.totalDistToday.toFixed(1)}<span style={{ fontSize: 16, marginLeft: 3 }}>km</span></div>
-          <div className="k-sub">aggregate fleet travel</div>
+        <div className="kpi" style={{ "--gl": "rgba(95, 168, 255, 0.12)" }}>
+          <div className="k-top"><CheckCircle2 size={14} /> AVAILABLE</div>
+          <div className="k-val">{counts.available}</div>
+          <div className="k-sub">{counts.in_use} in use</div>
         </div>
-        <div className="kpi" style={{ '--gl': 'rgba(95, 168, 255, 0.12)' }}>
-          <div className="k-top">
-            <Fuel size={14} />
-            AVG FUEL LEVEL
-          </div>
-          <div className="k-val">{kpis.avgFuel}<span style={{ fontSize: 16, marginLeft: 2 }}>%</span></div>
-          <div className="k-sub">fleet-wide average</div>
+        <div className="kpi" style={{ "--gl": "rgba(255, 95, 95, 0.12)" }}>
+          <div className="k-top"><Wrench size={14} /> MAINTENANCE</div>
+          <div className="k-val">{counts.maintenance}</div>
+          <div className="k-sub">not dispatchable</div>
         </div>
-        <div className="kpi" style={{ '--gl': 'rgba(173, 139, 255, 0.12)' }}>
-          <div className="k-top">
-            <ParkingCircle size={14} />
-            PARKED / IDLE
-          </div>
-          <div className="k-val">{kpis.parked}</div>
-          <div className="k-sub">vehicles stationary</div>
+        <div className="kpi" style={{ "--gl": "rgba(173, 139, 255, 0.12)" }}>
+          <div className="k-top"><User size={14} /> DRIVERS</div>
+          <div className="k-val">{activeDrivers.length}</div>
+          <div className="k-sub">active</div>
         </div>
       </div>
 
-      {/* Map + Vehicle List Split */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, marginBottom: 0 }}>
-        {/* Map */}
-        <div className="fleet-map-wrap">
-          <MapContainer
-            center={[-1.2864, 36.8200]}
-            zoom={12}
-            style={{ height: '100%', width: '100%' }}
-            zoomControl={true}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+      <div className="fleet-notracker" role="note">
+        <SatelliteDish size={16} />
+        <span>
+          <b>No GPS tracker connected.</b> Live position, speed, fuel and trip history will appear here once vehicles have trackers.
+        </span>
+      </div>
 
-            {mapCenter && <MapFlyTo center={mapCenter} zoom={mapZoom} />}
+      {notice && <Banner ok={notice.ok}>{notice.text}</Banner>}
 
-            {/* Vehicle markers */}
-            {vehicles.map(v => (
-              <Marker
-                key={v.id}
-                position={[v.lat, v.lng]}
-                icon={createVehicleIcon(v.status, selectedVehicle === v.id)}
-                eventHandlers={{
-                  click: () => handleVehicleSelect(v)
-                }}
-              >
-                <Popup>
-                  <div className="fleet-popup">
-                    <div className="fp-head">
-                      <span className="fp-plate">{v.plate}</span>
-                      <span className={`fleet-status ${v.status}`}>{v.status}</span>
-                    </div>
-                    <div className="fp-row">
-                      <span className="fp-label">Driver</span>
-                      <span className="fp-val">{v.driver}</span>
-                    </div>
-                    <div className="fp-row">
-                      <span className="fp-label">Vehicle</span>
-                      <span className="fp-val">{v.make}</span>
-                    </div>
-                    <div className="fp-row">
-                      <span className="fp-label">Speed</span>
-                      <span className="fp-val">{v.speed} km/h</span>
-                    </div>
-                    <div className="fp-row">
-                      <span className="fp-label">Fuel</span>
-                      <span className="fp-val">{v.fuel}%</span>
-                    </div>
-                    <div className="fp-fuel-bar">
-                      <span style={{
-                        width: `${v.fuel}%`,
-                        background: fuelColor(v.fuel)
-                      }} />
-                    </div>
-                    <div className="fp-row" style={{ marginTop: 6 }}>
-                      <span className="fp-label">Updated</span>
-                      <span className="fp-val">{timeAgo(v.lastUpdate)}</span>
-                    </div>
-                    {v.assignedLink && (
-                      <div className="fp-row">
-                        <span className="fp-label">Link</span>
-                        <span className="fp-val" style={{ color: 'var(--amber)' }}>{v.assignedLink}</span>
-                      </div>
-                    )}
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-
-            {/* Parking zone circles */}
-            {PARKING_ZONES.filter(pz => 
-              // Only show Nairobi-area zones at default zoom
-              Math.abs(pz.lat - (-1.29)) < 0.3
-            ).map(pz => (
-              <React.Fragment key={pz.id}>
-                <Circle
-                  center={[pz.lat, pz.lng]}
-                  radius={200}
-                  pathOptions={{
-                    color: 'rgba(173, 139, 255, 0.5)',
-                    fillColor: 'rgba(173, 139, 255, 0.08)',
-                    fillOpacity: 0.6,
-                    weight: 1.5,
-                    dashArray: '6 4'
-                  }}
-                />
-                <Marker
-                  position={[pz.lat, pz.lng]}
-                  icon={parkingIcon}
-                >
-                  <Popup>
-                    <div className="fleet-popup">
-                      <div className="fp-head">
-                        <span className="fp-plate">{pz.name}</span>
-                        <span className={`pz-type ${pz.type}`}>{pz.type}</span>
-                      </div>
-                      <div className="fp-row">
-                        <span className="fp-label">Capacity</span>
-                        <span className="fp-val">{pz.occupied}/{pz.capacity}</span>
-                      </div>
-                      <div className="fp-row">
-                        <span className="fp-label">Address</span>
-                        <span className="fp-val">{pz.address}</span>
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
-              </React.Fragment>
-            ))}
-
-            {/* Active route polylines */}
-            {showRoute && ROUTE_WAYPOINTS[showRoute] && (
-              <Polyline
-                positions={ROUTE_WAYPOINTS[showRoute]}
-                pathOptions={{
-                  color: '#5fa8ff',
-                  weight: 3,
-                  opacity: 0.7,
-                  dashArray: '8 6',
-                }}
-              />
-            )}
-          </MapContainer>
-
-          {/* Map Legend */}
-          <div className="fleet-map-legend">
-            <div className="lg-item">
-              <span className="lg-dot" style={{ background: '#33dcae' }} />
-              Moving
-            </div>
-            <div className="lg-item">
-              <span className="lg-dot" style={{ background: '#5fa8ff' }} />
-              Idle
-            </div>
-            <div className="lg-item">
-              <span className="lg-dot" style={{ background: '#5f6e80' }} />
-              Parked
-            </div>
-            <div className="lg-item">
-              <span className="lg-dot" style={{ background: '#ff5f5f' }} />
-              Maintenance
-            </div>
-            <div className="lg-item">
-              <span className="lg-dot" style={{ background: '#ad8bff', borderRadius: 3 }} />
-              Parking Zone
-            </div>
-          </div>
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 60, color: "var(--faint)" }}>
+          <Loader2 size={24} className="spin" style={{ marginBottom: 12 }} />
+          <div style={{ fontSize: 12 }}>Loading fleet…</div>
         </div>
-
-        {/* Vehicle List */}
-        <div className="panel">
-          <div className="panel-h">
-            <Truck size={15} className="ph-ico" />
-            <h3>Vehicles</h3>
-            <span className="ph-r" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="fleet-live-dot" />
-              Live
-            </span>
-          </div>
-          <div className="panel-b" style={{ padding: '12px 14px' }}>
-            {/* Filters */}
-            <div className="fleet-filters">
-              {['all', 'moving', 'parked', 'idle', 'maintenance'].map(s => (
-                <button
-                  key={s}
-                  className={`fleet-filter-btn ${statusFilter === s ? 'active' : ''}`}
-                  onClick={() => setStatusFilter(s)}
-                >
-                  {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
-                  <span className="ff-count">{statusCounts[s]}</span>
+      ) : error ? (
+        <div style={{ textAlign: "center", padding: 40, color: "var(--red)" }}>
+          <AlertTriangle size={24} style={{ marginBottom: 10 }} />
+          <div style={{ fontSize: 13, marginBottom: 10 }}>{error}</div>
+          <button className="btn sm" onClick={load}>Retry</button>
+        </div>
+      ) : (
+        <div className="fleet-manage">
+          {/* Vehicles */}
+          <div className="panel">
+            <div className="panel-h">
+              <Truck size={15} className="ph-ico" />
+              <h3>Vehicles</h3>
+              {canEdit && !vehicleForm && (
+                <button className="btn sm amber ph-r" onClick={() => { setNotice(null); setVehicleForm({ ...EMPTY_VEHICLE }); }}>
+                  <Plus size={13} /> Add vehicle
                 </button>
-              ))}
+              )}
             </div>
+            <div className="panel-b" style={{ padding: "12px 14px" }}>
+              {vehicleForm && (
+                <form className="fleet-form" onSubmit={saveVehicle}>
+                  <div className="fleet-form-grid">
+                    <label style={labelStyle}>
+                      Number plate *
+                      <input className="form-input" required maxLength={15} placeholder="KDY 919A" value={vehicleForm.plate}
+                        onChange={(e) => setVehicleForm((f) => ({ ...f, plate: e.target.value }))} />
+                    </label>
+                    <label style={labelStyle}>
+                      Make / model *
+                      <input className="form-input" required maxLength={60} placeholder="Isuzu D-Max" value={vehicleForm.make}
+                        onChange={(e) => setVehicleForm((f) => ({ ...f, make: e.target.value }))} />
+                    </label>
+                    <label style={labelStyle}>
+                      Body
+                      <input className="form-input" maxLength={40} placeholder="Double Cab" value={vehicleForm.body}
+                        onChange={(e) => setVehicleForm((f) => ({ ...f, body: e.target.value }))} />
+                    </label>
+                    <label style={labelStyle}>
+                      Status
+                      <select className="form-input" value={vehicleForm.status}
+                        onChange={(e) => setVehicleForm((f) => ({ ...f, status: e.target.value }))}>
+                        {Object.entries(VEHICLE_STATUS).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
+                      </select>
+                    </label>
+                    <label style={labelStyle}>
+                      Usual driver
+                      <select className="form-input" value={vehicleForm.driverId}
+                        onChange={(e) => setVehicleForm((f) => ({ ...f, driverId: e.target.value }))}>
+                        <option value="">— None —</option>
+                        {activeDrivers.map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="fleet-form-actions">
+                    <button className="btn amber sm" type="submit" disabled={busy}>
+                      {busy ? <Loader2 size={13} className="spin" /> : <CheckCircle2 size={13} />} {vehicleForm.id ? "Save" : "Add vehicle"}
+                    </button>
+                    <button className="btn ghost sm" type="button" onClick={() => setVehicleForm(null)}><X size={13} /> Cancel</button>
+                  </div>
+                </form>
+              )}
 
-            {/* Vehicle cards */}
-            <div className="fleet-vehicle-list">
-              {filteredVehicles.map(v => (
-                <div
-                  key={v.id}
-                  className={`fv-card ${selectedVehicle === v.id ? 'selected' : ''}`}
-                  onClick={() => handleVehicleSelect(v)}
-                >
-                  <div className={`fv-ico ${v.status}`}>
-                    {v.type === 'Truck' ? <Truck size={16} /> : <Car size={16} />}
+              <div className="fleet-filters">
+                {["all", "available", "in_use", "maintenance"].map((s) => (
+                  <button key={s} className={`fleet-filter-btn ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>
+                    {s === "all" ? "All" : VEHICLE_STATUS[s].label}
+                    <span className="ff-count">{counts[s]}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="fleet-vehicle-list">
+                {filtered.length === 0 && (
+                  <div className="faint" style={{ fontSize: 13, padding: 16, textAlign: "center" }}>
+                    {vehicles.length ? "No vehicles with this status." : "No vehicles yet."}
                   </div>
-                  <div className="fv-info">
-                    <div className="fv-plate">
-                      {v.plate}
-                      <span className={`fleet-status ${v.status}`} style={{ marginLeft: 8 }}>
-                        {v.status}
-                      </span>
-                    </div>
-                    <div className="fv-detail">
-                      {v.driver} · {v.make}
-                      {v.assignedLink && <> · <span style={{ color: 'var(--amber)' }}>{v.assignedLink}</span></>}
-                    </div>
-                  </div>
-                  <div className="fv-right">
-                    {v.status === 'moving' && (
-                      <div className="fv-speed">{v.speed} <span style={{ fontSize: 9, color: 'var(--faint)' }}>km/h</span></div>
-                    )}
-                    <div className="fv-fuel">
-                      <div className="fv-fuel-bar">
-                        <span style={{ width: `${v.fuel}%`, background: fuelColor(v.fuel) }} />
+                )}
+                {filtered.map((v) => {
+                  const st = VEHICLE_STATUS[v.status] || VEHICLE_STATUS.available;
+                  return (
+                    <div key={v._id} className="fv-card" style={{ cursor: "default" }}>
+                      <div className={`fv-ico ${st.cls}`}>
+                        {/cab|truck|pickup|d-max/i.test(`${v.make} ${v.body}`) ? <Truck size={16} /> : <Car size={16} />}
                       </div>
-                      {v.fuel}%
+                      <div className="fv-info">
+                        <div className="fv-plate">
+                          {v.plate}
+                          <span className={`fleet-status ${st.cls}`} style={{ marginLeft: 8 }}>{st.label}</span>
+                        </div>
+                        <div className="fv-detail">
+                          {v.make}{v.body ? ` · ${v.body}` : ""} · {v.driver ? v.driver.name : <span className="faint">no usual driver</span>}
+                        </div>
+                      </div>
+                      {canEdit && (
+                        <div className="fv-right fleet-row-actions">
+                          <button className="btn sm ghost" aria-label={`Edit ${v.plate}`} title="Edit"
+                            onClick={() => { setNotice(null); setVehicleForm({ id: v._id, plate: v.plate, make: v.make, body: v.body || "", status: v.status, driverId: v.driver?._id || "", notes: v.notes || "" }); }}>
+                            <Pencil size={13} />
+                          </button>
+                          <button className="btn sm ghost" style={{ color: "var(--red)" }} aria-label={`Remove ${v.plate}`} title="Remove" onClick={() => removeVehicle(v)}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
                     </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Drivers */}
+          <div className="panel">
+            <div className="panel-h">
+              <User size={15} className="ph-ico" />
+              <h3>Drivers</h3>
+              {canEdit && !driverForm && (
+                <button className="btn sm amber ph-r" onClick={() => { setNotice(null); setDriverForm({ ...EMPTY_DRIVER }); }}>
+                  <Plus size={13} /> Add driver
+                </button>
+              )}
+            </div>
+            <div className="panel-b" style={{ padding: "12px 14px" }}>
+              {driverForm && (
+                <form className="fleet-form" onSubmit={saveDriver}>
+                  <div className="fleet-form-grid">
+                    <label style={labelStyle}>
+                      Full name *
+                      <input className="form-input" required minLength={2} maxLength={80} placeholder="Ali Osman" value={driverForm.name}
+                        onChange={(e) => setDriverForm((f) => ({ ...f, name: e.target.value }))} />
+                    </label>
+                    <label style={labelStyle}>
+                      Phone
+                      <input className="form-input" type="tel" maxLength={20} placeholder="+254 712 345 678" value={driverForm.phone}
+                        onChange={(e) => setDriverForm((f) => ({ ...f, phone: e.target.value }))} />
+                    </label>
+                    <label style={labelStyle}>
+                      Status
+                      <select className="form-input" value={driverForm.status}
+                        onChange={(e) => setDriverForm((f) => ({ ...f, status: e.target.value }))}>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </label>
                   </div>
-                </div>
-              ))}
+                  <div className="fleet-form-actions">
+                    <button className="btn amber sm" type="submit" disabled={busy}>
+                      {busy ? <Loader2 size={13} className="spin" /> : <CheckCircle2 size={13} />} {driverForm.id ? "Save" : "Add driver"}
+                    </button>
+                    <button className="btn ghost sm" type="button" onClick={() => setDriverForm(null)}><X size={13} /> Cancel</button>
+                  </div>
+                </form>
+              )}
+
+              <div className="fleet-vehicle-list">
+                {drivers.length === 0 && <div className="faint" style={{ fontSize: 13, padding: 16, textAlign: "center" }}>No drivers yet.</div>}
+                {drivers.map((d) => {
+                  const assigned = vehicles.filter((v) => v.driver?._id === d._id).map((v) => v.plate);
+                  return (
+                    <div key={d._id} className="fv-card" style={{ cursor: "default" }}>
+                      <div className={`fv-ico ${d.status === "active" ? "moving" : "parked"}`}><User size={16} /></div>
+                      <div className="fv-info">
+                        <div className="fv-plate">
+                          {d.name}
+                          {d.status !== "active" && <span className="fleet-status parked" style={{ marginLeft: 8 }}>Inactive</span>}
+                        </div>
+                        <div className="fv-detail">
+                          {d.phone || <span className="faint">no phone</span>}
+                          {assigned.length > 0 && <> · usual driver of {assigned.join(", ")}</>}
+                        </div>
+                      </div>
+                      {canEdit && (
+                        <div className="fv-right fleet-row-actions">
+                          <button className="btn sm ghost" aria-label={`Edit ${d.name}`} title="Edit"
+                            onClick={() => { setNotice(null); setDriverForm({ id: d._id, name: d.name, phone: d.phone || "", status: d.status }); }}>
+                            <Pencil size={13} />
+                          </button>
+                          <button className="btn sm ghost" style={{ color: "var(--red)" }} aria-label={`Remove ${d.name}`} title="Remove" onClick={() => removeDriver(d)}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Bottom: Trip History + Parking */}
-      <div className="fleet-bottom">
-        {/* Trip History */}
-        <div className="panel">
-          <div className="panel-h">
-            <Navigation2 size={15} className="ph-ico" />
-            <h3>Trip History</h3>
-            <span className="ph-r" style={{ marginLeft: 'auto' }}>
-              {filteredTrips.length} trips
-            </span>
-          </div>
-
-          {/* Trip Filters */}
-          <div className="trip-filters" style={{ padding: '12px 18px' }}>
-            <select
-              className="trip-filter-select"
-              value={tripVehicleFilter}
-              onChange={e => setTripVehicleFilter(e.target.value)}
-            >
-              <option value="all">All Vehicles</option>
-              {vehicles.map(v => (
-                <option key={v.id} value={v.id}>{v.plate} — {v.driver}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Trip List */}
-          <div className="trip-list">
-            {filteredTrips.map(trip => {
-              const vehicle = vehicles.find(v => v.id === trip.vehicleId);
-              return (
-                <div
-                  key={trip.id}
-                  className="trip-row"
-                  onClick={() => handleTripClick(trip)}
-                >
-                  <span className="mono faint" style={{ fontSize: 11 }}>
-                    {trip.date.slice(5)}
-                    <br />
-                    <span style={{ fontSize: 10 }}>{trip.startTime}</span>
-                  </span>
-                  <div className="trip-route">
-                    <span className="tr-loc">{trip.from}</span>
-                    <ArrowRight size={12} className="tr-arrow" />
-                    <span className="tr-loc">{trip.to}</span>
-                  </div>
-                  <span className="mono" style={{ fontSize: 11, textAlign: 'right' }}>
-                    {trip.distance} km
-                  </span>
-                  <span className="mono faint" style={{ fontSize: 11, textAlign: 'right' }}>
-                    {fmtDuration(trip.duration)}
-                  </span>
-                  <span className={`fleet-status ${trip.status}`}>
-                    {trip.status === 'in_progress' ? 'active' : trip.status}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Parking Details */}
-        <div className="panel">
-          <div className="panel-h">
-            <ParkingCircle size={15} className="ph-ico" />
-            <h3>Parking Zones</h3>
-            <span className="ph-r" style={{ marginLeft: 'auto' }}>
-              {PARKING_ZONES.length} zones
-            </span>
-          </div>
-          <div className="panel-b">
-            <div className="parking-grid">
-              {PARKING_ZONES.map(pz => (
-                <div key={pz.id} className="pz-card">
-                  <div className="pz-head">
-                    <span className="pz-name">{pz.name}</span>
-                    <span className={`pz-type ${pz.type}`}>{pz.type}</span>
-                  </div>
-                  <div className="pz-addr">{pz.address}</div>
-                  <div className="pz-capacity">
-                    <div className="pz-bar">
-                      <span style={{ width: `${(pz.occupied / pz.capacity) * 100}%` }} />
-                    </div>
-                    <span className="pz-slots">
-                      {pz.occupied}/{pz.capacity} occupied
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

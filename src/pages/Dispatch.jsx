@@ -4,8 +4,8 @@ import {
   Cable, ShieldCheck, Package, Boxes, User, Clock, ChevronDown, Loader2, AlertTriangle, ArrowLeft
 } from 'lucide-react';
 import { TypeIcon, Band } from '../components/ui';
-import { LINKS, SITES, TODAY, FLEET_VEHICLES } from '../data/mockData';
-import { getSiteKits, getSiteKit, createDispatch, getDispatches, getGatePass, downloadGatePassPDF } from '../services/api';
+import { LINKS, SITES, TODAY } from '../data/mockData';
+import { getSiteKits, getSiteKit, createDispatch, getDispatches, getGatePass, downloadGatePassPDF, getVehicles, getDrivers } from '../services/api';
 
 // Picks a reasonable icon for a consumable line based on its model/name —
 // purely cosmetic, has no bearing on the actual decrement logic.
@@ -70,6 +70,16 @@ export function Dispatch({ assets, onDispatch }) {
   const [counts, setCounts] = useState({}); // keyed by componentId
   const [waybill, setWaybill] = useState(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [selectedDriverId, setSelectedDriverId] = useState('');
+  const [fleetVehicles, setFleetVehicles] = useState([]);
+  const [fleetDrivers, setFleetDrivers] = useState([]);
+
+  // Vehicles and drivers come from the Fleet page (database).
+  useEffect(() => {
+    Promise.all([getVehicles(), getDrivers()])
+      .then(([v, d]) => { setFleetVehicles(v); setFleetDrivers(d); })
+      .catch(() => { /* non-fatal: the selectors just stay empty */ });
+  }, []);
   const [dispatchTime, setDispatchTime] = useState(null);
   const [dispatchError, setDispatchError] = useState(null);
   const [firing, setFiring] = useState(false);
@@ -116,10 +126,21 @@ export function Dispatch({ assets, onDispatch }) {
 
   // Available vehicles: exclude those in maintenance
   const availableVehicles = useMemo(
-    () => FLEET_VEHICLES.filter(v => v.status !== 'maintenance'),
-    []
+    () => fleetVehicles.filter(v => v.status !== 'maintenance'),
+    [fleetVehicles]
   );
-  const selectedVehicle = availableVehicles.find(v => v.id === selectedVehicleId) || null;
+  const activeDrivers = useMemo(() => fleetDrivers.filter(d => d.status === 'active'), [fleetDrivers]);
+  const selectedVehicle = availableVehicles.find(v => v._id === selectedVehicleId) || null;
+  const selectedDriver = activeDrivers.find(d => d._id === selectedDriverId) || null;
+
+  // Picking a vehicle pre-selects its usual driver (or the only driver).
+  const chooseVehicle = (id) => {
+    setSelectedVehicleId(id);
+    const v = availableVehicles.find(x => x._id === id);
+    const usual = v?.driver && activeDrivers.find(d => d._id === v.driver._id);
+    if (usual) setSelectedDriverId(usual._id);
+    else if (!selectedDriverId && activeDrivers.length === 1) setSelectedDriverId(activeDrivers[0]._id);
+  };
 
   // Consumable pick-list is driven straight from the kit's components —
   // the "required" amount doubles as what gets requested from stock.
@@ -149,7 +170,7 @@ export function Dispatch({ assets, onDispatch }) {
   // is enough to raise a waybill/gate pass for. Full completion of every
   // line is no longer required to enable the button.
   const anySelected = serUnits.some(a => verified[a.uid]) || consReq.some(c => (counts[c.k] || 0) > 0);
-  const ready = !!kit && anySelected && !!selectedVehicle && !dispatched;
+  const ready = !!kit && anySelected && !!selectedVehicle && !!selectedDriver && !dispatched;
 
   const changeKit = () => {
     setSelectedKitId(null);
@@ -191,13 +212,9 @@ export function Dispatch({ assets, onDispatch }) {
         kitId: kit.kitId,
         linkId: job.id,
         items,
-        vehicle: {
-          id: selectedVehicle.id,
-          plate: selectedVehicle.plate,
-          make: selectedVehicle.make,
-          type: selectedVehicle.type,
-        },
-        driver: { name: selectedVehicle.driver, phone: selectedVehicle.phone },
+        // The server looks these up in the fleet and copies them onto the gate pass.
+        vehicleId: selectedVehicle._id,
+        driverId: selectedDriver._id,
       });
 
       setKit(updatedKit); // reflects the decremented component quantities
@@ -706,7 +723,7 @@ export function Dispatch({ assets, onDispatch }) {
                   <div style={{ position: 'relative' }}>
                     <select
                       value={selectedVehicleId}
-                      onChange={e => setSelectedVehicleId(e.target.value)}
+                      onChange={e => chooseVehicle(e.target.value)}
                       style={{
                         width: '100%',
                         padding: '10px 32px 10px 12px',
@@ -723,8 +740,8 @@ export function Dispatch({ assets, onDispatch }) {
                     >
                       <option value="">— Select vehicle —</option>
                       {availableVehicles.map(v => (
-                        <option key={v.id} value={v.id}>
-                          {v.plate} · {v.make} ({v.type})
+                        <option key={v._id} value={v._id}>
+                          {v.plate} · {v.make}{v.body ? ` (${v.body})` : ''}
                         </option>
                       ))}
                     </select>
@@ -732,27 +749,37 @@ export function Dispatch({ assets, onDispatch }) {
                   </div>
                 </div>
 
-                {/* Driver display (auto-populated from selected vehicle) */}
-                <div>
+                {/* Driver (pre-filled from the vehicle's usual driver) */}
+                <div style={{ position: 'relative' }}>
                   <label className="faint" style={{ display: 'block', fontSize: 10.5, marginBottom: 5, fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>DRIVER</label>
-                  <div style={{
-                    padding: '10px 12px',
-                    background: 'var(--bg)',
-                    border: `1px solid ${selectedVehicle ? 'rgba(51, 220, 174, 0.4)' : 'var(--line2)'}`,
-                    borderRadius: 9,
-                    fontSize: 12.5,
-                    fontFamily: 'var(--mono)',
-                    color: selectedVehicle ? 'var(--ink)' : 'var(--faint)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8
-                  }}>
-                    <User size={14} style={{ color: selectedVehicle ? 'var(--teal)' : 'var(--faint)', flexShrink: 0 }} />
-                    {selectedVehicle ? (
-                      <span>{selectedVehicle.driver} <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>{selectedVehicle.phone}</span></span>
-                    ) : (
-                      <span>Select a vehicle first</span>
-                    )}
+                  <div style={{ position: 'relative' }}>
+                    <User size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: selectedDriver ? 'var(--teal)' : 'var(--faint)', pointerEvents: 'none' }} />
+                    <select
+                      value={selectedDriverId}
+                      onChange={e => setSelectedDriverId(e.target.value)}
+                      aria-label="Driver"
+                      style={{
+                        width: '100%',
+                        padding: '10px 32px',
+                        background: 'var(--bg)',
+                        border: `1px solid ${selectedDriver ? 'rgba(51, 220, 174, 0.4)' : 'var(--line2)'}`,
+                        borderRadius: 9,
+                        color: 'var(--ink)',
+                        fontSize: 12.5,
+                        fontFamily: 'var(--mono)',
+                        cursor: 'pointer',
+                        appearance: 'none',
+                        WebkitAppearance: 'none'
+                      }}
+                    >
+                      <option value="">— Select driver —</option>
+                      {activeDrivers.map(d => (
+                        <option key={d._id} value={d._id}>
+                          {d.name}{d.phone ? ` · ${d.phone}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--faint)', pointerEvents: 'none' }} />
                   </div>
                 </div>
               </div>
@@ -797,7 +824,9 @@ export function Dispatch({ assets, onDispatch }) {
                     ? "Scan a unit or count a consumable to enable."
                     : !selectedVehicle
                       ? "Select a vehicle above to enable."
-                      : "Ready to seal manifest."
+                      : !selectedDriver
+                        ? "Select a driver above to enable."
+                        : "Ready to seal manifest."
                   }
                 </span>
               </>

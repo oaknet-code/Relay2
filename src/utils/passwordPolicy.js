@@ -5,8 +5,10 @@ export const PASSWORD_MAX_LENGTH = 72; // bcrypt ignores anything past 72 bytes
 
 export const PASSWORD_RULES = [
   { id: "length", label: `At least ${PASSWORD_MIN_LENGTH} characters`, test: (p) => p.length >= PASSWORD_MIN_LENGTH },
-  { id: "letter", label: "At least one letter", test: (p) => /[A-Za-z]/.test(p) },
-  { id: "number", label: "At least one number", test: (p) => /[0-9]/.test(p) },
+  { id: "lower", label: "A lowercase letter", test: (p) => /[a-z]/.test(p) },
+  { id: "upper", label: "An uppercase letter", test: (p) => /[A-Z]/.test(p) },
+  { id: "number", label: "A number", test: (p) => /[0-9]/.test(p) },
+  { id: "special", label: "A special character (! @ # $ % …)", test: (p) => /[^A-Za-z0-9]/.test(p) },
 ];
 
 export const isPasswordValid = (p) =>
@@ -20,11 +22,9 @@ export const passwordProblem = (p) => {
 };
 
 // Strong random password from the browser's CSPRNG: 16 characters, always
-// containing letters and numbers. Skips look-alikes (0/O, 1/l/I).
+// meeting every rule above. Skips look-alikes (0/O, 1/l/I).
 export function generatePassword(length = 16) {
-  const letters = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
-  const digits = "23456789";
-  const all = letters + digits;
+  const all = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*?-_=+";
   const pick = (chars) => {
     const buf = new Uint32Array(1);
     crypto.getRandomValues(buf);

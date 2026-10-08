@@ -243,7 +243,7 @@ export default function App() {
 
       case "fleet":
         return hasWriteAccess ? (
-          <FleetManagement />
+          <FleetManagement canEdit={hasWriteAccess} />
         ) : (
           <MissionControl assets={assets} />
         );

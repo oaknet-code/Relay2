@@ -763,3 +763,55 @@
 @media (hover: hover) and (pointer: fine) {
   /* Add fine-pointer hover styles here if needed */
 }
+
+/* Fleet management (vehicles + drivers from the database) */
+.fleet-manage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .fleet-manage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fleet-notracker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px dashed var(--line2);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.fleet-form {
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.fleet-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.fleet-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.fleet-row-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+}
