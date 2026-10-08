@@ -316,11 +316,13 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
       return;
     }
 
+    setError(null);
+    setSuccess("");
     try {
       await deleteSiteKit(kit.kitId);
       await loadKits();
       onKitsChanged?.();
-      setSuccess("Kit deleted successfully!");
+      setSuccess(`Kit ${kit.kitId} deleted.`);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to delete kit");
       console.error("Delete error:", err);
@@ -908,6 +910,25 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
         }}>
           <CheckCircle2 size={14} />
           {success}
+        </div>
+      )}
+
+      {/* Errors from actions on the list (e.g. a delete the server refused). */}
+      {!loading && error && kits.length > 0 && (
+        <div role="alert" style={{
+          marginBottom: 20,
+          padding: "10px 14px",
+          borderRadius: 10,
+          fontSize: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          background: "rgba(255,90,90,.06)",
+          border: "1px solid rgba(255,90,90,.25)",
+          color: "var(--red)",
+        }}>
+          <AlertTriangle size={14} />
+          {error}
         </div>
       )}
 

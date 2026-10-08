@@ -276,7 +276,7 @@ export const getSiteKits = async () => {
 };
 
 export const getSiteKit = async (kitId) => {
-  const { data } = await axiosInstance.get(`/api/sitekits/${kitId}`);
+  const { data } = await axiosInstance.get(`/api/sitekits/${encodeURIComponent(kitId)}`);
   return data;
 };
 
@@ -453,12 +453,12 @@ export const createSiteKit = async (payload) => {
 };
 
 export const updateSiteKit = async (kitId, payload) => {
-  const { data } = await axiosInstance.put(`/api/sitekits/${kitId}`, payload);
+  const { data } = await axiosInstance.put(`/api/sitekits/${encodeURIComponent(kitId)}`, payload);
   return data;
 };
 
 export const deleteSiteKit = async (kitId) => {
-  const { data } = await axiosInstance.delete(`/api/sitekits/${kitId}`);
+  const { data } = await axiosInstance.delete(`/api/sitekits/${encodeURIComponent(kitId)}`);
   return data;
 };
 
