@@ -552,3 +552,17 @@
   background: rgba(51, 220, 174, 0.12);
   color: var(--teal);
 }
+
+/* Sites: route group chips + picker */
+.site-groups { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; flex-wrap: wrap; }
+.view-head .site-groups { margin-left: 0; margin-top: 6px; }
+.site-group-chip {
+  font-size: 10px; line-height: 1; padding: 3px 6px; border: 1px solid; border-radius: 999px;
+  letter-spacing: .02em; white-space: nowrap; opacity: .9;
+}
+.site-group-picker {
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px 8px; margin: 0;
+  display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted);
+}
+.site-group-picker legend { padding: 0 4px; font-size: 11px; }
+.site-group-picker label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }

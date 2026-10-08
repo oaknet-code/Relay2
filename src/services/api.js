@@ -420,7 +420,7 @@ export const getLinks = async (params = {}) => {
 };
 
 export const getLink = async (linkId) => {
-  const { data } = await axiosInstance.get(`/api/links/${linkId}`);
+  const { data } = await axiosInstance.get(`/api/links/${encodeURIComponent(linkId)}`);
   return data;
 };
 
@@ -430,17 +430,17 @@ export const createLink = async (payload) => {
 };
 
 export const updateLink = async (linkId, payload) => {
-  const { data } = await axiosInstance.put(`/api/links/${linkId}`, payload);
+  const { data } = await axiosInstance.put(`/api/links/${encodeURIComponent(linkId)}`, payload);
   return data;
 };
 
 export const updateLinkStatus = async (linkId, status) => {
-  const { data } = await axiosInstance.patch(`/api/links/${linkId}/status`, { status });
+  const { data } = await axiosInstance.patch(`/api/links/${encodeURIComponent(linkId)}/status`, { status });
   return data;
 };
 
 export const deleteLink = async (linkId) => {
-  const { data } = await axiosInstance.delete(`/api/links/${linkId}`);
+  const { data } = await axiosInstance.delete(`/api/links/${encodeURIComponent(linkId)}`);
   return data;
 };
 

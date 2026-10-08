@@ -35,6 +35,39 @@ function SiteMap({ latitude, longitude, label }) {
 const UNASSIGNED = { unassigned: true, siteId: "—", name: "Unassigned kits" };
 const apiMessage = (err, fallback) => err.response?.data?.message || fallback;
 
+// Route groups a site can belong to (must match the backend's list).
+const SITE_GROUPS = [
+  { name: "Lamu Route Backbone", short: "Lamu", c: "var(--amber)" },
+  { name: "Mandera Links", short: "Mandera", c: "var(--teal)" },
+];
+
+function GroupChips({ groups }) {
+  if (!groups?.length) return null;
+  return (
+    <span className="site-groups">
+      {SITE_GROUPS.filter(g => groups.includes(g.name)).map(g => (
+        <span key={g.name} className="site-group-chip" style={{ color: g.c, borderColor: g.c }} title={g.name}>
+          {g.short}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function GroupPicker({ value, onChange }) {
+  const toggle = (name) => onChange(value.includes(name) ? value.filter(n => n !== name) : [...value, name]);
+  return (
+    <fieldset className="site-group-picker">
+      <legend>Groups</legend>
+      {SITE_GROUPS.map(g => (
+        <label key={g.name}>
+          <input type="checkbox" checked={value.includes(g.name)} onChange={() => toggle(g.name)} /> {g.name}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 function Banner({ kind, children }) {
   const ok = kind === "ok";
   return (
@@ -59,12 +92,13 @@ export function SitesPage({ canEdit = false }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState(""); // "" = all groups
   const [openId, setOpenId] = useState(null); // Site _id, "unassigned", or null for the list
   const [siteTab, setSiteTab] = useState("kits"); // "overview" | "kits" inside an open site
 
   const [listTab, setListTab] = useState("sites"); // "sites" | "kits" (every kit, all sites)
   const [showCreate, setShowCreate] = useState(false);
-  const [newSite, setNewSite] = useState({ name: "", siteId: "" });
+  const [newSite, setNewSite] = useState({ name: "", siteId: "", groups: [] });
   const [editing, setEditing] = useState(null); // { name, siteId } while editing the open site
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
@@ -91,9 +125,12 @@ export function SitesPage({ canEdit = false }) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return sites;
-    return sites.filter(s => s.siteId.includes(q) || s.name.toLowerCase().includes(q));
-  }, [sites, search]);
+    return sites.filter(s =>
+      (!groupFilter || (s.groups || []).includes(groupFilter)) &&
+      (!q || s.siteId.includes(q) || s.name.toLowerCase().includes(q))
+    );
+  }, [sites, search, groupFilter]);
+  const groupCount = (name) => sites.filter(s => (s.groups || []).includes(name)).length;
 
   // Opening a site always lands on its Site Kits tab.
   useEffect(() => { setSiteTab("kits"); setEditing(null); }, [openId]);
@@ -107,12 +144,12 @@ export function SitesPage({ canEdit = false }) {
     setBusy(true);
     setFormError("");
     try {
-      const payload = { name: newSite.name.trim() };
+      const payload = { name: newSite.name.trim(), groups: newSite.groups };
       if (newSite.siteId.trim()) payload.siteId = newSite.siteId.trim();
       const created = await createSite(payload);
       await loadSites();
       setShowCreate(false);
-      setNewSite({ name: "", siteId: "" });
+      setNewSite({ name: "", siteId: "", groups: [] });
       setNotice(`Site ${created.siteId} · ${created.name} created.`);
     } catch (err) {
       setFormError(apiMessage(err, "Failed to create the site."));
@@ -129,6 +166,10 @@ export function SitesPage({ canEdit = false }) {
       const payload = {};
       if (editing.name.trim() !== openSite.name) payload.name = editing.name.trim();
       if (editing.siteId.trim() !== openSite.siteId) payload.siteId = editing.siteId.trim();
+      const oldGroups = openSite.groups || [];
+      if (editing.groups.length !== oldGroups.length || editing.groups.some(g => !oldGroups.includes(g))) {
+        payload.groups = editing.groups;
+      }
       const lat = editing.latitude.trim(), lng = editing.longitude.trim();
       if (!lat !== !lng) {
         setFormError("Enter both latitude and longitude, or leave both empty.");
@@ -187,6 +228,7 @@ export function SitesPage({ canEdit = false }) {
             {openSite.unassigned ? "Not filed under a site" : `Site ${openSite.siteId}`}
           </span>
           <h2>{openSite.name}</h2>
+          {!openSite.unassigned && <GroupChips groups={openSite.groups} />}
           {openSite.unassigned && (
             <p>Kits created before sites existed. Open a kit and choose its site to file it.</p>
           )}
@@ -227,6 +269,7 @@ export function SitesPage({ canEdit = false }) {
                     siteId: openSite.siteId,
                     latitude: hasGps(openSite) ? String(openSite.latitude) : "",
                     longitude: hasGps(openSite) ? String(openSite.longitude) : "",
+                    groups: openSite.groups || [],
                   })}>
                     <Pencil size={13} /> Edit
                   </button>
@@ -265,6 +308,7 @@ export function SitesPage({ canEdit = false }) {
                     <input className="form-input" type="number" step="any" min={-180} max={180} placeholder="e.g. 38.518389"
                       value={editing.longitude} onChange={(e) => setEditing(p => ({ ...p, longitude: e.target.value }))} />
                   </label>
+                  <GroupPicker value={editing.groups} onChange={(groups) => setEditing(p => ({ ...p, groups }))} />
                   <button className="btn amber" type="submit" disabled={busy}>
                     {busy ? <Loader2 size={14} className="spin" /> : <CheckCircle2 size={14} />} Save
                   </button>
@@ -276,6 +320,10 @@ export function SitesPage({ canEdit = false }) {
                 <dl className="site-facts">
                   <div><dt>Site ID</dt><dd className="mono" style={{ color: "var(--teal)" }}>{openSite.siteId}</dd></div>
                   <div><dt>Site name</dt><dd>{openSite.name}</dd></div>
+                  <div>
+                    <dt>Groups</dt>
+                    <dd>{openSite.groups?.length ? openSite.groups.join(", ") : <span className="faint">None</span>}</dd>
+                  </div>
                   <div>
                     <dt>Site kits</dt>
                     <dd>
@@ -398,8 +446,21 @@ export function SitesPage({ canEdit = false }) {
             aria-label="Search sites"
           />
         </div>
+        <select
+          className="form-input"
+          style={{ width: "auto", minWidth: 200, flex: "0 1 auto" }}
+          value={groupFilter}
+          onChange={(e) => setGroupFilter(e.target.value)}
+          aria-label="Filter by group"
+        >
+          <option value="">All groups ({sites.length})</option>
+          {SITE_GROUPS.map(g => <option key={g.name} value={g.name}>{g.name} ({groupCount(g.name)})</option>)}
+        </select>
         {canEdit && !showCreate && (
-          <button className="btn amber" onClick={() => { setShowCreate(true); setFormError(""); setNotice(""); }}>
+          <button className="btn amber" onClick={() => {
+            setShowCreate(true); setFormError(""); setNotice("");
+            setNewSite(p => ({ ...p, groups: groupFilter ? [groupFilter] : p.groups }));
+          }}>
             <Plus size={16} /> New Site
           </button>
         )}
@@ -419,7 +480,7 @@ export function SitesPage({ canEdit = false }) {
           <div className="panel-b" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
             <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)", flex: "1 1 240px" }}>
               Site name
-              <input className="form-input" autoFocus required maxLength={120} placeholder="e.g. Loresho"
+              <input className="form-input" autoFocus required maxLength={120} placeholder="e.g. HQ"
                 value={newSite.name} onChange={(e) => setNewSite(p => ({ ...p, name: e.target.value }))} />
             </label>
             <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)", width: 140 }}>
@@ -427,6 +488,7 @@ export function SitesPage({ canEdit = false }) {
               <input className="form-input" pattern="\d{3,6}" placeholder={`${nextId} (auto)`}
                 value={newSite.siteId} onChange={(e) => setNewSite(p => ({ ...p, siteId: e.target.value }))} />
             </label>
+            <GroupPicker value={newSite.groups} onChange={(groups) => setNewSite(p => ({ ...p, groups }))} />
             <button className="btn amber" type="submit" disabled={busy}>
               {busy ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} Create site
             </button>
@@ -465,7 +527,7 @@ export function SitesPage({ canEdit = false }) {
                 </tr>
               </thead>
               <tbody>
-                {!search && unassignedCount > 0 && (
+                {!search && !groupFilter && unassignedCount > 0 && (
                   <tr className="site-row" onClick={() => setOpenId("unassigned")}>
                     <td className="faint mono">—</td>
                     <td>
@@ -485,6 +547,7 @@ export function SitesPage({ canEdit = false }) {
                       <button className="site-open" onClick={(e) => { e.stopPropagation(); setOpenId(s._id); }}>
                         {s.name}
                       </button>
+                      <GroupChips groups={s.groups} />
                     </td>
                     <td style={{ fontSize: 11.5 }}>
                       {hasGps(s) ? (
@@ -512,7 +575,7 @@ export function SitesPage({ canEdit = false }) {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={5} className="faint" style={{ textAlign: "center", padding: 24 }}>No sites match "{search}".</td></tr>
+                  <tr><td colSpan={5} className="faint" style={{ textAlign: "center", padding: 24 }}>No sites match{search ? ` "${search}"` : ""}{groupFilter ? ` in ${groupFilter}` : ""}.</td></tr>
                 )}
               </tbody>
             </table>

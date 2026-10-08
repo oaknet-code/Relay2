@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Antenna, RadioTower, CheckCircle2, Circle, SatelliteDish, MapPin,
-  Plus, AlertTriangle, Loader2
+  Plus, AlertTriangle, Loader2, Pencil, Trash2
 } from 'lucide-react';
 import { TypeIcon, Band, Dot } from '../components/ui';
 import { STATE_META, LINK_STATUS, BAND_COLORS } from '../constants/states';
-import { getLinks, getAssets, createLink } from '../services/api';
+import { getLinks, getAssets, createLink, updateLink, deleteLink } from '../services/api';
 
 const BANDS = ["4 GHz", "6 GHz", "8 GHz", "11 GHz", "13 GHz", "15 GHz", "18 GHz", "23 GHz"];
 
@@ -20,15 +20,40 @@ const emptyForm = () => ({
   notes: "",
 });
 
+// Prefill the form from an existing link. Keeps any GPS/address already on
+// each end, since saving replaces the whole site object.
+const formFromLink = (link) => {
+  const site = (s) => ({
+    ...(s?.lat != null ? { lat: s.lat } : {}),
+    ...(s?.lng != null ? { lng: s.lng } : {}),
+    ...(s?.address ? { address: s.address } : {}),
+    siteId: s?.siteId || "",
+    name: s?.name || "",
+    region: s?.region || "",
+  });
+  return {
+    linkId: link.linkId,
+    name: link.name || "",
+    band: link.band || "",
+    pathLengthKm: link.pathLengthKm ?? "",
+    dishSize: link.dishSize || "",
+    siteA: site(link.siteA),
+    siteB: site(link.siteB),
+    notes: link.notes || "",
+  };
+};
+
 export function LinksView({ canEdit = true }) {
   const [links, setLinks] = useState([]);
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState("list"); // list, create
+  const [view, setView] = useState("list"); // list, create, edit
   const [formData, setFormData] = useState(emptyForm());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [listError, setListError] = useState("");
+  const [deleting, setDeleting] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -84,8 +109,38 @@ export function LinksView({ canEdit = true }) {
   const startCreate = () => {
     setError("");
     setSuccess("");
+    setListError("");
     setFormData(emptyForm());
     setView("create");
+  };
+
+  const startEdit = (link) => {
+    setError("");
+    setSuccess("");
+    setListError("");
+    setFormData(formFromLink(link));
+    setView("edit");
+  };
+
+  const removeLink = async (link) => {
+    setSuccess("");
+    setListError("");
+    if (!window.confirm(`Delete link ${link.linkId}? This can't be undone.`)) return;
+    setDeleting(link.linkId);
+    try {
+      await deleteLink(link.linkId);
+      setSuccess(`Link ${link.linkId} deleted.`);
+      await loadData();
+    } catch (err) {
+      const msg = err.response?.data?.message || "Failed to delete link";
+      setListError(
+        err.response?.status === 409
+          ? `${link.linkId} can't be deleted: ${msg}. Only links that are still Planned and have no site kit can be deleted.`
+          : msg
+      );
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const handleFormChange = (field, value) => {
@@ -109,41 +164,59 @@ export function LinksView({ canEdit = true }) {
       return;
     }
 
+    const editing = view === "edit";
     setIsSubmitting(true);
     try {
-      await createLink({
-        linkId: formData.linkId,
-        name: formData.name || undefined,
-        band: formData.band,
-        pathLengthKm: formData.pathLengthKm ? Number(formData.pathLengthKm) : undefined,
-        dishSize: formData.dishSize || undefined,
-        siteA: formData.siteA,
-        siteB: formData.siteB,
-        notes: formData.notes || undefined,
-      });
-      setSuccess("Link created successfully!");
+      if (editing) {
+        await updateLink(formData.linkId, {
+          name: formData.name,
+          band: formData.band,
+          pathLengthKm: formData.pathLengthKm === "" ? null : Number(formData.pathLengthKm),
+          dishSize: formData.dishSize,
+          siteA: formData.siteA,
+          siteB: formData.siteB,
+          notes: formData.notes,
+        });
+      } else {
+        await createLink({
+          linkId: formData.linkId,
+          name: formData.name || undefined,
+          band: formData.band,
+          pathLengthKm: formData.pathLengthKm ? Number(formData.pathLengthKm) : undefined,
+          dishSize: formData.dishSize || undefined,
+          siteA: formData.siteA,
+          siteB: formData.siteB,
+          notes: formData.notes || undefined,
+        });
+      }
+      setSuccess(editing ? `Link ${formData.linkId} updated.` : "Link created successfully!");
       await loadData();
       setFormData(emptyForm());
       setView("list");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create link");
+      setError(err.response?.data?.message || (editing ? "Failed to update link" : "Failed to create link"));
       console.error("Create link error:", err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // CREATE VIEW
-  if (view === "create") {
+  // CREATE / EDIT VIEW
+  if (view === "create" || view === "edit") {
+    const editing = view === "edit";
     return (
       <div className="view">
         <div className="view-head">
           <div className="tagchip">
             <Antenna size={11} />
-            New Link
+            {editing ? "Edit Link" : "New Link"}
           </div>
-          <h2>Create New Link</h2>
-          <p>Define a new microwave link between two sites, ready to have a site kit assigned.</p>
+          <h2>{editing ? `Edit ${formData.linkId}` : "Create New Link"}</h2>
+          <p>
+            {editing
+              ? "Update this link's details. The Link ID can't be changed; status changes as the kit moves through the pipeline."
+              : "Define a new microwave link between two sites, ready to have a site kit assigned."}
+          </p>
         </div>
 
         <div style={{ maxWidth: "700px" }}>
@@ -173,6 +246,8 @@ export function LinksView({ canEdit = true }) {
                   placeholder="e.g. MW-03"
                   value={formData.linkId}
                   onChange={(e) => handleFormChange("linkId", e.target.value)}
+                  disabled={editing}
+                  maxLength={40}
                   required
                 />
               </div>
@@ -293,7 +368,7 @@ export function LinksView({ canEdit = true }) {
                   cursor: isSubmitting ? "not-allowed" : "pointer", transition: "all 130ms"
                 }}
               >
-                {isSubmitting ? "Saving..." : "Create Link"}
+                {isSubmitting ? "Saving..." : (editing ? "Save Changes" : "Create Link")}
               </button>
               <button
                 type="button"
@@ -349,6 +424,17 @@ export function LinksView({ canEdit = true }) {
         </div>
       )}
 
+      {listError && (
+        <div role="alert" style={{
+          marginBottom: 20, padding: "10px 14px", borderRadius: 10, fontSize: 12,
+          display: "flex", alignItems: "flex-start", gap: 8,
+          background: "rgba(255,90,90,.1)", border: "1px solid rgba(255,90,90,.25)", color: "var(--red)",
+        }}>
+          <AlertTriangle size={14} style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>{listError}</span>
+        </div>
+      )}
+
       {loading && (
         <div style={{ textAlign: "center", padding: 60, color: "var(--faint)" }}>
           <Loader2 size={24} className="spin" style={{ marginBottom: 12 }} />
@@ -370,6 +456,17 @@ export function LinksView({ canEdit = true }) {
                   <Dot c={statusMeta.c} />
                   {statusMeta.label}
                 </span>
+                {canEdit && (
+                  <span style={{ display: "flex", gap: 4 }}>
+                    <button className="btn sm ghost" title="Edit" aria-label={`Edit ${link.linkId}`} onClick={() => startEdit(link)}>
+                      <Pencil size={13} />
+                    </button>
+                    <button className="btn sm ghost" title="Delete" aria-label={`Delete ${link.linkId}`}
+                      style={{ color: "var(--red)" }} disabled={deleting === link.linkId} onClick={() => removeLink(link)}>
+                      {deleting === link.linkId ? <Loader2 size={13} className="spin" /> : <Trash2 size={13} />}
+                    </button>
+                  </span>
+                )}
               </div>
 
               <div className="endpoints">
