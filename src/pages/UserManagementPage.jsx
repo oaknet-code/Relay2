@@ -16,10 +16,11 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  ShieldOff,
 } from "lucide-react";
 import { PasswordRules } from "../components/ui/PasswordRules";
 import { isPasswordValid, passwordProblem, generatePassword, PASSWORD_MAX_LENGTH } from "../utils/passwordPolicy";
-import { listUsers, createUser, updateUser, deleteUser, setUserStatus } from "../services/api";
+import { listUsers, createUser, updateUser, deleteUser, setUserStatus, resetUserMfa } from "../services/api";
 
 // All six account roles. Order = how they appear in the role picker.
 const ROLES = [
@@ -191,6 +192,22 @@ export function UserManagementPage() {
       setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
     } catch (err) {
       setActionError(err.message || "Failed to update account status.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleResetMfa = async (user) => {
+    if (!window.confirm(`Reset two-factor authentication for "${user.username}"? They'll be signed out and must set up Google Authenticator again at their next login.`)) return;
+    setBusyId(user.id);
+    setActionError("");
+    setNotice("");
+    try {
+      const updated = await resetUserMfa(user.id);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
+      setNotice(`2FA reset for ${user.username}. They'll set it up again at next login.`);
+    } catch (err) {
+      setActionError(err.message || "Failed to reset 2FA.");
     } finally {
       setBusyId(null);
     }
@@ -487,6 +504,7 @@ export function UserManagementPage() {
                   <th>Company</th>
                   <th>Created</th>
                   <th>Status</th>
+                  <th>2FA</th>
                   <th style={{ textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
@@ -519,6 +537,11 @@ export function UserManagementPage() {
                         </span>
                       </td>
                       <td>
+                        <span className={`mfa-badge ${user.mfaEnabled ? "on" : ""}`}>
+                          {user.mfaEnabled ? "On" : "Not set up"}
+                        </span>
+                      </td>
+                      <td>
                         <div className="user-actions">
                           <button className="btn sm ghost" onClick={() => startEdit(user)} disabled={busy} title="Edit account">
                             <Pencil size={13} /> Edit
@@ -535,6 +558,12 @@ export function UserManagementPage() {
                             {busy ? <Loader size={13} className="spin" /> : <Power size={13} />}
                             {user.status === "active" ? "Suspend" : "Reactivate"}
                           </button>
+                          {user.mfaEnabled && !user.isSelf && (
+                            <button className="btn sm ghost" onClick={() => handleResetMfa(user)} disabled={busy}
+                              title="Lost phone: clear 2FA so they can set it up again">
+                              <ShieldOff size={13} /> Reset 2FA
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDelete(user)}
                             disabled={busy || user.isSelf}

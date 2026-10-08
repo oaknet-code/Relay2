@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   RadioTower, Eye, EyeOff, ArrowRight, ShieldCheck, ArrowLeft, MailCheck, CheckCircle2
 } from "lucide-react";
 import { api, requestPasswordReset, resetPassword } from "../services/api";
 import { PasswordRules } from "../components/ui/PasswordRules";
+import { MfaStep } from "../components/auth/MfaStep";
 import { isPasswordValid, passwordProblem, PASSWORD_MAX_LENGTH } from "../utils/passwordPolicy";
 
 // resetToken: from an emailed "Reset password" link (App reads it from the
@@ -14,6 +15,7 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [info, setInfo] = useState("");
+  const [mfaStage, setMfaStage] = useState(null); // "setup" | "verify" after a correct password
   const [formData, setFormData] = useState({
     email: "",
     password: ""
@@ -41,10 +43,18 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone }) {
       // trust for identity. Fetch the authenticated profile instead: it's
       // derived server-side from the cookie via the `protect` middleware,
       // not from anything the client supplied.
-      await api.login({
+      const res = await api.login({
         email: formData.email,
         password: formData.password
       });
+
+      // Every account uses 2FA: a correct password only opens the
+      // authenticator step; the session exists after a correct code.
+      if (res?.mfaRequired) {
+        setMfaStage(res.stage);
+        setMode("mfa");
+        return;
+      }
 
       const { user } = await api.getMe();
 
@@ -57,6 +67,23 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone }) {
   };
 
   const isValid = formData.email && formData.password;
+
+  const finishMfa = useCallback(async () => {
+    try {
+      const { user } = await api.getMe();
+      onLoginSuccess?.(user);
+    } catch (err) {
+      setMode("login");
+      setError(err.message || "Login failed. Please try again.");
+    }
+  }, [onLoginSuccess]);
+
+  const restartLogin = useCallback((message) => {
+    setMode("login");
+    setMfaStage(null);
+    setFormData((p) => ({ ...p, password: "" }));
+    setError(message || "");
+  }, []);
 
   const goToLogin = () => {
     setMode("login");
@@ -105,6 +132,9 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone }) {
     "forgot-sent": "Check your email.",
     reset: "Choose a new password for your account.",
     "reset-done": "Password updated.",
+    mfa: mfaStage === "setup"
+      ? "Set up two-factor authentication — required for every account."
+      : "Enter the code from Google Authenticator.",
   }[mode];
 
   return (
@@ -124,7 +154,7 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone }) {
             <p className="signup-subtitle">{subtitle}</p>
           </div>
 
-          {error && (
+          {error && mode !== "mfa" && (
             <div className="auth-error">
               <ShieldCheck size={16} />
               {error}
@@ -136,6 +166,10 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone }) {
               {mode === "forgot-sent" ? <MailCheck size={16} /> : <CheckCircle2 size={16} />}
               <span>{info}</span>
             </div>
+          )}
+
+          {mode === "mfa" && (
+            <MfaStep stage={mfaStage} email={formData.email} onDone={finishMfa} onRestart={restartLogin} />
           )}
 
           {mode === "forgot" && (

@@ -24,7 +24,7 @@ const axiosInstance = axios.create({
 // Excludes /login (a wrong password is also a 401 — show the form's error,
 // don't reload) and /me (a 401 there just means "not logged in yet", the
 // normal state on first load — reloading would loop forever).
-const AUTH_PROBE_PATHS = ["/api/auth/login", "/api/auth/me"];
+const AUTH_PROBE_PATHS = ["/api/auth/login", "/api/auth/me", "/api/auth/mfa/"];
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -58,6 +58,30 @@ export const loginUser = async (credentials) => {
 
 // Aliased export for compatibility
 export const login = loginUser;
+
+/**
+ * Two-factor authentication (Google Authenticator). After a correct
+ * password the server opens a short 2FA step (HttpOnly cookie); these calls
+ * finish it. Errors carry `restart: true` when the step has ended and the
+ * user must log in again.
+ */
+const mfaCall = async (url, body) => {
+  try {
+    const { data } = await axiosInstance.post(url, body);
+    return data;
+  } catch (error) {
+    const err = new Error(error.response?.data?.message || "Something went wrong. Please try again.");
+    err.restart = Boolean(error.response?.data?.restart) || error.response?.status === 401;
+    err.attemptsLeft = error.response?.data?.attemptsLeft;
+    throw err;
+  }
+};
+// -> { qrDataUrl, secret, account, issuer }
+export const mfaSetupStart = () => mfaCall("/api/auth/mfa/setup");
+// -> { ok, recoveryCodes: [10 one-time codes] }
+export const mfaSetupConfirm = (code) => mfaCall("/api/auth/mfa/setup/confirm", { code });
+// payload: { code } or { recoveryCode } -> { ok, recoveryCodesLeft? }
+export const mfaVerify = (payload) => mfaCall("/api/auth/mfa/verify", payload);
 
 /**
  * Forgot password — always resolves with the same message whether or not
@@ -150,6 +174,16 @@ export const deleteUser = async (id) => {
   } catch (error) {
     const message = error.response?.data?.message || "Failed to delete account";
     throw new Error(message);
+  }
+};
+
+// Admin-only: clear an account's 2FA (lost phone); it sets 2FA up again at next login.
+export const resetUserMfa = async (id) => {
+  try {
+    const { data } = await axiosInstance.patch(`/api/auth/users/${id}/mfa-reset`);
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Failed to reset 2FA");
   }
 };
 

@@ -538,3 +538,17 @@
   white-space: nowrap;
   border: 0;
 }
+
+.mfa-badge {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  white-space: nowrap;
+  background: rgba(255, 176, 32, 0.12);
+  color: var(--amber);
+}
+
+.mfa-badge.on {
+  background: rgba(51, 220, 174, 0.12);
+  color: var(--teal);
+}

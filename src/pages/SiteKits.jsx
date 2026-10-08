@@ -273,9 +273,10 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
         await updateSiteKit(editingKit.kitId, kitPayload);
         setSuccess("Kit updated successfully!");
       } else {
-        // Generate a unique kit ID
-        const timestamp = Date.now().toString().slice(-6);
-        kitPayload.kitId = `KIT-${timestamp}`;
+        // Random, unguessable kit ID (was the last 6 digits of the clock).
+        const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        const bytes = crypto.getRandomValues(new Uint8Array(8));
+        kitPayload.kitId = "KIT-" + Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
         await createSiteKit(kitPayload);
         setSuccess("Kit created successfully!");
       }
