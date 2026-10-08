@@ -467,6 +467,24 @@ export const allocateSiteKit = async (kitId) => {
   return data;
 };
 
+// Holds free BOQ stock for a kit (all components, or just `componentIds`).
+export const reserveKitBoq = async (kitId, componentIds) => {
+  const { data } = await axiosInstance.post(`/api/sitekits/${encodeURIComponent(kitId)}/boq/reserve`, componentIds ? { componentIds } : {});
+  return data; // { message, reserved, short, kit }
+};
+
+// Gives a kit's BOQ reservations back to the pool.
+export const releaseKitBoq = async (kitId, componentIds) => {
+  const { data } = await axiosInstance.post(`/api/sitekits/${encodeURIComponent(kitId)}/boq/release`, componentIds ? { componentIds } : {});
+  return data; // { message, released, kit }
+};
+
+// Every part the kits use: total demand vs. BOQ quantity.
+export const getKitBoqShortages = async () => {
+  const { data } = await axiosInstance.get("/api/sitekits/boq/shortages");
+  return data; // { parts, covered, shortages: [...], notInBoq: [...] }
+};
+
 /**
  * Sites — each site holds its Site Kits.
  */
@@ -629,6 +647,9 @@ export const api = {
   updateSiteKit,
   deleteSiteKit,
   allocateSiteKit,
+  reserveKitBoq,
+  releaseKitBoq,
+  getKitBoqShortages,
   sendKitToDispatch,
   setKitSite,
   importSiteKitsExcel,

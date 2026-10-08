@@ -2,10 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Package, Plus, Search, Filter, Eye, Wrench, Upload, Loader2,
   AlertTriangle, CheckCircle2, Trash2, Edit, X, ChevronDown, ChevronUp, Zap,
-  ArrowLeft, Truck
+  ArrowLeft, Truck, PackageCheck, Undo2, ClipboardList
 } from 'lucide-react';
 import { Band, StatePill, Dot } from '../components/ui';
-import { getSiteKits, createSiteKit, updateSiteKit, deleteSiteKit, allocateSiteKit, importSiteKitsExcel, getLinks, sendKitToDispatch, setKitSite } from '../services/api';
+import { getSiteKits, createSiteKit, updateSiteKit, deleteSiteKit, importSiteKitsExcel, getLinks, sendKitToDispatch, setKitSite, reserveKitBoq, releaseKitBoq, getKitBoqShortages } from '../services/api';
 
 function timeAgo(dateStr) {
   if (!dateStr) return "—";
@@ -38,7 +38,10 @@ function fromApiKit(k) {
       qtyRequired: c.qtyRequired,
       qtyAvailable: c.qtyAvailable || 0,
       sourceType: c.sourceType || "consumable",
+      // BOQ availability, worked out by the server (not edited here).
+      boq: c.boq || null,
     })),
+    boqSummary: k.boqSummary || null,
     lastUpdated: timeAgo(k.updatedAt || k.createdAt),
     createdAt: k.createdAt || new Date().toISOString().split("T")[0],
   };
@@ -54,8 +57,122 @@ const KIT_STATUS = {
   INSTALLED: { label: "Installed", c: "var(--teal)" }
 };
 
+// A kit line against the BOQ: reserved (green), in the BOQ but not yet
+// reserved (blue), or more than the BOQ has left (red).
+function lineState(comp) {
+  if (comp.qtyAvailable >= comp.qtyRequired) return { c: "var(--teal)", label: "Reserved" };
+  if (comp.boq && comp.boq.shortfall === 0) return { c: "var(--blue)", label: "In BOQ, not reserved" };
+  return { c: "var(--red)", label: "Short in BOQ" };
+}
+
+// Short note on the BOQ position of a line not yet fully reserved.
+function boqNote(comp) {
+  const b = comp.boq;
+  if (!b || comp.qtyAvailable >= comp.qtyRequired) return null;
+  if (b.inBoq === 0) return "not in BOQ";
+  if (b.shortfall > 0) return `short ${b.shortfall}`;
+  return `${b.free} free`;
+}
+
+const LEGEND = [["var(--teal)", "Reserved"], ["var(--blue)", "In BOQ, not reserved"], ["var(--red)", "Short in BOQ"]];
+
+function BoqLegend() {
+  return (
+    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 10.5, color: "var(--faint)" }}>
+      {LEGEND.map(([c, label]) => (
+        <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Dot c={c} />{label}</span>
+      ))}
+    </div>
+  );
+}
+
+// One-line kit summary, e.g. "40/52 reserved · 10 in stock · 2 short".
+function BoqSummary({ summary }) {
+  if (!summary || !summary.lines) return null;
+  const parts = [
+    <span key="r" style={{ color: summary.covered === summary.lines ? "var(--teal)" : undefined }}>{summary.covered}/{summary.lines} reserved</span>,
+  ];
+  if (summary.reservable) parts.push(<span key="s" style={{ color: "var(--blue)" }}>{summary.reservable} in stock</span>);
+  if (summary.short) parts.push(<span key="x" style={{ color: "var(--red)" }}>{summary.short} short</span>);
+  return (
+    <span style={{ fontSize: 10.5, fontFamily: "var(--mono)", color: "var(--muted)" }}>
+      {parts.flatMap((p, i) => (i ? [<span key={`d${i}`}> · </span>, p] : [p]))}
+    </span>
+  );
+}
+
+// Detail-view line under a part: where its BOQ stock stands.
+function BoqDetail({ comp }) {
+  const b = comp.boq;
+  const bits = [];
+  if (b.mapped) bits.push(`BOQ as ${b.parts.join(" / ")}`);
+  if (b.inBoq === 0) {
+    bits.push("not in the BOQ");
+  } else {
+    bits.push(`BOQ ${b.inBoq}${b.spares ? ` (${b.main} main + ${b.spares} spares)` : ""}`);
+    if (b.reservedByOthers) bits.push(`${b.reservedByOthers} held by other kits`);
+    bits.push(`${b.free} free`);
+  }
+  if (b.reservedFromSpares) bits.push(`${b.reservedFromSpares} of this kit's from spares`);
+  return (
+    <span style={{ display: "block", fontSize: 10.5, marginTop: 2, fontFamily: "var(--mono)", color: "var(--faint)" }}>
+      {bits.join(" · ")}
+      {b.shortfall > 0 && <span style={{ color: "var(--red)" }}> · short {b.shortfall}</span>}
+    </span>
+  );
+}
+
+// Project-wide check of every part the kits use against the BOQ.
+function BoqShortagesPanel({ data }) {
+  const [open, setOpen] = useState(false);
+  if (!data) return null;
+  const problems = [...data.shortages, ...data.notInBoq];
+  const ok = problems.length === 0;
+  return (
+    <div className="panel" style={{ marginBottom: 20 }}>
+      <div className="panel-h">
+        <ClipboardList size={16} className="ph-ico" />
+        <h3>BOQ check</h3>
+        <span style={{ fontSize: 11.5, color: ok ? "var(--teal)" : "var(--red)", marginLeft: 8 }}>
+          {data.covered} of {data.parts} kit parts covered{ok ? "" : ` · ${problems.length} short`}
+        </span>
+        {!ok && (
+          <div className="ph-r">
+            <button type="button" className="btn ghost sm" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+              {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {open ? "Hide" : "Show"} shortages
+            </button>
+          </div>
+        )}
+      </div>
+      {open && !ok && (
+        <div className="panel-b" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 11, color: "var(--faint)" }}>
+            Total needed by all kits vs. the BOQ (main + spares). Reserving uses main stock first, then spares.
+          </div>
+          {problems.map(p => (
+            <div key={p.model} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)", fontSize: 11 }}>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontFamily: "var(--mono)" }}>{p.model}</span>
+                {p.mapped && <span className="faint" style={{ fontFamily: "var(--mono)" }}> → {p.boqParts.join(" / ")}</span>}
+                <span className="faint" style={{ display: "block", fontSize: 10.5, marginTop: 2 }}>
+                  {p.description}{p.description ? " · " : ""}{p.kits.length} kit{p.kits.length === 1 ? "" : "s"}: {p.kits.map(k => k.replace(/^KIT-/, "")).join(", ")}
+                </span>
+              </div>
+              <div style={{ fontFamily: "var(--mono)", textAlign: "right", flexShrink: 0 }}>
+                <div style={{ color: "var(--red)" }}>{p.inBoq === 0 ? "not in BOQ" : `short ${p.short}`}</div>
+                <div className="faint" style={{ fontSize: 10 }}>need {p.required} · BOQ {p.inBoq}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // `limit` shows only the first few lines (kit cards); the kit's detail view
-// shows them all, with each part's description.
+// shows them all, with each part's description and BOQ breakdown.
 function ComponentsTable({ components, limit, onShowAll }) {
   const shown = limit ? components.slice(0, limit) : components;
   const hidden = components.length - shown.length;
@@ -72,20 +189,21 @@ function ComponentsTable({ components, limit, onShowAll }) {
           borderBottom: i < shown.length - 1 || hidden > 0 ? "1px solid var(--line)" : "none"
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <Dot c={comp.qtyAvailable >= comp.qtyRequired ? "var(--teal)" : "var(--red)"} />
+            <span title={lineState(comp).label} style={{ display: "inline-flex" }}><Dot c={lineState(comp).c} /></span>
             <span style={{ fontFamily: "var(--mono)", flexShrink: 0 }}>{comp.type}</span>
             <span style={{ minWidth: 0 }}>
               {comp.model}
               {!limit && comp.description && (
                 <span className="faint" style={{ display: "block", fontSize: 10.5, marginTop: 2 }}>{comp.description}</span>
               )}
+              {!limit && comp.boq && <BoqDetail comp={comp} />}
             </span>
           </div>
-          <div style={{
-            fontFamily: "var(--mono)",
-            color: comp.qtyAvailable >= comp.qtyRequired ? "var(--teal)" : "var(--red)"
-          }}>
-            {comp.qtyAvailable}/{comp.qtyRequired}
+          <div style={{ fontFamily: "var(--mono)", textAlign: "right", flexShrink: 0 }}>
+            <div style={{ color: lineState(comp).c }}>{comp.qtyAvailable}/{comp.qtyRequired}</div>
+            {boqNote(comp) && (
+              <div style={{ fontSize: 10, color: comp.boq?.shortfall ? "var(--red)" : "var(--faint)" }}>{boqNote(comp)}</div>
+            )}
           </div>
         </div>
       ))}
@@ -101,7 +219,7 @@ function ComponentsTable({ components, limit, onShowAll }) {
 // Rendered inside the Sites page: `site` is the open site ({ _id, siteId,
 // name }) or { unassigned: true } for kits not yet filed under a site.
 // Without `site` it lists every kit, as before.
-export function SiteKits({ canEdit = true, site = null, sites = [], showHeader = true, onKitsChanged }) {
+export function SiteKits({ canEdit = true, canReserve = canEdit, site = null, sites = [], showHeader = true, onKitsChanged }) {
   const inSite = !!site && !site.unassigned;
   const [view, setView] = useState("list"); // list, create, edit
   const [searchTerm, setSearchTerm] = useState("");
@@ -121,6 +239,8 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
   const [sendingToDispatch, setSendingToDispatch] = useState(false);
   const [detailsError, setDetailsError] = useState("");
   const [detailsSuccess, setDetailsSuccess] = useState("");
+  const [boqBusy, setBoqBusy] = useState(null); // "reserve" | "release" | null
+  const [shortages, setShortages] = useState(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -140,6 +260,8 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
       const normalizedKits = kitsData.map(fromApiKit);
       setKits(normalizedKits);
       setLinks(linksData);
+      // The project-wide BOQ check only shows on the all-kits list.
+      if (!site) getKitBoqShortages().then(setShortages).catch(() => setShortages(null));
     } catch (err) {
       setError("Failed to load kits");
       console.error("Load error:", err);
@@ -222,6 +344,25 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
       setDetailsError(err.response?.data?.message || "Failed to send kit to dispatch.");
     } finally {
       setSendingToDispatch(false);
+    }
+  };
+
+  // Reserve (or release) BOQ stock for the whole kit. Other kits' "free"
+  // numbers change too, so the list is reloaded.
+  const handleBoq = async (kit, action) => {
+    setBoqBusy(action);
+    setDetailsError("");
+    setDetailsSuccess("");
+    try {
+      const result = action === "reserve" ? await reserveKitBoq(kit.kitId) : await releaseKitBoq(kit.kitId);
+      setViewingKit(fromApiKit(result.kit));
+      setDetailsSuccess(result.message);
+      await loadKits();
+      onKitsChanged?.();
+    } catch (err) {
+      setDetailsError(err.response?.data?.message || `Failed to ${action} stock.`);
+    } finally {
+      setBoqBusy(null);
     }
   };
 
@@ -462,9 +603,38 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
               )}
 
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                  Kit Components
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Kit Components
+                  </div>
+                  <BoqSummary summary={viewingKit.boqSummary} />
                 </div>
+                {canReserve && !isSentToDispatch && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                    <button
+                      className="btn amber sm"
+                      disabled={!!boqBusy || !viewingKit.boqSummary?.reservable}
+                      title={viewingKit.boqSummary?.reservable ? "Hold free BOQ stock for every part this kit still needs" : "Nothing in the BOQ left to reserve for this kit"}
+                      onClick={() => handleBoq(viewingKit, "reserve")}
+                    >
+                      {boqBusy === "reserve" ? <Loader2 size={14} className="spin" /> : <PackageCheck size={14} />}
+                      {boqBusy === "reserve" ? "Reserving…" : "Reserve BOQ stock"}
+                    </button>
+                    {viewingKit.components.some(c => c.boq?.reserved > 0) && (
+                      <button
+                        className="btn ghost sm"
+                        disabled={!!boqBusy}
+                        onClick={() => {
+                          if (window.confirm(`Release all BOQ stock held for ${viewingKit.kitId}? Other kits can then take it.`)) handleBoq(viewingKit, "release");
+                        }}
+                      >
+                        {boqBusy === "release" ? <Loader2 size={14} className="spin" /> : <Undo2 size={14} />}
+                        {boqBusy === "release" ? "Releasing…" : "Release"}
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div style={{ marginBottom: 8 }}><BoqLegend /></div>
                 <ComponentsTable components={viewingKit.components} />
               </div>
 
@@ -484,7 +654,9 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
                       Ready for Dispatch
                     </div>
                     <div style={{ fontSize: 11, color: "var(--faint)" }}>
-                      All components are stocked — this kit is ready to send to Dispatch.
+                      {viewingKit.boqSummary && viewingKit.boqSummary.covered < viewingKit.boqSummary.lines
+                        ? `${viewingKit.boqSummary.lines - viewingKit.boqSummary.covered} of ${viewingKit.boqSummary.lines} part lines aren't reserved yet.`
+                        : "All components are reserved — this kit is ready to send to Dispatch."}
                     </div>
                   </div>
                   {canEdit && (
@@ -913,6 +1085,8 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
         </div>
       )}
 
+      {!site && !loading && <BoqShortagesPanel data={shortages} />}
+
       {/* Errors from actions on the list (e.g. a delete the server refused). */}
       {!loading && error && kits.length > 0 && (
         <div role="alert" style={{
@@ -980,8 +1154,11 @@ export function SiteKits({ canEdit = true, site = null, sites = [], showHeader =
               </div>
 
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: "var(--faint)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                  Kit Components
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Kit Components
+                  </div>
+                  <BoqSummary summary={kit.boqSummary} />
                 </div>
                 <ComponentsTable components={kit.components} limit={6} onShowAll={() => startView(kit)} />
               </div>
