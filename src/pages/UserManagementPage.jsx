@@ -22,9 +22,10 @@ import { PasswordRules } from "../components/ui/PasswordRules";
 import { isPasswordValid, passwordProblem, generatePassword, PASSWORD_MAX_LENGTH } from "../utils/passwordPolicy";
 import { listUsers, createUser, updateUser, deleteUser, setUserStatus, resetUserMfa } from "../services/api";
 
-// All six account roles. Order = how they appear in the role picker.
+// All seven account roles. Order = how they appear in the role picker.
 const ROLES = [
-  { value: "admin", label: "Admin", hint: "Full access, including user management" },
+  { value: "super_admin", label: "Super Admin", hint: "Full access, including admin accounts" },
+  { value: "admin", label: "Admin", hint: "Views everything; manages accounts below admin" },
   { value: "warehouse_manager", label: "Warehouse Manager", hint: "Manages stock, kits and links" },
   { value: "warehouse_operator", label: "Warehouse Operator", hint: "Allocates kits and dispatches" },
   { value: "site_engineer", label: "Site Engineer", hint: "Views kits, staging and field ops" },
@@ -32,7 +33,10 @@ const ROLES = [
   { value: "field_worker", label: "Site Worker", hint: "Submits Site Work reports (needs a company)" },
 ];
 const ROLE_LABELS = Object.fromEntries(ROLES.map((r) => [r.value, r.label]));
+// Only a super admin can create, edit or delete these.
+const PRIVILEGED_ROLES = ["super_admin", "admin"];
 const ROLE_COLORS = {
+  super_admin: "var(--red)",
   admin: "var(--amber)",
   warehouse_manager: "var(--blue)",
   warehouse_operator: "var(--blue)",
@@ -62,7 +66,9 @@ function ErrorBox({ children }) {
 
 const labelStyle = { display: "block", fontSize: "12px", fontWeight: "500", marginBottom: "6px", color: "var(--muted)" };
 
-export function UserManagementPage() {
+export function UserManagementPage({ isSuper = false }) {
+  // Roles this user may hand out: admins can't create admins or super admins.
+  const assignableRoles = isSuper ? ROLES : ROLES.filter((r) => !PRIVILEGED_ROLES.includes(r.value));
   const [view, setView] = useState("list"); // list, create, edit
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -322,7 +328,7 @@ export function UserManagementPage() {
               <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={roleLocked}>
                 <legend style={labelStyle}>Role *</legend>
                 <div className="role-picker" role="radiogroup" aria-label="Role">
-                  {ROLES.map((r) => {
+                  {assignableRoles.map((r) => {
                     const selected = formData.role === r.value;
                     return (
                       <button
@@ -542,6 +548,10 @@ export function UserManagementPage() {
                         </span>
                       </td>
                       <td>
+                        {/* user.canManage comes from the server: admins can't touch admin / super admin accounts. */}
+                        {!user.canManage ? (
+                          <div className="user-actions faint" style={{ fontSize: 11.5 }}>Super admin only</div>
+                        ) : (
                         <div className="user-actions">
                           <button className="btn sm ghost" onClick={() => startEdit(user)} disabled={busy} title="Edit account">
                             <Pencil size={13} /> Edit
@@ -575,6 +585,7 @@ export function UserManagementPage() {
                             <Trash2 size={13} /> Delete
                           </button>
                         </div>
+                        )}
                       </td>
                     </tr>
                   );

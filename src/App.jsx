@@ -11,7 +11,7 @@ import { SiteWorkPage } from "./pages/SiteWorkPage";
 
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
-import { canEdit, getAccessLevel, getAllowedNavigation, isAdmin } from "./utils/access";
+import { canEdit, getAccessLevel, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin } from "./utils/access";
 
 import { SEED_ASSETS, LINKS, POD_INIT } from "./data/mockData";
 
@@ -112,7 +112,8 @@ export default function App() {
    * profile (see utils/access.js), never from the login response body,
    * which is unsigned and can be tampered with client-side.
    */
-  const hasWriteAccess = canEdit(user);
+  const hasWriteAccess = canEdit(user); // super admin only
+  const fullView = hasFullView(user); // admin + super admin
   const navigation = getAllowedNavigation(NAV_CONFIG, user);
 
   /*
@@ -235,22 +236,23 @@ export default function App() {
         return <SitesPage canEdit={hasWriteAccess} />;
 
       case "dispatch":
-        return hasWriteAccess ? (
-          <Dispatch assets={assets} onDispatch={onDispatch} />
+        return fullView ? (
+          <Dispatch assets={assets} onDispatch={onDispatch} canEdit={hasWriteAccess} />
         ) : (
           <MissionControl assets={assets} />
         );
 
       case "fleet":
-        return hasWriteAccess ? (
+        return fullView ? (
           <FleetManagement canEdit={hasWriteAccess} />
         ) : (
           <MissionControl assets={assets} />
         );
 
       case "field":
-        return hasWriteAccess ? (
+        return fullView ? (
           <FieldOps
+            canEdit={hasWriteAccess}
             assets={assets}
             pod={pod}
             setPod={setPod}
@@ -261,7 +263,7 @@ export default function App() {
         );
 
       case "tracking":
-        return hasWriteAccess ? (
+        return fullView ? (
           <AssetTracking assets={assets} />
         ) : (
           <MissionControl assets={assets} />
@@ -269,13 +271,13 @@ export default function App() {
 
       case "users":
         return isAdmin(user) ? (
-          <UserManagementPage />
+          <UserManagementPage isSuper={isSuperAdmin(user)} />
         ) : (
           <MissionControl assets={assets} />
         );
 
       case "notifications":
-        return hasWriteAccess ? (
+        return fullView ? (
           <NotificationsPage />
         ) : (
           <MissionControl assets={assets} />
@@ -305,8 +307,10 @@ export default function App() {
           name: user?.firstName || "User",
 
           title:
-            getAccessLevel(user) === "full"
-              ? "Full Access"
+            isSuperAdmin(user)
+              ? "Super Admin · Full Access"
+              : getAccessLevel(user) === "full"
+              ? "Admin · View Access"
               : getAccessLevel(user) === "field_worker"
                 ? "Field Worker"
                 : "Client View Only",

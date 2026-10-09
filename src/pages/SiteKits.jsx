@@ -472,6 +472,9 @@ export function SiteKits({ canEdit = true, canReserve = canEdit, site = null, si
 
   const [movingSite, setMovingSite] = useState(false);
   const handleMoveKit = async (kit, newSiteRef) => {
+    // A <select> changes on a stray scroll or arrow key, so confirm first.
+    const label = (ref) => { const s = sites.find(x => x._id === ref); return s ? `${s.siteId} · ${s.name}` : "Unassigned"; };
+    if (!window.confirm(`Move kit "${kit.name}" from ${label(kit.siteRef)} to ${label(newSiteRef)}?`)) return;
     setMovingSite(true);
     setDetailsError("");
     setDetailsSuccess("");

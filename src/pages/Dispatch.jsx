@@ -26,7 +26,7 @@ const linkIdFromKitId = (kitId = "") => {
   return raw.includes("-") ? raw : raw.replace(/^([A-Za-z]+)(\d+)$/, "$1-$2");
 };
 
-export function Dispatch({ assets, onDispatch }) {
+export function Dispatch({ assets, onDispatch, canEdit = true }) {
   // ── Kits ready for dispatch (status STAGED) ──────────────────
   const [kits, setKits] = useState([]);
   const [kitsLoading, setKitsLoading] = useState(true);
@@ -815,12 +815,15 @@ export function Dispatch({ assets, onDispatch }) {
               )
             ) : (
               <>
-                <button className="btn amber" disabled={!ready || firing} onClick={fire}>
+                <button className="btn amber" disabled={!canEdit || !ready || firing} onClick={fire}
+                  title={canEdit ? undefined : "View only — a super admin dispatches"}>
                   {firing ? <Loader2 size={15} className="spin" /> : <FileText size={15} />}
                   {firing ? "Dispatching…" : "Generate Waybill & Gate Pass"}
                 </button>
                 <span className="faint" style={{ fontSize: 11.5 }}>
-                  {!anySelected
+                  {!canEdit
+                    ? "View only — dispatching needs a super admin or warehouse account."
+                    : !anySelected
                     ? "Scan a unit or count a consumable to enable."
                     : !selectedVehicle
                       ? "Select a vehicle above to enable."

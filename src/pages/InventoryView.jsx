@@ -77,8 +77,8 @@ export function InventoryView({ canImport = false }) {
         </span>
         <h2>Inventory</h2>
         <p>
-          Project equipment from the Line 1 &amp; 2 BOQ, plus serialized units
-          tracked through their lifecycle.
+          Project equipment for Line 1 &amp; 2, plus serialized units tracked
+          through their lifecycle.
         </p>
       </div>
 

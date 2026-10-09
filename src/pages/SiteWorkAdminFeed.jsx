@@ -20,7 +20,8 @@ function imageSrc(relativeUrl) {
 // (see SiteWorkPage.jsx). A non-admin session should never fetch this
 // chunk's JS at all, let alone call GET /api/site-work (the backend
 // enforces that independently regardless of what the client requests).
-export function SiteWorkAdminFeed() {
+// `canDelete`: super admins only (admins see the feed read-only).
+export function SiteWorkAdminFeed({ canDelete = false }) {
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -141,6 +142,7 @@ export function SiteWorkAdminFeed() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <span className="faint" style={{ fontSize: "12px", whiteSpace: "nowrap" }}>{fmtDate(item.createdAt)}</span>
+                  {canDelete && (
                   <button
                     className="btn sm"
                     title="Delete submission"
@@ -152,6 +154,7 @@ export function SiteWorkAdminFeed() {
                     {deletingKey === item._id ? <Loader2 size={14} className="spin" /> : <Trash2 size={14} />}
                     Delete
                   </button>
+                  )}
                 </div>
               </div>
 
@@ -179,6 +182,7 @@ export function SiteWorkAdminFeed() {
                           }}
                         />
                       </a>
+                      {canDelete && (
                       <button
                         className="photo-del"
                         title="Delete photo"
@@ -194,6 +198,7 @@ export function SiteWorkAdminFeed() {
                       >
                         {deletingKey === url ? <Loader2 size={12} className="spin" /> : <X size={12} />}
                       </button>
+                      )}
                     </div>
                   ))}
                 </div>

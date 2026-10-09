@@ -10,7 +10,12 @@ export const ACCESS_LEVELS = {
 // on every call rather than trusting anything the client supplied. Actual
 // enforcement still happens on the backend via 403s; this only controls
 // what the UI shows.
-export const isAdmin = (user) => user?.role === "admin";
+//
+// Super admin: full access. Admin: sees everything (full navigation) but
+// can't create, edit or delete operational data; it manages accounts below
+// admin level only.
+export const isSuperAdmin = (user) => user?.role === "super_admin";
+export const isAdmin = (user) => user?.role === "admin" || isSuperAdmin(user);
 export const isFieldWorker = (user) => user?.role === "field_worker";
 
 export const getAccessLevel = (user) => {
@@ -19,7 +24,9 @@ export const getAccessLevel = (user) => {
   return ACCESS_LEVELS.CLIENT_VIEW;
 };
 
-export const canEdit = (user) => getAccessLevel(user) === ACCESS_LEVELS.FULL;
+export const hasFullView = (user) => getAccessLevel(user) === ACCESS_LEVELS.FULL;
+// Create / edit / delete of operational data (sites, kits, links, ...).
+export const canEdit = (user) => isSuperAdmin(user);
 
 export const CLIENT_NAV_IDS = ["control", "links"];
 // Field worker accounts are restricted to solely the Site Work page —
@@ -30,5 +37,5 @@ export const getAllowedNavigation = (navigation, user) => {
   if (isFieldWorker(user)) {
     return navigation.filter(item => FIELD_WORKER_NAV_IDS.includes(item.id));
   }
-  return canEdit(user) ? navigation : navigation.filter(item => CLIENT_NAV_IDS.includes(item.id));
+  return hasFullView(user) ? navigation : navigation.filter(item => CLIENT_NAV_IDS.includes(item.id));
 };

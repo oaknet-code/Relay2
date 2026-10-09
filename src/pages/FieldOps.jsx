@@ -20,7 +20,7 @@ const JOB_CONSUMABLES = [
   { uid: "cons-tie", type: "Consumable", label: "UV Cable Ties", model: "CTIE-UV-300", serial: "4 packs" }
 ];
 
-export function FieldOps({ assets, pod, setPod, onInstall }) {
+export function FieldOps({ assets, pod, setPod, onInstall, canEdit = true }) {
   const job = LINKS.find(l => l.id === "MW-04");
   const units = assets.filter(a => a.link === "MW-04");
   const manifestItems = [
@@ -308,7 +308,7 @@ export function FieldOps({ assets, pod, setPod, onInstall }) {
                       <button 
                         className="btn sm" 
                         style={{ padding: "4px 8px", fontSize: 10 }} 
-                        disabled={!pod.manifest[a.uid]} 
+                        disabled={!canEdit || !pod.manifest[a.uid]} 
                         onClick={() => onInstall(a.uid)}
                       >
                         <ScanLine size={11} />
@@ -322,7 +322,8 @@ export function FieldOps({ assets, pod, setPod, onInstall }) {
 
             <button 
               className="btn teal" 
-              disabled={!pod.stage1.done && installed === 0} 
+              disabled={!canEdit || (!pod.stage1.done && installed === 0)} 
+              title={canEdit ? undefined : "View only"}
               onClick={sync} 
               style={{ width: "100%", justifyContent: "center", marginTop: 4 }}
             >
