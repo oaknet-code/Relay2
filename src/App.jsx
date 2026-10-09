@@ -13,7 +13,7 @@ import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
 import { canEdit, getAccessLevel, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin } from "./utils/access";
 
-import { SEED_ASSETS, LINKS, POD_INIT } from "./data/mockData";
+import { SEED_ASSETS } from "./data/mockData";
 
 import "./styles/globals.css";
 import "./styles/layout.css";
@@ -31,7 +31,6 @@ import "./styles/change-password.css";
 // call itself only fires at the moment one of these actually renders.
 const Dispatch = lazy(() => import("./pages/Dispatch").then((m) => ({ default: m.Dispatch })));
 const FleetManagement = lazy(() => import("./pages/FleetManagement").then((m) => ({ default: m.FleetManagement })));
-const FieldOps = lazy(() => import("./pages/FieldOps").then((m) => ({ default: m.FieldOps })));
 const AssetTracking = lazy(() => import("./pages/AssetTracking").then((m) => ({ default: m.AssetTracking })));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const UserManagementPage = lazy(() =>
@@ -47,7 +46,6 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState("control");
 
   const [assets, setAssets] = useState(SEED_ASSETS);
-  const [pod, setPod] = useState(POD_INIT);
 
   const [user, setUser] = useState(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -149,25 +147,6 @@ export default function App() {
   };
 
   /*
-   * Install asset
-   */
-  const onInstall = (uid) => {
-    if (!hasWriteAccess) return;
-
-    setAssets((prev) =>
-      prev.map((asset) =>
-        asset.uid === uid
-          ? {
-              ...asset,
-              state: "installed",
-              loc: "Summit North · installed",
-            }
-          : asset,
-      ),
-    );
-  };
-
-  /*
    * Login — `user` here comes from GET /api/auth/me (see LoginPage), which
    * is derived server-side from the HttpOnly session cookie, not from
    * anything the client supplied.
@@ -187,15 +166,24 @@ export default function App() {
   };
 
   /*
-   * Calculate live links
+   * Live / planned link counts for the top bar, from the real links
+   * (refreshed whenever the page changes, so edits elsewhere show up).
    */
-  const liveLinks =
-    LINKS.filter((link) => link.status === "live").length +
-    (assets
-      .filter((asset) => asset.link === "MW-04")
-      .every((asset) => asset.state === "installed")
-      ? 1
-      : 0);
+  const [linkCounts, setLinkCounts] = useState({ live: 0, planned: 0 });
+  useEffect(() => {
+    if (!user || user.role === "field_worker") return;
+    let cancelled = false;
+    api.getLinks()
+      .then((links) => {
+        if (cancelled || !Array.isArray(links)) return;
+        setLinkCounts({
+          live: links.filter((l) => ["LIVE", "COMMISSIONED"].includes(l.status)).length,
+          planned: links.filter((l) => l.status === "PLANNED").length,
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user, currentTab]);
 
   /*
    * Current navigation item
@@ -224,7 +212,7 @@ export default function App() {
   const renderCurrentView = () => {
     switch (currentTab) {
       case "control":
-        return <MissionControl assets={assets} />;
+        return <MissionControl />;
 
       case "links":
         return <LinksView canEdit={hasWriteAccess} />;
@@ -239,55 +227,42 @@ export default function App() {
         return fullView ? (
           <Dispatch assets={assets} onDispatch={onDispatch} canEdit={hasWriteAccess} />
         ) : (
-          <MissionControl assets={assets} />
+          <MissionControl />
         );
 
       case "fleet":
         return fullView ? (
           <FleetManagement canEdit={hasWriteAccess} />
         ) : (
-          <MissionControl assets={assets} />
-        );
-
-      case "field":
-        return fullView ? (
-          <FieldOps
-            canEdit={hasWriteAccess}
-            assets={assets}
-            pod={pod}
-            setPod={setPod}
-            onInstall={onInstall}
-          />
-        ) : (
-          <MissionControl assets={assets} />
+          <MissionControl />
         );
 
       case "tracking":
         return fullView ? (
           <AssetTracking assets={assets} />
         ) : (
-          <MissionControl assets={assets} />
+          <MissionControl />
         );
 
       case "users":
         return isAdmin(user) ? (
           <UserManagementPage isSuper={isSuperAdmin(user)} />
         ) : (
-          <MissionControl assets={assets} />
+          <MissionControl />
         );
 
       case "notifications":
         return fullView ? (
           <NotificationsPage />
         ) : (
-          <MissionControl assets={assets} />
+          <MissionControl />
         );
 
       case "site-work":
         return <SiteWorkPage user={user} />;
 
       default:
-        return <MissionControl assets={assets} />;
+        return <MissionControl />;
     }
   };
 
@@ -301,8 +276,8 @@ export default function App() {
         currentTab={currentTab}
         onTabChange={setCurrentTab}
         currentView={currentViewObj?.label || "Mission Control"}
-        liveLinks={liveLinks}
-        totalLinks={LINKS.length}
+        liveLinks={linkCounts.live}
+        totalLinks={linkCounts.planned}
         user={{
           name: user?.firstName || "User",
 

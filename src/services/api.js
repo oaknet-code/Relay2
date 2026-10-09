@@ -310,24 +310,6 @@ export const getDispatches = async ({ kitId, linkId } = {}) => {
 };
 
 /**
- * Field Ops — offline-safe sync. Always pass a stable clientSyncId
- * (generated once when the entry is captured, even offline) so retried
- * or queued syncs upsert instead of duplicating on the server.
- */
-export const syncFieldOps = async (jobId, payload) => {
-  const { data } = await axiosInstance.post("/api/fieldops/sync", {
-    jobId,
-    ...payload,
-  });
-  return data;
-};
-
-export const getFieldOpsReports = async (jobId) => {
-  const { data } = await axiosInstance.get(`/api/fieldops/${jobId}`);
-  return data;
-};
-
-/**
  * Inventory — Assets
  */
 export const getAssets = async (params = {}) => {
@@ -408,6 +390,14 @@ export const restockConsumable = async (id, delta) => {
   const { data } = await axiosInstance.patch(`/api/inventory/consumables/${id}/stock`, {
     delta,
   });
+  return data;
+};
+
+/**
+ * Mission Control — live link, site, kit, stock and asset figures
+ */
+export const getDashboard = async () => {
+  const { data } = await axiosInstance.get("/api/dashboard");
   return data;
 };
 
@@ -634,6 +624,7 @@ export const api = {
   updateConsumable,
   restockConsumable,
   // Links
+  getDashboard,
   getLinks,
   getLink,
   createLink,
@@ -669,9 +660,6 @@ export const api = {
   getDispatches,
   getGatePass,
   downloadGatePassPDF,
-  // Field Ops
-  syncFieldOps,
-  getFieldOpsReports,
   // Site Work
   createSiteWork,
   getSiteWork,

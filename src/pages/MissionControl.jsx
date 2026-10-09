@@ -1,24 +1,16 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Gauge, PackageCheck, TrendingDown, Clock, Boxes, Layers,
-  CheckCircle2, AlertTriangle, MapPin, List
+  Gauge, PackageCheck, Truck, Boxes, Layers, MapPin, List,
+  Loader2, AlertTriangle, RefreshCw, Package, ExternalLink
 } from 'lucide-react';
-import { Ring, StatePill, Band, Dot } from '../components/ui';
-import { STATE_META, LINK_STATUS } from '../constants/states';
-import { LINKS, SITES } from '../data/mockData';
+import { Ring, Band, Dot } from '../components/ui';
+import { LINK_STATUS } from '../constants/states';
+import { getDashboard } from '../services/api';
 
-// Mission Control's sample links use lowercase statuses ("live", "staged",
-// "bom_incomplete"); LINK_STATUS is keyed by the backend's uppercase ones.
-// Looking them up directly returned undefined and crashed the page (BOM
-// List tab, and clicking a site on the map).
-const EXTRA_LINK_STATUS = {
-  STAGED: { label: "Staged", c: "var(--violet)" },
-  BOM_INCOMPLETE: { label: "BOM Short", c: "var(--red)" },
-};
-const linkStatus = (s) => {
-  const key = String(s || "").toUpperCase();
-  return LINK_STATUS[key] || EXTRA_LINK_STATUS[key] || { label: String(s || "—"), c: "var(--faint)" };
-};
+// Everything here comes from GET /api/dashboard (live links, sites, kits,
+// reserved stock and assets) — no sample data.
+
+const linkStatus = (s) => LINK_STATUS[String(s || "").toUpperCase()] || { label: String(s || "—"), c: "var(--faint)" };
 
 // Leaflet draws on canvas/SVG, which can't read CSS variables — resolve
 // "var(--teal)" to its actual colour.
@@ -28,161 +20,174 @@ const cssColor = (c) => {
   return getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || "#8a94a6";
 };
 
-const SITE_COORDS = {
-  "NBO-HUB": [-1.2921, 36.8219],
-  "RVS-TWR": [-1.2655, 36.8082],
-  "NGG-RDG": [-1.3615, 36.6566],
-  "MGD-RLY": [-1.9012, 36.2872],
-  "SMT-N": [-0.4201, 36.9510],
-  "SMT-S": [-0.4350, 36.9600],
-  "CST-GW": [-4.0435, 39.6682],
-  "ISL-ND": [-4.0505, 39.6730]
-};
+const GROUPS = [
+  { name: "Lamu Route Backbone", short: "Lamu" },
+  { name: "Mandera Links", short: "Mandera" },
+];
 
-export function MissionControl({ assets }) {
-  const [activeTab, setActiveTab] = useState('map'); // 'map' or 'bom'
-  const [selectedSite, setSelectedSite] = useState(null);
+// Asset lifecycle, in pipeline order (backend statuses).
+const ASSET_STAGES = [
+  ["STOCKED", "Stocked", "var(--steel)"],
+  ["ALLOCATED", "Allocated", "var(--blue)"],
+  ["STAGING", "Staging", "var(--blue)"],
+  ["QA_PASSED", "QA passed", "var(--blue)"],
+  ["STAGED", "Staged", "var(--violet)"],
+  ["DISPATCHED", "Dispatched", "#f5a524"],
+  ["IN_TRANSIT", "In transit", "#f5a524"],
+  ["ARRIVED", "Arrived", "#f5a524"],
+  ["FIELD_INSTALLATION", "Installing", "#f5a524"],
+  ["INSTALLED", "Installed", "var(--teal)"],
+  ["COMMISSIONED", "Commissioned", "var(--teal)"],
+  ["LIVE", "Live", "var(--teal)"],
+  ["MAINTENANCE", "Maintenance", "var(--red)"],
+  ["RETIRED", "Retired", "var(--faint)"],
+];
+
+// Map marker colour: live link > kit fully stocked > stock outstanding > no kit.
+// (The theme's --amber is blue, so outstanding uses a literal amber.)
+const OUTSTANDING = "#f5a524";
+const siteState = (s) =>
+  s.live ? { c: "var(--teal)", label: "Link live" }
+  : !s.kits.length ? { c: "var(--faint)", label: "No kit" }
+  : s.stockPct === 100 ? { c: "var(--violet)", label: "Kit stocked" }
+  : { c: OUTSTANDING, label: "Stock outstanding" };
+
+const hasGps = (s) => typeof s.latitude === "number" && typeof s.longitude === "number";
+const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
+
+export function MissionControl() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('map'); // 'map' | 'links'
+  const [group, setGroup] = useState(""); // "" = all routes
+  const [selectedId, setSelectedId] = useState(null); // site siteId
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
-
-  const counts = useMemo(() => {
-    const c = {};
-    assets.forEach(a => { c[a.state] = (c[a.state] || 0) + 1; });
-    return c;
-  }, [assets]);
-
-  const total = assets.length;
-  const completeLinks = LINKS.filter(l => l.bomReady).length;
-  const completePct = Math.round(completeLinks / LINKS.length * 100);
-  const shrink = assets.filter(a => a.state === "dispatched" && (a.daysOut || 0) > 14);
-  const cfgVals = assets.filter(a => a.cfg).map(a => a.cfg);
-  const avgCfg = cfgVals.length ? (cfgVals.reduce((x, y) => x + y, 0) / cfgVals.length) : 0;
-
-  const order = ["in_transit", "stocked", "staged", "dispatched", "installed", "maintenance", "quarantine", "retired"];
-  const segs = order.filter(k => counts[k]).map(k => ({ k, n: counts[k], c: STATE_META[k].c }));
-
-  const selectedSiteDetails = useMemo(() => {
-    if (!selectedSite) return null;
-    const site = SITES[selectedSite];
-    if (!site) return null;
-
-    const siteLinks = LINKS.filter(l => l.a === selectedSite || l.b === selectedSite);
-
-    const siteAssets = assets.filter(a => {
-      if (a.loc && a.loc.toLowerCase().includes(site.name.toLowerCase())) {
-        return true;
-      }
-      if (a.link) {
-        const linkObj = LINKS.find(l => l.id === a.link);
-        if (linkObj && (linkObj.a === selectedSite || linkObj.b === selectedSite)) {
-          return true;
-        }
-      }
-      return false;
-    });
-
-    const iduCount = siteAssets.filter(a => a.type === 'IDU').length;
-    const oduCount = siteAssets.filter(a => a.type === 'ODU').length;
-    const dishCount = siteAssets.filter(a => a.type === 'DISH').length;
-
-    return {
-      code: selectedSite,
-      ...site,
-      links: siteLinks,
-      assets: siteAssets,
-      stats: { idus: iduCount, odus: oduCount, dishes: dishCount }
-    };
-  }, [selectedSite, assets]);
-
   const layersRef = useRef(null);
 
-  // Create the map once each time the Map tab is shown; tear it down when
-  // the tab switches away. (Previously it was destroyed and rebuilt on
-  // every site click, resetting pan/zoom.)
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setData(await getDashboard());
+    } catch (err) {
+      setError(err.response?.data?.message || "Couldn't load Mission Control.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const isClient = data && !data.sites; // clients only get their links
+  const sites = useMemo(() => data?.sites || [], [data]);
+  const siteById = useMemo(() => new Map(sites.map((s) => [s.siteId, s])), [sites]);
+  const inGroup = useCallback((s) => !group || s.groups.includes(group), [group]);
+  const shownSites = useMemo(() => sites.filter(inGroup), [sites, inGroup]);
+  const shownLinks = useMemo(() => (data?.linkList || []).filter((l) => {
+    if (!group) return true;
+    const a = siteById.get(l.siteA?.siteId), b = siteById.get(l.siteB?.siteId);
+    return (a && a.groups.includes(group)) || (b && b.groups.includes(group));
+  }), [data, group, siteById]);
+  const gpsCount = shownSites.filter(hasGps).length;
+  const selected = selectedId ? siteById.get(selectedId) : null;
+  const selectedLinks = useMemo(
+    () => (selected ? (data?.linkList || []).filter((l) => l.siteA?.siteId === selected.siteId || l.siteB?.siteId === selected.siteId) : []),
+    [data, selected]
+  );
+
+  // Create the map while the Map tab is shown.
   useEffect(() => {
-    if (activeTab !== 'map' || !mapRef.current) return;
+    if (activeTab !== 'map' || !mapRef.current || !data || isClient) return;
     const L = window.L;
     if (!L) return;
-
-    const map = L.map(mapRef.current, {
-      center: [-1.6, 37.6], // Mount Kenya down to Mombasa
-      zoom: 7,
-      zoomControl: false,
-    });
+    const map = L.map(mapRef.current, { center: [0.2, 38.3], zoom: 6, zoomControl: false });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-    // OpenStreetMap tiles (no API key; the CARTO basemap now requires one
-    // and was rendering "API KEY REQUIRED" watermarks). Darkened via CSS
-    // (.mc-map .leaflet-tile-pane) to match the console theme.
+    // OpenStreetMap tiles, darkened via CSS (.mc-map .leaflet-tile-pane).
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
-
     layersRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
-
-    // The container can still be sizing itself on first paint.
     const t = setTimeout(() => map.invalidateSize(), 150);
-
     return () => {
       clearTimeout(t);
       map.remove();
       mapInstanceRef.current = null;
       layersRef.current = null;
     };
-  }, [activeTab]);
+  }, [activeTab, data, isClient]);
 
-  // Draw links and site markers; redraws only these layers on selection.
+  // Draw the sites that have GPS, and links whose two ends both do.
   useEffect(() => {
     const L = window.L;
     const layers = layersRef.current;
-    if (activeTab !== 'map' || !L || !layers) return;
+    const map = mapInstanceRef.current;
+    if (activeTab !== 'map' || !L || !layers || !map) return;
     layers.clearLayers();
 
-    LINKS.forEach(link => {
-      const from = SITE_COORDS[link.a];
-      const to = SITE_COORDS[link.b];
-      if (!from || !to) return;
-      const isLive = link.status === 'live';
-      L.polyline([from, to], {
-        color: cssColor(linkStatus(link.status).c),
-        weight: isLive ? 3 : 1.5,
-        dashArray: isLive ? null : '4, 4',
+    for (const l of shownLinks) {
+      const a = siteById.get(l.siteA?.siteId), b = siteById.get(l.siteB?.siteId);
+      if (!a || !b || !hasGps(a) || !hasGps(b)) continue;
+      const live = ["LIVE", "COMMISSIONED"].includes(l.status);
+      L.polyline([[a.latitude, a.longitude], [b.latitude, b.longitude]], {
+        color: cssColor(linkStatus(l.status).c),
+        weight: live ? 3 : 1.5,
+        dashArray: live ? null : '4, 4',
         opacity: 0.85,
-      }).addTo(layers);
-    });
+      }).bindTooltip(`${l.linkId} · ${l.name}`).addTo(layers);
+    }
 
-    Object.entries(SITES).forEach(([code]) => {
-      const coord = SITE_COORDS[code];
-      if (!coord) return;
-
-      const isSelected = selectedSite === code;
-      const siteLinks = LINKS.filter(l => l.a === code || l.b === code);
-      const hasLive = siteLinks.some(l => l.status === 'live');
-      const hasStaging = siteLinks.some(l => l.status === 'staging' || l.status === 'staged');
-      const fill = cssColor(hasLive ? 'var(--teal)' : (hasStaging ? 'var(--blue)' : 'var(--red)'));
-
-      const marker = L.circleMarker(coord, {
-        radius: isSelected ? 9 : 7,
-        fillColor: fill,
-        color: isSelected ? '#ffffff' : '#080b10',
-        weight: isSelected ? 2 : 1.5,
+    const points = [];
+    for (const s of shownSites.filter(hasGps)) {
+      const isSel = s.siteId === selectedId;
+      points.push([s.latitude, s.longitude]);
+      L.circleMarker([s.latitude, s.longitude], {
+        radius: isSel ? 9 : 7,
+        fillColor: cssColor(siteState(s).c),
+        color: isSel ? '#ffffff' : '#080b10',
+        weight: isSel ? 2 : 1.5,
         opacity: 1,
         fillOpacity: 0.9,
-        className: `interactive-marker ${isSelected ? 'selected' : ''}`,
-      }).addTo(layers);
+      })
+        .bindTooltip(`${s.siteId} · ${s.name}`, { permanent: points.length <= 25, direction: 'top', className: `map-tooltip ${isSel ? 'selected' : ''}`, offset: [0, -8] })
+        .on('click', () => setSelectedId(s.siteId))
+        .addTo(layers);
+    }
+    if (points.length > 1) map.fitBounds(points, { padding: [40, 40], maxZoom: 9 });
+    else if (points.length === 1) map.setView(points[0], 9);
+  }, [activeTab, shownSites, shownLinks, siteById, selectedId]);
 
-      marker.bindTooltip(code, {
-        permanent: true,
-        direction: 'top',
-        className: `map-tooltip ${isSelected ? 'selected' : ''}`,
-        offset: [0, -8],
-      });
-      marker.on('click', () => setSelectedSite(code));
-    });
-  }, [activeTab, selectedSite]);
+  const openSite = (siteId) => {
+    if (!siteId || !siteById.has(siteId)) return;
+    setSelectedId(siteId);
+    setActiveTab('map');
+  };
+
+  if (loading && !data) {
+    return (
+      <div style={{ textAlign: "center", padding: 80, color: "var(--faint)" }}>
+        <Loader2 size={24} className="spin" style={{ marginBottom: 12 }} />
+        <div style={{ fontSize: 12 }}>Loading Mission Control…</div>
+      </div>
+    );
+  }
+  if (error && !data) {
+    return (
+      <div style={{ textAlign: "center", padding: 60, color: "var(--red)" }}>
+        <AlertTriangle size={24} style={{ marginBottom: 10 }} />
+        <div style={{ fontSize: 13, marginBottom: 10 }}>{error}</div>
+        <button className="btn sm" onClick={load}>Retry</button>
+      </div>
+    );
+  }
+
+  const L = data.links;
+  const K = data.kits;
+  const A = data.assets;
+  const assetSegs = A ? ASSET_STAGES.filter(([k]) => A.byStatus[k]).map(([k, label, c]) => ({ k, label, c, n: A.byStatus[k] })) : [];
 
   return (
     <div>
@@ -193,186 +198,189 @@ export function MissionControl({ assets }) {
         </span>
         <h2>Mission Control</h2>
         <p>
-          Live rollout health across all microwave links — completeness, custody risk, 
-          and configuration throughput in one console.
+          Live rollout health across {isClient ? "your" : "all"} microwave links — link completion,
+          kit stock, dispatch custody and tracked hardware, straight from the system.
         </p>
       </div>
 
       <div className="kpi-row">
         <div className="kpi" style={{ "--gl": "rgba(51,220,174,.10)" }}>
-          <div className="k-top">
-            <PackageCheck size={14} />
-            Link Completeness Rate
-          </div>
+          <div className="k-top"><PackageCheck size={14} /> Link Completeness</div>
           <div className="k-val">
-            {completePct}
+            {L.completePct}
             <span style={{ fontSize: 18, color: "var(--faint)" }}>%</span>
           </div>
-          <div className="k-sub">
-            {completeLinks} of {LINKS.length} links · full BOM in region
-          </div>
-          <div className="k-ring">
-            <Ring pct={completePct} c="var(--teal)" />
-          </div>
+          <div className="k-sub">{L.complete} of {L.total} links commissioned or live · {L.planned} planned</div>
+          <div className="k-ring"><Ring pct={L.completePct} c="var(--teal)" /></div>
         </div>
 
-        <div className="kpi" style={{ "--gl": "rgba(255,95,95,.10)" }}>
-          <div className="k-top">
-            <TrendingDown size={14} />
-            Shrinkage / Loss Risk
-          </div>
-          <div className="k-val" style={{ color: shrink.length ? "var(--red)" : "var(--teal)" }}>
-            {shrink.length}
-          </div>
-          <div className="k-sub">
-            serialized units · dispatched &gt; 14 days, not installed
-          </div>
-          <div className="k-ring">
-            <Ring pct={total ? shrink.length / total * 100 * 4 : 0} c="var(--red)" />
-          </div>
-        </div>
+        {!isClient && (
+          <>
+            <div className="kpi" style={{ "--gl": "rgba(95,168,255,.10)" }}>
+              <div className="k-top"><Package size={14} /> Kit Stock Reserved</div>
+              <div className="k-val">
+                {K.stockPct}
+                <span style={{ fontSize: 18, color: "var(--faint)" }}>%</span>
+              </div>
+              <div className="k-sub">
+                {K.coveredLines} of {K.lines} part lines reserved · {K.stocked} of {K.total} kits fully stocked
+              </div>
+              <div className="k-ring"><Ring pct={K.stockPct} c="var(--blue)" /></div>
+            </div>
 
-        <div className="kpi" style={{ "--gl": "rgba(95,168,255,.10)" }}>
-          <div className="k-top">
-            <Clock size={14} />
-            Avg Configuration Time
-          </div>
-          <div className="k-val">
-            {avgCfg.toFixed(1)}
-            <span style={{ fontSize: 16, color: "var(--faint)" }}> d</span>
-          </div>
-          <div className="k-sub">
-            days in staging before passing QC gates
-          </div>
-          <div className="spark k-ring" style={{ width: 84 }}>
-            {[2, 3, 4, 2, 5, 3, 3, 4].map((v, i) => 
-              <i key={i} style={{ height: `${v / 5 * 100}%` }} />
-            )}
-          </div>
-        </div>
+            <div className="kpi" style={{ "--gl": "rgba(255,95,95,.10)" }}>
+              <div className="k-top"><Truck size={14} /> Dispatch &amp; Custody</div>
+              <div className="k-val" style={{ color: K.overdue.length ? "var(--red)" : "var(--ink)" }}>
+                {K.dispatched}
+                <span style={{ fontSize: 16, color: "var(--faint)" }}> / {K.total}</span>
+              </div>
+              <div className="k-sub">
+                kits dispatched · {K.installed} installed ·{" "}
+                <span style={{ color: K.overdue.length ? "var(--red)" : "inherit" }}>
+                  {K.overdue.length} out &gt; {data.overdueDays} d, not installed
+                </span>
+              </div>
+              <div className="k-ring"><Ring pct={pct(K.dispatched, K.total)} c="var(--amber)" /></div>
+            </div>
 
-        <div className="kpi" style={{ "--gl": "rgba(173,139,255,.10)" }}>
-          <div className="k-top">
-            <Boxes size={14} />
-            Serialized Assets Tracked
-          </div>
-          <div className="k-val">{total}</div>
-          <div className="k-sub">
-            {counts.installed || 0} live · {counts.staged || 0} staged · {counts.dispatched || 0} in transit
-          </div>
-          <div className="k-ring">
-            <Ring pct={(counts.installed || 0) / total * 100} c="var(--violet)" />
-          </div>
-        </div>
+            <div className="kpi" style={{ "--gl": "rgba(173,139,255,.10)" }}>
+              <div className="k-top"><Boxes size={14} /> Serialized Assets Tracked</div>
+              <div className="k-val">{A.total}</div>
+              <div className="k-sub">
+                {(A.byStatus.INSTALLED || 0) + (A.byStatus.COMMISSIONED || 0) + (A.byStatus.LIVE || 0)} installed ·{" "}
+                {A.byStatus.STAGED || 0} staged · {(A.byStatus.DISPATCHED || 0) + (A.byStatus.IN_TRANSIT || 0)} in transit
+              </div>
+              <div className="k-ring">
+                <Ring pct={pct((A.byStatus.INSTALLED || 0) + (A.byStatus.COMMISSIONED || 0) + (A.byStatus.LIVE || 0), A.total)} c="var(--violet)" />
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div style={{ marginTop: 16 }}>
         <div className="panel">
-          <div className="panel-h" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="panel-h" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Layers size={15} className="ph-ico" />
-              <h3>{activeTab === 'map' ? 'Kenya Operations Map' : 'Asset Lifecycle Distribution'}</h3>
+              <h3>{activeTab === 'map' ? 'Kenya Operations Map' : 'Links & Kit Stock'}</h3>
             </div>
-            <div className="tab-buttons">
-              <button 
-                className={`tab-btn ${activeTab === 'map' ? 'active' : ''}`}
-                onClick={() => setActiveTab('map')}
-              >
-                <MapPin size={12} style={{ marginRight: 4 }} /> Map
-              </button>
-              <button 
-                className={`tab-btn ${activeTab === 'bom' ? 'active' : ''}`}
-                onClick={() => setActiveTab('bom')}
-              >
-                <List size={12} style={{ marginRight: 4 }} /> BOM List
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {!isClient && (
+                <select className="form-input" style={{ width: "auto", padding: "6px 10px", fontSize: 12 }}
+                  value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Route">
+                  <option value="">All routes</option>
+                  {GROUPS.map((g) => <option key={g.name} value={g.name}>{g.name}</option>)}
+                </select>
+              )}
+              <div className="tab-buttons">
+                {!isClient && (
+                  <button className={`tab-btn ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>
+                    <MapPin size={12} style={{ marginRight: 4 }} /> Map
+                  </button>
+                )}
+                <button className={`tab-btn ${activeTab === 'links' || isClient ? 'active' : ''}`} onClick={() => setActiveTab('links')}>
+                  <List size={12} style={{ marginRight: 4 }} /> Links
+                </button>
+              </div>
+              <button className="btn sm ghost" onClick={load} disabled={loading} title="Refresh" aria-label="Refresh">
+                <RefreshCw size={13} className={loading ? "spin" : ""} />
               </button>
             </div>
           </div>
-          
-          {activeTab === 'map' ? (
+
+          {activeTab === 'map' && !isClient ? (
             <div className="map-view-container">
               <div className="map-wrapper">
                 <div ref={mapRef} className="mc-map" style={{ width: '100%', height: '100%', minHeight: '400px', background: 'var(--bg)' }} />
-                
                 <div className="map-legend">
-                  <span><Dot c="var(--teal)" /> Active</span>
-                  <span><Dot c="var(--blue)" /> Staging</span>
-                  <span><Dot c="var(--red)" /> Short</span>
+                  <span><Dot c="var(--teal)" /> Link live</span>
+                  <span><Dot c="var(--violet)" /> Kit stocked</span>
+                  <span><Dot c={OUTSTANDING} /> Stock outstanding</span>
+                  <span><Dot c="var(--faint)" /> No kit</span>
                 </div>
+                {gpsCount < shownSites.length && (
+                  <div className="mc-gps-note">
+                    {gpsCount} of {shownSites.length} sites have GPS · the rest appear once GPS is added on the Sites page
+                  </div>
+                )}
               </div>
 
               <div className="site-details-panel">
-                {selectedSiteDetails ? (
+                {selected ? (
                   <div className="site-details-card">
                     <div className="sd-header">
                       <div>
-                        <h4>{selectedSiteDetails.name}</h4>
-                        <span className="mono">{selectedSiteDetails.code} · {selectedSiteDetails.region}</span>
+                        <h4>{selected.name}</h4>
+                        <span className="mono">
+                          Site {selected.siteId}{selected.groups.length ? ` · ${selected.groups.map((g) => GROUPS.find((x) => x.name === g)?.short || g).join(" + ")}` : ""}
+                        </span>
                       </div>
-                      <button className="sd-close" onClick={() => setSelectedSite(null)}>×</button>
+                      <button className="sd-close" onClick={() => setSelectedId(null)} aria-label="Close">×</button>
                     </div>
                     <div className="sd-body">
                       <div className="sd-section">
-                        <h5>Connected Microwave Links</h5>
-                        {selectedSiteDetails.links.length === 0 ? (
-                          <div className="sd-empty">No links configured at this site.</div>
+                        <h5>Status</h5>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                          <Dot c={siteState(selected).c} /> {siteState(selected).label}
+                          {hasGps(selected) ? (
+                            <a className="site-maplink" style={{ marginLeft: "auto" }} target="_blank" rel="noopener noreferrer"
+                              href={`https://www.google.com/maps?q=${selected.latitude},${selected.longitude}`}>
+                              <ExternalLink size={11} /> GPS
+                            </a>
+                          ) : <span className="faint" style={{ marginLeft: "auto", fontSize: 11 }}>No GPS yet</span>}
+                        </div>
+                      </div>
+
+                      <div className="sd-section">
+                        <h5>Links ({selectedLinks.length})</h5>
+                        {selectedLinks.length === 0 ? (
+                          <div className="sd-empty">No links at this site.</div>
                         ) : (
                           <div className="sd-links-list">
-                            {selectedSiteDetails.links.map(l => (
-                              <div key={l.id} className="sd-link-item">
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                  <span className="mono font-semibold">{l.id}</span>
-                                  <span className="pill" style={{ color: linkStatus(l.status).c, border: "1px solid var(--line2)" }}>
-                                    {linkStatus(l.status).label}
-                                  </span>
+                            {selectedLinks.map((l) => {
+                              const other = l.siteA?.siteId === selected.siteId ? l.siteB : l.siteA;
+                              return (
+                                <div key={l.linkId} className="sd-link-item">
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                    <span className="mono font-semibold">{l.linkId}</span>
+                                    <span className="pill" style={{ color: linkStatus(l.status).c, border: "1px solid var(--line2)" }}>
+                                      {linkStatus(l.status).label}
+                                    </span>
+                                  </div>
+                                  <div className="faint mono" style={{ fontSize: 10, marginTop: 2 }}>
+                                    to{" "}
+                                    <button className="site-open" style={{ fontSize: 10 }} onClick={() => openSite(other?.siteId)}>
+                                      {other?.name || "—"}
+                                    </button>
+                                    {" "}· {l.band || "—"} · {l.dishSize || "—"}
+                                  </div>
                                 </div>
-                                <div className="faint mono" style={{ fontSize: 10, marginTop: 2 }}>
-                                  {l.path} · {l.band} ({l.dish})
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
 
                       <div className="sd-section">
-                        <h5>Site Inventory Summary</h5>
-                        <div className="sd-inv-grid">
-                          <div className="sd-inv-item">
-                            <span className="sd-inv-val">{selectedSiteDetails.stats.idus}</span>
-                            <span className="sd-inv-lbl">IDUs</span>
-                          </div>
-                          <div className="sd-inv-item">
-                            <span className="sd-inv-val">{selectedSiteDetails.stats.odus}</span>
-                            <span className="sd-inv-lbl">ODUs</span>
-                          </div>
-                          <div className="sd-inv-item">
-                            <span className="sd-inv-val">{selectedSiteDetails.stats.dishes}</span>
-                            <span className="sd-inv-lbl">Dishes</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="sd-section">
-                        <h5>Hardware Tracked</h5>
-                        {selectedSiteDetails.assets.length === 0 ? (
-                          <div className="sd-empty">No serialized hardware found.</div>
+                        <h5>Site kits ({selected.kits.length})</h5>
+                        {selected.kits.length === 0 ? (
+                          <div className="sd-empty">No kit filed under this site.</div>
                         ) : (
                           <div className="sd-assets-list">
-                            {selectedSiteDetails.assets.slice(0, 3).map(a => (
-                              <div key={a.serial} className="sd-asset-row">
+                            {selected.kits.map((k) => (
+                              <div key={k.kitId} className="sd-asset-row">
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <span className="mono text-xs">{a.serial}</span>
-                                  <span className="faint text-xxs">{a.model}</span>
+                                  <span className="text-xs">{k.name}</span>
+                                  <span className="faint text-xxs mono">
+                                    {k.covered}/{k.lines} lines reserved{k.short ? ` · ${k.short} short in BOQ` : ""}
+                                  </span>
                                 </div>
-                                <StatePill s={a.state} />
+                                <span className="mono" style={{ fontSize: 12, color: k.stocked ? "var(--teal)" : OUTSTANDING }}>
+                                  {pct(k.covered, k.lines)}%
+                                </span>
                               </div>
                             ))}
-                            {selectedSiteDetails.assets.length > 3 && (
-                              <div className="sd-more faint text-xxs">
-                                + {selectedSiteDetails.assets.length - 3} more assets at this location
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>
@@ -381,83 +389,79 @@ export function MissionControl({ assets }) {
                 ) : (
                   <div className="sd-placeholder">
                     <MapPin size={28} className="sd-placeholder-icon" />
-                    <h4>Interactive Site Ops</h4>
-                    <p>Select any site node on the map of Kenya to view active link connectivity, inventory checklists, and tracked serialized hardware.</p>
+                    <h4>Site details</h4>
+                    <p>Pick a site on the map, or from this list, to see its links and kit stock.</p>
+                    <select className="form-input" style={{ marginTop: 12, maxWidth: 280 }} value=""
+                      onChange={(e) => setSelectedId(e.target.value || null)} aria-label="Choose a site">
+                      <option value="">Choose a site…</option>
+                      {shownSites.map((s) => <option key={s.siteId} value={s.siteId}>{s.siteId} · {s.name}</option>)}
+                    </select>
                   </div>
                 )}
               </div>
             </div>
           ) : (
             <div className="panel-b">
-              <div className="stackbar">
-                {segs.map(s => 
-                  <i 
-                    key={s.k} 
-                    style={{ width: `${s.n / total * 100}%`, background: s.c }} 
-                    title={`${STATE_META[s.k].label}: ${s.n}`} 
-                  />
-                )}
-              </div>
-              <div className="legend">
-                {segs.map(s => 
-                  <span key={s.k}>
-                    <Dot c={s.c} />
-                    {STATE_META[s.k].label} 
-                    <b className="mono" style={{ color: "var(--ink)" }}>{s.n}</b>
-                  </span>
-                )}
-              </div>
-              <div style={{ height: 1, background: "var(--line)", margin: "16px 0" }} />
+              {!isClient && A.total > 0 && (
+                <>
+                  <div className="stackbar">
+                    {assetSegs.map((s) => (
+                      <i key={s.k} style={{ width: `${(s.n / A.total) * 100}%`, background: s.c }} title={`${s.label}: ${s.n}`} />
+                    ))}
+                  </div>
+                  <div className="legend">
+                    {assetSegs.map((s) => (
+                      <span key={s.k}><Dot c={s.c} />{s.label} <b className="mono" style={{ color: "var(--ink)" }}>{s.n}</b></span>
+                    ))}
+                  </div>
+                  <div style={{ height: 1, background: "var(--line)", margin: "16px 0" }} />
+                </>
+              )}
               <div className="tbl-wrap">
                 <table className="tbl">
                   <thead>
                     <tr>
                       <th>Link</th>
-                      <th>Path</th>
+                      <th>Sites</th>
                       <th>Band</th>
-                      <th>BOM</th>
+                      <th>Dish</th>
+                      {!isClient && <th title="Part lines reserved for the kits at each end">Kit stock (A / B)</th>}
                       <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {LINKS.map(l => (
-                      <tr key={l.id}>
-                        <td className="mono">
-                          {l.id}
-                          <div className="faint" style={{ fontSize: 10 }}>
-                            {l.a.split("-")[0]}→{l.b.split("-")[0]}
-                          </div>
-                        </td>
-                        <td className="mono muted">{l.path}</td>
-                        <td><Band b={l.band} /></td>
-                        <td>
-                          {l.bomReady ? (
-                            <span className="pill" style={{ color: "var(--teal)" }}>
-                              <CheckCircle2 size={12} />
-                              100%
+                    {shownLinks.map((l) => {
+                      const a = siteById.get(l.siteA?.siteId), b = siteById.get(l.siteB?.siteId);
+                      const stock = (s) => (!s ? "—" : s.stockPct == null ? "no kit" : `${s.stockPct}%`);
+                      return (
+                        <tr key={l.linkId}>
+                          <td className="mono">{l.linkId}</td>
+                          <td style={{ fontSize: 12 }}>
+                            {isClient ? (l.siteA?.name || "—") : <button className="site-open" onClick={() => openSite(l.siteA?.siteId)}>{l.siteA?.name || "—"}</button>}
+                            <span className="faint"> → </span>
+                            {isClient ? (l.siteB?.name || "—") : <button className="site-open" onClick={() => openSite(l.siteB?.siteId)}>{l.siteB?.name || "—"}</button>}
+                          </td>
+                          <td>{l.band ? <Band b={l.band} /> : "—"}</td>
+                          <td className="mono muted" style={{ fontSize: 11 }}>{l.dishSize || "—"}</td>
+                          {!isClient && <td className="mono" style={{ fontSize: 11 }}>{stock(a)} / {stock(b)}</td>}
+                          <td>
+                            <span className="pill" style={{ color: linkStatus(l.status).c }}>
+                              <Dot c={linkStatus(l.status).c} />
+                              {linkStatus(l.status).label}
                             </span>
-                          ) : (
-                            <span className="pill" style={{ color: "var(--red)" }}>
-                              <AlertTriangle size={12} />
-                              Short
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <span className="pill" style={{ color: linkStatus(l.status).c }}>
-                            <Dot c={linkStatus(l.status).c} />
-                            {linkStatus(l.status).label}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {shownLinks.length === 0 && (
+                      <tr><td colSpan={6} className="faint" style={{ textAlign: "center", padding: 24 }}>No links yet.</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
         </div>
-
       </div>
     </div>
   );

@@ -136,13 +136,6 @@ export const CHECK_DEFS = [
   { key: "bench", label: "Back-to-back bench test passed", sub: "BER + Rx level within spec", ico: "Activity" }
 ];
 
-export const POD_INIT = { 
-  online: false, 
-  manifest: {}, 
-  stage1: { done: false, gps: null, signedBy: null, at: null }, 
-  synced: null 
-};
-
 export const TODAY = "08 Jun 2026";
 
 // ─── Asset Chain of Custody / Audit Trail ───────────────────────
