@@ -350,6 +350,12 @@ export const getAssetAudit = async (id) => {
   return data;
 };
 
+// Recent rollout activity from the audit log, newest first.
+export const getActivity = async (limit = 50) => {
+  const { data } = await axiosInstance.get("/api/inventory/activity", { params: { limit } });
+  return data;
+};
+
 /**
  * Inventory — project BOQ (bill of quantities)
  */

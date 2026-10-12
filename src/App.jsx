@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { Layout } from "./components/layout";
 import { ChangePasswordModal } from "./components/layout/ChangePasswordModal";
 
@@ -12,8 +12,6 @@ import { SiteWorkPage } from "./pages/SiteWorkPage";
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
 import { canEdit, getAccessLevel, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin } from "./utils/access";
-
-import { SEED_ASSETS } from "./data/mockData";
 
 import "./styles/globals.css";
 import "./styles/layout.css";
@@ -44,8 +42,6 @@ function ChunkLoading() {
 export default function App() {
   const [currentView, setCurrentView] = useState("login");
   const [currentTab, setCurrentTab] = useState("control");
-
-  const [assets, setAssets] = useState(SEED_ASSETS);
 
   const [user, setUser] = useState(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -127,26 +123,6 @@ export default function App() {
   }, [currentTab, navigation]);
 
   /*
-   * Dispatch assets
-   */
-  const onDispatch = (uids) => {
-    if (!hasWriteAccess) return;
-
-    setAssets((prev) =>
-      prev.map((asset) =>
-        uids.includes(asset.uid)
-          ? {
-              ...asset,
-              state: "dispatched",
-              loc: "Truck KDB-118J",
-              daysOut: 0,
-            }
-          : asset,
-      ),
-    );
-  };
-
-  /*
    * Login — `user` here comes from GET /api/auth/me (see LoginPage), which
    * is derived server-side from the HttpOnly session cookie, not from
    * anything the client supplied.
@@ -225,7 +201,7 @@ export default function App() {
 
       case "dispatch":
         return fullView ? (
-          <Dispatch assets={assets} onDispatch={onDispatch} canEdit={hasWriteAccess} />
+          <Dispatch canEdit={hasWriteAccess} onNavigate={setCurrentTab} />
         ) : (
           <MissionControl />
         );
@@ -239,7 +215,7 @@ export default function App() {
 
       case "tracking":
         return fullView ? (
-          <AssetTracking assets={assets} />
+          <AssetTracking onNavigate={setCurrentTab} />
         ) : (
           <MissionControl />
         );
@@ -253,7 +229,7 @@ export default function App() {
 
       case "notifications":
         return fullView ? (
-          <NotificationsPage />
+          <NotificationsPage onNavigate={setCurrentTab} />
         ) : (
           <MissionControl />
         );
