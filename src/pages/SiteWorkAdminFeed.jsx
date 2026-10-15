@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Camera, Loader, Loader2, AlertTriangle, Trash2, X, User as UserIcon } from "lucide-react";
+import { Camera, FileText, FilePlus, Loader, Loader2, AlertTriangle, Trash2, X, User as UserIcon } from "lucide-react";
 import { getSiteWork, deleteSiteWork, deleteSiteWorkImage, API_BASE_URL } from "../services/api";
+import { AdminJobCards } from "./AdminJobCards";
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -23,8 +24,12 @@ function imageSrc(relativeUrl) {
 // `canDelete`: super admins only (admins see the feed read-only).
 export function SiteWorkAdminFeed({ canDelete = false }) {
   const [items, setItems] = useState([]);
+  // url -> stored content type; PDFs are new reports, anything else an older photo.
+  const [contentTypes, setContentTypes] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  // "Add Job Card" — open to admins and super admins alike.
+  const [jobCardFormOpen, setJobCardFormOpen] = useState(false);
 
   const load = async () => {
     setIsLoading(true);
@@ -32,6 +37,7 @@ export function SiteWorkAdminFeed({ canDelete = false }) {
     try {
       const data = await getSiteWork();
       setItems(data.siteWork || []);
+      setContentTypes(data.contentTypes || {});
     } catch (err) {
       setError(err.message || "Failed to load site work submissions.");
     } finally {
@@ -48,7 +54,7 @@ export function SiteWorkAdminFeed({ canDelete = false }) {
   const [deleteError, setDeleteError] = useState("");
 
   const handleDeleteReport = async (item) => {
-    if (!window.confirm(`Delete "${item.title}" and all ${item.imageUrls?.length || 0} photo(s)? This can't be undone.`)) return;
+    if (!window.confirm(`Delete "${item.title}" and all ${item.imageUrls?.length || 0} file(s)? This can't be undone.`)) return;
     setDeletingKey(item._id);
     setDeleteError("");
     try {
@@ -64,8 +70,8 @@ export function SiteWorkAdminFeed({ canDelete = false }) {
   const handleDeleteImage = async (item, url) => {
     const isLast = item.imageUrls.length === 1;
     const prompt = isLast
-      ? `This is the only photo in "${item.title}" — deleting it deletes the whole submission. Continue?`
-      : "Delete this photo? This can't be undone.";
+      ? `This is the only file in "${item.title}" — deleting it deletes the whole submission. Continue?`
+      : "Delete this file? This can't be undone.";
     if (!window.confirm(prompt)) return;
 
     const imageId = url.split("/").pop();
@@ -87,12 +93,22 @@ export function SiteWorkAdminFeed({ canDelete = false }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      <div>
-        <h1 style={{ fontSize: "24px", fontWeight: "600", margin: 0 }}>Site Work</h1>
-        <p className="faint" style={{ fontSize: "13px", margin: "4px 0 0" }}>
-          Progress reports submitted by field workers.
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontSize: "24px", fontWeight: "600", margin: 0 }}>Site Work</h1>
+          <p className="faint" style={{ fontSize: "13px", margin: "4px 0 0" }}>
+            Progress reports submitted by field workers, and job cards sent to contractors.
+          </p>
+        </div>
+        <button className="btn amber" onClick={() => setJobCardFormOpen(true)} disabled={jobCardFormOpen}>
+          <FilePlus size={15} />
+          Add Job Card
+        </button>
       </div>
+
+      <AdminJobCards formOpen={jobCardFormOpen} onCloseForm={() => setJobCardFormOpen(false)} />
+
+      <h2 style={{ fontSize: "16px", fontWeight: "600", margin: "8px 0 0" }}>Progress Reports</h2>
 
       {deleteError && (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--red)" }}>
@@ -172,6 +188,22 @@ export function SiteWorkAdminFeed({ canDelete = false }) {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                   {item.imageUrls.map((url) => (
                     <div key={url} style={{ position: "relative" }}>
+                      {contentTypes[url] === "application/pdf" ? (
+                        // Served as a download (see getImage on the backend).
+                        <a
+                          href={imageSrc(url)}
+                          title="Download PDF report"
+                          style={{
+                            width: 120, height: 120, display: "flex", flexDirection: "column",
+                            alignItems: "center", justifyContent: "center", gap: "6px",
+                            borderRadius: "8px", border: "1px solid var(--line2)", background: "var(--bg)",
+                            color: "var(--muted)", fontSize: "12px", textDecoration: "none",
+                          }}
+                        >
+                          <FileText size={32} />
+                          <span>PDF report</span>
+                        </a>
+                      ) : (
                       <a href={imageSrc(url)} target="_blank" rel="noreferrer">
                         <img
                           src={imageSrc(url)}
@@ -182,11 +214,12 @@ export function SiteWorkAdminFeed({ canDelete = false }) {
                           }}
                         />
                       </a>
+                      )}
                       {canDelete && (
                       <button
                         className="photo-del"
-                        title="Delete photo"
-                        aria-label="Delete photo"
+                        title="Delete file"
+                        aria-label="Delete file"
                         disabled={deletingKey !== null}
                         onClick={() => handleDeleteImage(item, url)}
                         style={{

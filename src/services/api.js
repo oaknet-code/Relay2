@@ -251,6 +251,61 @@ export const deleteSiteWorkImage = async (id, imageId) => {
 };
 
 /**
+ * Job Cards — PDFs sent by admins / super admins to a contractor (a company
+ * with registered site workers). Site workers see their company's cards.
+ */
+export const getJobCardContractors = async () => {
+  try {
+    const { data } = await axiosInstance.get("/api/job-cards/contractors");
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to load contractors";
+    throw new Error(message);
+  }
+};
+
+export const getJobCards = async () => {
+  try {
+    const { data } = await axiosInstance.get("/api/job-cards");
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to load job cards";
+    throw new Error(message);
+  }
+};
+
+export const createJobCard = async ({ title, notes, company, file }) => {
+  try {
+    const formData = new FormData();
+    formData.append("title", title);
+    if (notes) formData.append("notes", notes);
+    formData.append("company", company);
+    formData.append("file", file);
+
+    const { data } = await axiosInstance.post("/api/job-cards", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to send the job card";
+    throw new Error(message);
+  }
+};
+
+export const deleteJobCard = async (id) => {
+  try {
+    const { data } = await axiosInstance.delete(`/api/job-cards/${id}`);
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to delete the job card";
+    throw new Error(message);
+  }
+};
+
+// Download link for a job card's PDF (served as an attachment by the API).
+export const jobCardFileUrl = (id) => `${API_BASE_URL}/api/job-cards/${encodeURIComponent(id)}/file`;
+
+/**
  * Change Password
  */
 export const changePassword = async (passwordData) => {
@@ -671,6 +726,11 @@ export const api = {
   getSiteWork,
   deleteSiteWork,
   deleteSiteWorkImage,
+  // Job Cards
+  getJobCardContractors,
+  getJobCards,
+  createJobCard,
+  deleteJobCard,
 };
 
 export default api;

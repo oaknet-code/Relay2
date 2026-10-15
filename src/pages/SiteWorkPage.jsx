@@ -1,7 +1,8 @@
 import React, { Suspense, lazy } from "react";
 import { Loader } from "lucide-react";
 import { SiteWorkSubmissionForm } from "./SiteWorkSubmissionForm";
-import { isAdmin, isSuperAdmin } from "../utils/access";
+import { WorkerJobCards } from "./JobCards";
+import { isAdmin, isSuperAdmin, isFieldWorker } from "../utils/access";
 
 // The admin feed is its own chunk, fetched over the network only if this
 // branch actually renders — a field_worker or client session never
@@ -21,7 +22,17 @@ function ChunkLoading() {
 
 export function SiteWorkPage({ user }) {
   if (!isAdmin(user)) {
-    return <SiteWorkSubmissionForm />;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <SiteWorkSubmissionForm />
+        {/* Job cards sent to this site worker's company. */}
+        {isFieldWorker(user) && (
+          <div style={{ maxWidth: "560px" }}>
+            <WorkerJobCards />
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (

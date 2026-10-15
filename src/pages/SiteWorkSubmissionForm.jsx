@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  Camera,
+  FileText,
   Upload,
   Loader,
   AlertTriangle,
@@ -9,12 +9,12 @@ import {
 } from "lucide-react";
 import { createSiteWork } from "../services/api";
 
-const ALLOWED_PHOTO = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-const MAX_PHOTOS = 10;
-const isAllowedPhoto = (file) => {
+const ALLOWED_REPORT = { pdf: "application/pdf" };
+const MAX_REPORT_BYTES = 5 * 1024 * 1024;
+const MAX_REPORTS = 10;
+const isAllowedReport = (file) => {
   const ext = (file.name.split(".").pop() || "").toLowerCase();
-  return Boolean(ALLOWED_PHOTO[ext]) && ALLOWED_PHOTO[ext] === file.type;
+  return Boolean(ALLOWED_REPORT[ext]) && ALLOWED_REPORT[ext] === file.type;
 };
 
 // Field worker's submission form. Kept in its own module (not lazy) since
@@ -30,18 +30,18 @@ export function SiteWorkSubmissionForm() {
   const [success, setSuccess] = useState(false);
 
   // Same rules as the server (which also checks the file's bytes):
-  // JPG/PNG/WebP only, 5 MB each, 10 photos max.
+  // PDF only, 5 MB each, 10 files max.
   const handleFileChange = (e) => {
     const chosen = Array.from(e.target.files || []);
     e.target.value = "";
-    const rejected = chosen.filter((f) => !isAllowedPhoto(f));
-    const tooBig = chosen.filter((f) => isAllowedPhoto(f) && f.size > MAX_PHOTO_BYTES);
-    const ok = chosen.filter((f) => isAllowedPhoto(f) && f.size <= MAX_PHOTO_BYTES);
+    const rejected = chosen.filter((f) => !isAllowedReport(f));
+    const tooBig = chosen.filter((f) => isAllowedReport(f) && f.size > MAX_REPORT_BYTES);
+    const ok = chosen.filter((f) => isAllowedReport(f) && f.size <= MAX_REPORT_BYTES);
     const problems = [];
-    if (rejected.length) problems.push(`${rejected.map((f) => f.name).join(", ")}: only JPG, PNG or WebP photos are accepted.`);
+    if (rejected.length) problems.push(`${rejected.map((f) => f.name).join(", ")}: only PDF reports are accepted.`);
     if (tooBig.length) problems.push(`${tooBig.map((f) => f.name).join(", ")}: larger than 5 MB.`);
-    const next = [...files, ...ok].slice(0, MAX_PHOTOS);
-    if (files.length + ok.length > MAX_PHOTOS) problems.push(`At most ${MAX_PHOTOS} photos per report.`);
+    const next = [...files, ...ok].slice(0, MAX_REPORTS);
+    if (files.length + ok.length > MAX_REPORTS) problems.push(`At most ${MAX_REPORTS} PDFs per submission.`);
     setError(problems.join(" "));
     setFiles(next);
   };
@@ -59,7 +59,7 @@ export function SiteWorkSubmissionForm() {
       return;
     }
     if (files.length === 0) {
-      setError("Attach at least one photo.");
+      setError("Attach at least one PDF report.");
       return;
     }
 
@@ -82,7 +82,7 @@ export function SiteWorkSubmissionForm() {
       <div>
         <h1 style={{ fontSize: "24px", fontWeight: "600", margin: 0 }}>Site Work</h1>
         <p className="faint" style={{ fontSize: "13px", margin: "4px 0 0" }}>
-          Submit a progress report with photos from the field.
+          Submit a progress report from the field as a PDF.
         </p>
       </div>
 
@@ -143,7 +143,7 @@ export function SiteWorkSubmissionForm() {
 
         <div>
           <label style={{ display: "block", fontSize: "12px", fontWeight: "500", marginBottom: "6px", color: "var(--muted)" }}>
-            Photos *
+            PDF Reports *
           </label>
           <label
             style={{
@@ -153,10 +153,10 @@ export function SiteWorkSubmissionForm() {
             }}
           >
             <Upload size={16} />
-            Tap to choose photos (JPG, PNG or WebP · max 5 MB each)
+            Tap to choose PDF reports (PDF only · max 5 MB each)
             <input
               type="file"
-              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+              accept=".pdf,application/pdf"
               multiple
               onChange={handleFileChange}
               style={{ display: "none" }}
@@ -174,7 +174,7 @@ export function SiteWorkSubmissionForm() {
                     padding: "6px 10px", fontSize: "12px", color: "var(--ink)",
                   }}
                 >
-                  <Camera size={13} style={{ color: "var(--muted)" }} />
+                  <FileText size={13} style={{ color: "var(--muted)" }} />
                   <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {file.name}
                   </span>
