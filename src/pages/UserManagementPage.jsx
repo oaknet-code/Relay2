@@ -46,6 +46,7 @@ const ROLE_COLORS = {
 };
 
 const EMPTY_FORM = { username: "", email: "", company: "", role: "client", password: "" };
+const NEW_COMPANY = "__new_company__";
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -82,6 +83,7 @@ export function UserManagementPage({ isSuper = false }) {
   const [busyId, setBusyId] = useState(null);
 
   const [formData, setFormData] = useState(EMPTY_FORM);
+  const [isNewCompany, setIsNewCompany] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [createdAccount, setCreatedAccount] = useState(null); // { username, email, role, temporaryPassword }
   const [copied, setCopied] = useState(false);
@@ -110,6 +112,7 @@ export function UserManagementPage({ isSuper = false }) {
 
   const backToList = () => {
     setFormData(EMPTY_FORM);
+    setIsNewCompany(false);
     setEditingUser(null);
     setCreatedAccount(null);
     setCopied(false);
@@ -130,7 +133,8 @@ export function UserManagementPage({ isSuper = false }) {
     setNotice("");
     setFormError("");
     setEditingUser(user);
-    setFormData({ username: user.username, email: user.email, company: user.company || "", role: user.role, password: "" });
+    setIsNewCompany(false);
+    setFormData({ username: user.username, email: user.email, company: user.company?.trim() || "", role: user.role, password: "" });
     setView("edit");
   };
 
@@ -138,7 +142,7 @@ export function UserManagementPage({ isSuper = false }) {
     e.preventDefault();
     setIsSubmitting(true);
     setFormError("");
-    // Company belongs to site workers only — don't send a value typed
+    // Company belongs to site workers only — don't send a value selected
     // before switching to another role.
     const company = formData.role === "field_worker" ? formData.company.trim() : undefined;
 
@@ -240,6 +244,18 @@ export function UserManagementPage({ isSuper = false }) {
     const c = {};
     users.forEach((u) => { c[u.role] = (c[u.role] || 0) + 1; });
     return c;
+  }, [users]);
+
+  const companies = useMemo(() => {
+    const unique = new Map();
+    users
+      .filter((user) => user.role === "field_worker" && user.company?.trim())
+      .forEach((user) => {
+        const company = user.company.trim();
+        const key = company.toLocaleLowerCase("en");
+        if (!unique.has(key)) unique.set(key, company);
+      });
+    return [...unique.values()].sort((a, b) => a.localeCompare(b));
   }, [users]);
 
   const filteredUsers = users.filter((user) => {
@@ -397,8 +413,38 @@ export function UserManagementPage({ isSuper = false }) {
               {formData.role === "field_worker" && (
                 <div>
                   <label style={labelStyle} htmlFor="um-company">Company *</label>
-                  <input id="um-company" type="text" name="company" className="form-input" placeholder="e.g. Oaknet Business"
-                    value={formData.company} onChange={handleChange} required minLength={2} maxLength={150} />
+                  <select
+                    id="um-company"
+                    className="form-input"
+                    value={isNewCompany ? NEW_COMPANY : formData.company}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormError("");
+                      setIsNewCompany(value === NEW_COMPANY);
+                      setFormData((prev) => ({ ...prev, company: value === NEW_COMPANY ? "" : value }));
+                    }}
+                    required
+                  >
+                    <option value="">Select a company</option>
+                    {companies.map((company) => (
+                      <option key={company} value={company}>{company}</option>
+                    ))}
+                    <option value={NEW_COMPANY}>Add a new company…</option>
+                  </select>
+                  {isNewCompany && (
+                    <input
+                      type="text"
+                      name="company"
+                      className="form-input"
+                      placeholder="Enter company name"
+                      value={formData.company}
+                      onChange={handleChange}
+                      required
+                      minLength={2}
+                      maxLength={150}
+                      style={{ marginTop: 8 }}
+                    />
+                  )}
                 </div>
               )}
 
