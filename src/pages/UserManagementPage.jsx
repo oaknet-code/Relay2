@@ -47,6 +47,11 @@ const ROLE_COLORS = {
 
 const EMPTY_FORM = { username: "", email: "", company: "", role: "client", password: "" };
 const NEW_COMPANY = "__new_company__";
+const COMPANIES = [
+  "Tesla Services Limited",
+  "Vinke Construction Enterprises",
+  "Charlestone",
+];
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -246,18 +251,6 @@ export function UserManagementPage({ isSuper = false }) {
     return c;
   }, [users]);
 
-  const companies = useMemo(() => {
-    const unique = new Map();
-    users
-      .filter((user) => user.role === "field_worker" && user.company?.trim())
-      .forEach((user) => {
-        const company = user.company.trim();
-        const key = company.toLocaleLowerCase("en");
-        if (!unique.has(key)) unique.set(key, company);
-      });
-    return [...unique.values()].sort((a, b) => a.localeCompare(b));
-  }, [users]);
-
   const filteredUsers = users.filter((user) => {
     const q = searchTerm.toLowerCase();
     const matchesSearch =
@@ -426,7 +419,7 @@ export function UserManagementPage({ isSuper = false }) {
                     required
                   >
                     <option value="">Select a company</option>
-                    {companies.map((company) => (
+                    {COMPANIES.map((company) => (
                       <option key={company} value={company}>{company}</option>
                     ))}
                     <option value={NEW_COMPANY}>Add a new company…</option>
