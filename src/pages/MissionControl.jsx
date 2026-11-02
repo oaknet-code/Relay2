@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import {
   Gauge, PackageCheck, Truck, Boxes, Layers, MapPin, List,
-  Loader2, AlertTriangle, RefreshCw, Package, ExternalLink
+  Loader2, AlertTriangle, RefreshCw, Package, ExternalLink, LocateFixed
 } from 'lucide-react';
 import { Ring, Band, Dot } from '../components/ui';
+import { WeatherForecast } from '../components/WeatherForecast';
 import { LINK_STATUS } from '../constants/states';
-import { getDashboard } from '../services/api';
+import { getDashboard, getSiteWeather } from '../services/api';
 
 // Everything here comes from GET /api/dashboard (live links, sites, kits,
 // reserved stock and assets) — no sample data.
@@ -62,10 +63,15 @@ export function MissionControl() {
   const [activeTab, setActiveTab] = useState('map'); // 'map' | 'links'
   const [group, setGroup] = useState(""); // "" = all routes
   const [selectedId, setSelectedId] = useState(null); // site siteId
+  const [weather, setWeather] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState("");
+  const [weatherRefresh, setWeatherRefresh] = useState(0);
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layersRef = useRef(null);
+  const lastFitKeyRef = useRef("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,10 +98,44 @@ export function MissionControl() {
   }), [data, group, siteById]);
   const gpsCount = shownSites.filter(hasGps).length;
   const selected = selectedId ? siteById.get(selectedId) : null;
+  const fitMapToSites = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const points = shownSites.filter(hasGps).map((s) => [s.latitude, s.longitude]);
+    if (points.length > 1) map.fitBounds(points, { padding: [40, 40], maxZoom: 9 });
+    else if (points.length === 1) map.setView(points[0], 9);
+    else map.setView([0.2, 38.3], 6);
+  }, [shownSites]);
   const selectedLinks = useMemo(
     () => (selected ? (data?.linkList || []).filter((l) => l.siteA?.siteId === selected.siteId || l.siteB?.siteId === selected.siteId) : []),
     [data, selected]
   );
+
+  useEffect(() => {
+    if (!selected || !hasGps(selected)) {
+      setWeather(null);
+      setWeatherLoading(false);
+      setWeatherError("");
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    setWeather(null);
+    setWeatherLoading(true);
+    setWeatherError("");
+    getSiteWeather(selected.siteId, controller.signal)
+      .then(setWeather)
+      .catch((err) => {
+        if (err.code !== "ERR_CANCELED") {
+          setWeatherError(err.response?.data?.message || "Couldn't load the site forecast.");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setWeatherLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [selected, weatherRefresh]);
 
   // Create the map while the Map tab is shown.
   useEffect(() => {
@@ -111,6 +151,7 @@ export function MissionControl() {
     }).addTo(map);
     layersRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
+    lastFitKeyRef.current = "";
     const t = setTimeout(() => map.invalidateSize(), 150);
     return () => {
       clearTimeout(t);
@@ -140,25 +181,26 @@ export function MissionControl() {
       }).bindTooltip(`${l.linkId} · ${l.name}`).addTo(layers);
     }
 
-    const points = [];
     for (const s of shownSites.filter(hasGps)) {
       const isSel = s.siteId === selectedId;
-      points.push([s.latitude, s.longitude]);
       L.circleMarker([s.latitude, s.longitude], {
-        radius: isSel ? 9 : 7,
+        radius: isSel ? 10 : 7,
         fillColor: cssColor(siteState(s).c),
         color: isSel ? '#ffffff' : '#080b10',
-        weight: isSel ? 2 : 1.5,
+        weight: isSel ? 3 : 1.5,
         opacity: 1,
         fillOpacity: 0.9,
       })
-        .bindTooltip(`${s.siteId} · ${s.name}`, { permanent: points.length <= 25, direction: 'top', className: `map-tooltip ${isSel ? 'selected' : ''}`, offset: [0, -8] })
+        .bindTooltip(`${s.siteId} · ${s.name}`, { permanent: shownSites.length <= 25, direction: 'top', className: `map-tooltip ${isSel ? 'selected' : ''}`, offset: [0, -8] })
         .on('click', () => setSelectedId(s.siteId))
         .addTo(layers);
     }
-    if (points.length > 1) map.fitBounds(points, { padding: [40, 40], maxZoom: 9 });
-    else if (points.length === 1) map.setView(points[0], 9);
-  }, [activeTab, shownSites, shownLinks, siteById, selectedId]);
+    const fitKey = shownSites.filter(hasGps).map((s) => `${s.siteId}:${s.latitude},${s.longitude}`).join("|");
+    if (fitKey !== lastFitKeyRef.current) {
+      lastFitKeyRef.current = fitKey;
+      fitMapToSites();
+    }
+  }, [activeTab, shownSites, shownLinks, siteById, selectedId, fitMapToSites]);
 
   const openSite = (siteId) => {
     if (!siteId || !siteById.has(siteId)) return;
@@ -293,6 +335,9 @@ export function MissionControl() {
             <div className="map-view-container">
               <div className="map-wrapper">
                 <div ref={mapRef} className="mc-map" style={{ width: '100%', height: '100%', minHeight: '400px', background: 'var(--bg)' }} />
+                <button type="button" className="map-fit-button" onClick={fitMapToSites} title="Fit all visible sites">
+                  <LocateFixed size={14} /> Fit sites
+                </button>
                 <div className="map-legend">
                   <span><Dot c="var(--teal)" /> Link live</span>
                   <span><Dot c="var(--violet)" /> Kit stocked</span>
@@ -331,6 +376,14 @@ export function MissionControl() {
                           ) : <span className="faint" style={{ marginLeft: "auto", fontSize: 11 }}>No GPS yet</span>}
                         </div>
                       </div>
+
+                      <WeatherForecast
+                        site={selected}
+                        weather={weather}
+                        loading={weatherLoading}
+                        error={weatherError}
+                        onRetry={() => setWeatherRefresh((value) => value + 1)}
+                      />
 
                       <div className="sd-section">
                         <h5>Links ({selectedLinks.length})</h5>

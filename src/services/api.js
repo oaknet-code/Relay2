@@ -482,6 +482,11 @@ export const getDashboard = async () => {
   return data;
 };
 
+export const getSiteWeather = async (siteId, signal) => {
+  const { data } = await axiosInstance.get(`/api/weather/sites/${encodeURIComponent(siteId)}`, { signal });
+  return data;
+};
+
 /**
  * Links
  */
