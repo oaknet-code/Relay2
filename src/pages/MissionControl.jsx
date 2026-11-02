@@ -420,6 +420,17 @@ export function MissionControl() {
                   {GROUPS.map((g) => <option key={g.name} value={g.name}>{g.name}</option>)}
                 </select>
               )}
+              {!isClient && activeTab === "map" && (
+                <button
+                  type="button"
+                  className={`btn sm ${weatherOnMap ? "" : "ghost"}`}
+                  onClick={() => setWeatherOnMap((enabled) => !enabled)}
+                  aria-pressed={weatherOnMap}
+                  title="Show or hide site weather conditions on the map"
+                >
+                  <CloudSun size={13} /> Weather {weatherOnMap ? "on" : "off"}
+                </button>
+              )}
               <div className="tab-buttons">
                 {!isClient && (
                   <button className={`tab-btn ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>
