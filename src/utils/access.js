@@ -32,10 +32,14 @@ export const CLIENT_NAV_IDS = ["control", "links"];
 // Field worker accounts are restricted to solely the Site Work page —
 // no Mission Control, no other pipeline stages, no admin views.
 export const FIELD_WORKER_NAV_IDS = ["site-work"];
+const MOVEMENT_PLAN_ROLES = new Set(["super_admin", "admin", "warehouse_manager", "warehouse_operator", "site_engineer"]);
 
 export const getAllowedNavigation = (navigation, user) => {
   if (isFieldWorker(user)) {
     return navigation.filter(item => FIELD_WORKER_NAV_IDS.includes(item.id));
+  }
+  if (MOVEMENT_PLAN_ROLES.has(user?.role) && !isAdmin(user)) {
+    return navigation.filter(item => item.id === "movement-plan");
   }
   return hasFullView(user) ? navigation : navigation.filter(item => CLIENT_NAV_IDS.includes(item.id));
 };

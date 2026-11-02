@@ -544,6 +544,46 @@ export const getSites = async () => {
   return data; // { sites: [{ _id, siteId, name, kitCount }], unassignedKitCount }
 };
 
+export const getMovementPlanOptions = async (params = {}) => {
+  const { data } = await axiosInstance.get("/api/movement-plans/options", { params });
+  return data;
+};
+
+export const getMovementPlans = async () => {
+  const { data } = await axiosInstance.get("/api/movement-plans");
+  return data;
+};
+
+export const createMovementPlan = async (payload = {}) => {
+  const { data } = await axiosInstance.post("/api/movement-plans", payload);
+  return data;
+};
+
+export const updateMovementPlan = async (id, payload) => {
+  const { data } = await axiosInstance.put(`/api/movement-plans/${encodeURIComponent(id)}`, payload);
+  return data;
+};
+
+export const submitMovementPlan = async (id) => {
+  const { data } = await axiosInstance.post(`/api/movement-plans/${encodeURIComponent(id)}/submit`);
+  return data;
+};
+
+export const decideMovementPlan = async (id, decision, comment = "") => {
+  const { data } = await axiosInstance.patch(`/api/movement-plans/${encodeURIComponent(id)}/approval`, { decision, comment });
+  return data;
+};
+
+export const publishMovementPlan = async (id) => {
+  const { data } = await axiosInstance.post(`/api/movement-plans/${encodeURIComponent(id)}/publish`);
+  return data;
+};
+
+export const getApprovedMovementPlan = async (id) => {
+  const { data } = await axiosInstance.get(`/api/movement-plans/${encodeURIComponent(id)}/document`);
+  return data;
+};
+
 export const createSite = async (payload) => {
   const { data } = await axiosInstance.post("/api/sites", payload);
   return data;

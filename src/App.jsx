@@ -216,7 +216,7 @@ export default function App() {
         );
 
       case "movement-plan":
-        return fullView ? <MovementPlanPage /> : <MissionControl />;
+        return <MovementPlanPage user={user} />;
 
       case "tracking":
         return fullView ? (
@@ -269,7 +269,11 @@ export default function App() {
               ? "Admin · View Access"
               : getAccessLevel(user) === "field_worker"
                 ? "Field Worker"
-                : "Client View Only",
+                : ["site_engineer", "warehouse_manager"].includes(user?.role)
+                  ? "Movement Planner"
+                  : user?.role === "warehouse_operator"
+                    ? "Fleet Staff · View"
+                    : "Client View Only",
 
           initials: (user?.firstName || "U").slice(0, 2).toUpperCase(),
         }}
