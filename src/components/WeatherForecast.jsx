@@ -55,9 +55,12 @@ const valueWithUnit = (value, unit) =>
   Number.isFinite(value) ? `${Math.round(value)}${unit}` : "—";
 
 const formatDay = (date) => {
-  const [year, month, day] = date.split("-").map(Number);
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(date)) return "—";
+  const [year, month, day] = date.slice(0, 10).split("-").map(Number);
   return new Date(year, month - 1, day).toLocaleDateString(undefined, { weekday: "short" });
 };
+
+const valueAt = (values, index) => Array.isArray(values) ? values[index] : null;
 
 export function WeatherForecast({ site, weather, loading, error, onRetry }) {
   if (!site || !Number.isFinite(site.latitude) || !Number.isFinite(site.longitude)) {
@@ -78,7 +81,7 @@ export function WeatherForecast({ site, weather, loading, error, onRetry }) {
     );
   }
 
-  if (error || !weather?.current || !weather?.daily) {
+  if (error || !weather?.current || !weather?.daily || !Array.isArray(weather.daily.time)) {
     const message = error || "Weather forecast is unavailable.";
     return (
       <div className="sd-section weather-panel" aria-live="polite">
@@ -91,18 +94,20 @@ export function WeatherForecast({ site, weather, loading, error, onRetry }) {
 
   const currentCode = weather.current.weather_code;
   const CurrentIcon = iconForCode(currentCode);
-  const forecast = weather.daily.time.map((date, index) => {
-    const code = weather.daily.weather_code[index];
-    return {
-      date,
-      code,
-      Icon: iconForCode(code),
-      description: weatherDescriptions[code] || "Conditions unavailable",
-      high: weather.daily.temperature_2m_max[index],
-      low: weather.daily.temperature_2m_min[index],
-      rain: weather.daily.precipitation_sum?.[index],
-    };
-  });
+  const forecast = weather.daily.time
+    .map((date, index) => {
+      if (typeof date !== "string") return null;
+      const code = valueAt(weather.daily.weather_code, index);
+      return {
+        date,
+        Icon: iconForCode(code),
+        description: weatherDescriptions[code] || "Conditions unavailable",
+        high: valueAt(weather.daily.temperature_2m_max, index),
+        low: valueAt(weather.daily.temperature_2m_min, index),
+        rain: valueAt(weather.daily.precipitation_sum, index),
+      };
+    })
+    .filter(Boolean);
 
   return (
     <div className="sd-section weather-panel" aria-live="polite">
