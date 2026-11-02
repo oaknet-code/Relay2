@@ -23,6 +23,7 @@ const toPickUnit = (a) => ({
   serial: a.serialNumber,
   type: a.assetType,
   model: a.model,
+  componentId: a.assignedComponentId,
   band: a.band,
   state: String(a.status).toLowerCase(),
 });
@@ -84,6 +85,7 @@ export function Dispatch({ canEdit = true, onNavigate }) {
   const [verified, setVerified] = useState({});
   const [counts, setCounts] = useState({}); // keyed by componentId
   const [waybill, setWaybill] = useState(null);
+  const [dispatchStatus, setDispatchStatus] = useState(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [fleetVehicles, setFleetVehicles] = useState([]);
@@ -106,7 +108,10 @@ export function Dispatch({ canEdit = true, onNavigate }) {
   const loadKitAssets = (kitObjectId) =>
     getAssets({ kit: kitObjectId })
       .then(data => setKitAssets(Array.isArray(data) ? data : []))
-      .catch(() => setKitAssets([]));
+      .catch(err => {
+        setKitAssets([]);
+        setKitError(err.response?.data?.message || "Couldn't load this kit's serialized assets.");
+      });
 
   useEffect(() => {
     if (kit?._id) loadKitAssets(kit._id);
@@ -133,19 +138,34 @@ export function Dispatch({ canEdit = true, onNavigate }) {
   useEffect(() => {
     if (!selectedKitId) return;
     let cancelled = false;
+    setWaybill(null);
+    setDispatchStatus(null);
+    setDispatchTime(null);
+    setGatePass(null);
+    setDispatchError(null);
     getDispatches({ kitId: selectedKitId })
       .then(records => {
         if (cancelled || !records.length) return;
         const latest = records[0]; // API returns newest first
+        if (latest.status === "REJECTED") {
+          setDispatchError(`The previous request ${latest.waybillId} was rejected. You can submit a new request.`);
+          return;
+        }
         setWaybill(latest.waybillId);
-        setDispatchTime(new Date(latest.dispatchedAt));
+        setDispatchStatus(latest.status || "DISPATCHED");
+        setDispatchTime(new Date(latest.dispatchedAt || latest.requestedAt || latest.createdAt));
+        if (latest.status === "PENDING_APPROVAL") return;
         // Also restore the full gate pass so the Download button reappears
         // after a refresh — not just the waybill id/time.
         getGatePass(latest._id)
           .then(gp => { if (!cancelled) setGatePass(gp); })
-          .catch(() => { /* non-fatal — download button just stays hidden */ });
+          .catch(err => {
+            if (!cancelled) setDispatchError(err.response?.data?.message || "Couldn't load the approved gate pass.");
+          });
       })
-      .catch(() => { /* non-fatal — form just stays available */ });
+      .catch(err => {
+        if (!cancelled) setDispatchError(err.response?.data?.message || "Couldn't check existing dispatch requests.");
+      });
     return () => { cancelled = true; };
   }, [selectedKitId]);
 
@@ -170,7 +190,7 @@ export function Dispatch({ canEdit = true, onNavigate }) {
   // Consumable pick-list is driven straight from the kit's components —
   // the "required" amount doubles as what gets requested from stock.
   const consReq = (kit?.components || [])
-    .filter(c => c.type === "Consumable")
+    .filter(c => c.sourceType === "consumable")
     .map(c => ({
       k: c._id,
       t: c.model,
@@ -181,17 +201,12 @@ export function Dispatch({ canEdit = true, onNavigate }) {
 
   // Serialized (IDU/ODU/DISH) units are matched to a kit component of the
   // same type, so scanning them can decrement that component too.
-  const serialComponentForType = (type) =>
-    (kit?.components || []).find(c => c.type === type && c.type !== "Consumable");
-
   const step = (k, d) => setCounts(p => ({ ...p, [k]: Math.max(0, (p[k] || 0) + d) }));
   const verify = (uid) => setVerified(p => ({ ...p, [uid]: true }));
 
   const serN = serUnits.filter(a => dispatched || verified[a.uid]).length;
 
-  // Anything selected for dispatch — scanned units or counted consumables —
-  // is enough to raise a waybill/gate pass for. Full completion of every
-  // line is no longer required to enable the button.
+  // A selected subset is enough to submit a dispatch request.
   const anySelected = serUnits.some(a => verified[a.uid]) || consReq.some(c => (counts[c.k] || 0) > 0);
   const ready = !!kit && anySelected && !!selectedVehicle && !!selectedDriver && !dispatched;
 
@@ -202,6 +217,7 @@ export function Dispatch({ canEdit = true, onNavigate }) {
     setVerified({});
     setCounts({});
     setWaybill(null);
+    setDispatchStatus(null);
     setSelectedVehicleId('');
     setDispatchTime(null);
     setDispatchError(null);
@@ -220,15 +236,22 @@ export function Dispatch({ canEdit = true, onNavigate }) {
         .filter(c => (counts[c.k] || 0) > 0)
         .map(c => ({ componentId: c.k, qty: counts[c.k] }));
 
-      // Serialized units: group verified units by type, decrement the
-      // matching kit component by that count.
-      const byType = {};
+      // Serialized units: group selected asset IDs by their kit component.
+      const byComponent = {};
       serUnits.forEach(a => {
-        if (verified[a.uid]) byType[a.type] = (byType[a.type] || 0) + 1;
+        if (verified[a.uid]) {
+          const key = a.componentId || `${a.type}|${a.model}`;
+          if (!byComponent[key]) byComponent[key] = { type: a.type, model: a.model, qty: 0, assetIds: [] };
+          byComponent[key].qty += 1;
+          byComponent[key].assetIds.push(a.uid);
+        }
       });
-      Object.entries(byType).forEach(([type, qty]) => {
-        const comp = serialComponentForType(type);
-        if (comp) items.push({ componentId: comp._id, qty });
+      Object.entries(byComponent).forEach(([componentId, selection]) => {
+        const comp = (kit.components || []).find(c =>
+          String(c._id) === String(componentId) ||
+          (c.type === selection.type && c.model === selection.model && c.sourceType === "serialized")
+        );
+        if (comp) items.push({ componentId: comp._id, qty: selection.qty, assetIds: selection.assetIds });
       });
 
       const { dispatch, kit: updatedKit } = await createDispatch({
@@ -240,21 +263,12 @@ export function Dispatch({ canEdit = true, onNavigate }) {
         driverId: selectedDriver._id,
       });
 
-      setKit(updatedKit); // reflects the decremented component quantities
+      setKit(updatedKit);
       setWaybill(dispatch.waybillId);
-      setDispatchTime(new Date(dispatch.dispatchedAt));
-
-      // Fetch full gate pass data
-      try {
-        const gp = await getGatePass(dispatch._id);
-        setGatePass(gp);
-      } catch (err) {
-        console.error("Failed to fetch gate pass:", err);
-        // Non-fatal — dispatch still succeeded
-      }
-
-      // The server marks the staged units on the gate pass as dispatched.
-      loadKitAssets(updatedKit._id);
+      setDispatchStatus(dispatch.status);
+      setDispatchTime(new Date(dispatch.requestedAt));
+      setGatePass(null);
+      setKits((previous) => previous.filter((stagedKit) => stagedKit._id !== updatedKit._id));
     } catch (err) {
       const details = err.response?.data?.details;
       setDispatchError(
@@ -327,6 +341,27 @@ export function Dispatch({ canEdit = true, onNavigate }) {
     }
   };
 
+  if (waybill && dispatchStatus === "PENDING_APPROVAL") {
+    return (
+      <div>
+        <div className="view-head">
+          <span className="tagchip"><ShieldCheck size={11} /> Dispatch approval</span>
+          <h2>Request submitted</h2>
+          <p>Request <b>{waybill}</b> is waiting for the required approval. Inventory and the gate pass remain locked until approval is complete.</p>
+        </div>
+        <div className="panel" style={{ padding: 24 }}>
+          <div className="faint" style={{ fontSize: 12, marginBottom: 16 }}>
+            Submitted {dispatchTime ? fmtTime(dispatchTime) : "—"} · {kit?.kitId || selectedKitId} · {site?.name || "Site"}
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="btn amber" onClick={() => onNavigate?.("tracking")}>View approvals in Asset Tracking</button>
+            <button className="btn" onClick={changeKit}>Back to staged kits</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Step 1: pick which staged kit to dispatch ────────────────
   if (!selectedKitId) {
     return (
@@ -338,8 +373,7 @@ export function Dispatch({ canEdit = true, onNavigate }) {
           </span>
           <h2>Dispatch</h2>
           <p>
-            Pick a kit that&apos;s staged and ready to go — scan/count its items, assign a vehicle,
-            and generate its waybill &amp; gate pass.
+            Pick a staged kit, verify the selected items, assign its vehicle and driver, then submit it for approval.
           </p>
         </div>
 
@@ -372,13 +406,17 @@ export function Dispatch({ canEdit = true, onNavigate }) {
             </div>
           ) : (
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
-              {kits.map(k => (
+              {kits.map(k => {
+                const siteName = k.site?.name || k.link?.siteA?.name;
+                const hasSite = Boolean(k.site || k.link?.siteA?.siteId);
+                return (
                 <div key={k._id} className="panel">
                   <div className="panel-h">
                     <Boxes size={15} className="ph-ico" />
                     <div>
                       <h3>{k.kitId}</h3>
                       <div className="faint" style={{ fontSize: 11 }}>{k.name}</div>
+                      {siteName && <div className="faint" style={{ fontSize: 10, marginTop: 4 }}>{k.site?.siteId || k.link?.siteA?.siteId} · {siteName}</div>}
                     </div>
                     <span className="ph-r" style={{ marginLeft: "auto" }}>
                       <Band b={k.band} />
@@ -388,13 +426,14 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                     <div style={{ marginBottom: 12, fontSize: 12 }}>
                       <strong>{k.components?.length || 0}</strong> components
                     </div>
-                    <button className="btn amber" style={{ width: "100%" }} onClick={() => setSelectedKitId(k.kitId)}>
+                    <button className="btn amber" style={{ width: "100%" }} disabled={!hasSite} onClick={() => setSelectedKitId(k.kitId)}>
                       <Truck size={14} />
-                      Dispatch this kit
+                      {hasSite ? "Dispatch this kit" : "Assign a site before dispatch"}
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )
         )}
@@ -827,12 +866,12 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                   onClick={() => setShowWaybillDetails(true)}
                 >
                   <FileText size={14} />
-                  Gate pass {waybill} generated — View details
+                  Gate pass {waybill} approved — View details
                 </button>
               ) : (
                 <span className="pill" style={{ color: "var(--teal)", fontSize: 12, padding: "6px 12px" }}>
                   <FileText size={14} />
-                  Gate pass {waybill || "GP-2207"} generated
+                  Gate pass {waybill || "GP-2207"} approved
                 </span>
               )
             ) : (
@@ -840,18 +879,18 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                 <button className="btn amber" disabled={!canEdit || !ready || firing} onClick={fire}
                   title={canEdit ? undefined : "View only — a super admin dispatches"}>
                   {firing ? <Loader2 size={15} className="spin" /> : <FileText size={15} />}
-                  {firing ? "Dispatching…" : "Generate Waybill & Gate Pass"}
+                  {firing ? "Submitting…" : "Submit for Approval"}
                 </button>
                 <span className="faint" style={{ fontSize: 11.5 }}>
                   {!canEdit
-                    ? "View only — dispatching needs a super admin or warehouse account."
+                    ? "View only — dispatching needs a warehouse account."
                     : !anySelected
                     ? "Scan a unit or count a consumable to enable."
                     : !selectedVehicle
                       ? "Select a vehicle above to enable."
                       : !selectedDriver
                         ? "Select a driver above to enable."
-                        : "Ready to seal manifest."
+                        : "Ready to submit for sequential approval."
                   }
                 </span>
               </>

@@ -4,6 +4,7 @@ import {
   Package, ShieldCheck, Truck, MapPin, User, Clock, Loader2, Wrench
 } from 'lucide-react';
 import { TypeIcon, Band } from '../components/ui';
+import { DispatchCustodyTracker } from '../components/DispatchCustodyTracker';
 import { getAssets, getAssetAudit } from '../services/api';
 
 // ─── Stage Pipeline Definition ──────────────────────────────
@@ -32,7 +33,8 @@ const actionText = (e) => {
 const groupOf = (a) => a.kit?.kitId || 'none';
 
 // ─── Main Component ─────────────────────────────────────────
-export function AssetTracking({ onNavigate }) {
+export function AssetTracking({ user, onNavigate }) {
+  const canViewAssetLifecycle = ['super_admin', 'admin', 'warehouse_manager', 'warehouse_operator', 'site_engineer'].includes(user?.role);
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,13 +43,17 @@ export function AssetTracking({ onNavigate }) {
   const [audits, setAudits] = useState({}); // asset _id -> { loading, error, entries }
 
   useEffect(() => {
+    if (!canViewAssetLifecycle) {
+      setLoading(false);
+      return undefined;
+    }
     let cancelled = false;
     getAssets()
       .then(data => { if (!cancelled) setAssets(Array.isArray(data) ? data : []); })
       .catch(err => { if (!cancelled) setError(err.response?.data?.message || "Couldn't load assets."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [canViewAssetLifecycle]);
 
   const groups = useMemo(() => {
     const m = new Map();
@@ -107,26 +113,41 @@ export function AssetTracking({ onNavigate }) {
         </span>
         <h2>Asset Tracking</h2>
         <p>
-          Every serialized asset and where it is in its lifecycle — from warehouse receipt to site
-          installation — with the recorded history of each change.
+          Follow every dispatch through request, required approvals, warehouse release, and signed
+          delivery receipt, then inspect each serialized asset&apos;s lifecycle history.
         </p>
       </div>
 
-      {loading && (
+      <DispatchCustodyTracker user={user} />
+
+      <div style={{ margin: "8px 0 12px" }}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>Asset lifecycle</h3>
+        <div className="faint" style={{ fontSize: 11.5, marginTop: 4 }}>
+          Warehouse receipt through installation, with the recorded history of each status change.
+        </div>
+      </div>
+
+      {!canViewAssetLifecycle && (
+        <div className="panel" style={{ marginBottom: 16, padding: 14, fontSize: 12, color: 'var(--muted)' }}>
+          Asset lifecycle records are limited to warehouse and engineering staff. Dispatch custody above is scoped to your role and site assignments.
+        </div>
+      )}
+
+      {canViewAssetLifecycle && loading && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--faint)' }}>
           <Loader2 size={24} className="spin" style={{ marginBottom: 12 }} />
           <div style={{ fontSize: 12 }}>Loading assets…</div>
         </div>
       )}
 
-      {!loading && error && (
+      {canViewAssetLifecycle && !loading && error && (
         <div className="panel" style={{ textAlign: 'center', padding: 32, color: 'var(--red)' }}>
           <AlertTriangle size={20} style={{ marginBottom: 8 }} />
           <div style={{ fontSize: 13 }}>{error}</div>
         </div>
       )}
 
-      {!loading && !error && assets.length === 0 && (
+      {canViewAssetLifecycle && !loading && !error && assets.length === 0 && (
         <div className="panel" style={{ textAlign: 'center', padding: 40 }}>
           <Package size={24} style={{ color: 'var(--faint)', marginBottom: 10 }} />
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>No serialized assets yet</div>
@@ -141,7 +162,7 @@ export function AssetTracking({ onNavigate }) {
         </div>
       )}
 
-      {!loading && !error && assets.length > 0 && (
+      {canViewAssetLifecycle && !loading && !error && assets.length > 0 && (
         <>
           {/* Pipeline Overview */}
           <div className="coc-pipeline">

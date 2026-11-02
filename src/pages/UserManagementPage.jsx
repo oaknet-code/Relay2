@@ -20,14 +20,17 @@ import {
 } from "lucide-react";
 import { PasswordRules } from "../components/ui/PasswordRules";
 import { isPasswordValid, passwordProblem, generatePassword, PASSWORD_MAX_LENGTH } from "../utils/passwordPolicy";
-import { listUsers, createUser, updateUser, deleteUser, setUserStatus, resetUserMfa } from "../services/api";
+import { listUsers, createUser, updateUser, deleteUser, setUserStatus, resetUserMfa, getSites } from "../services/api";
 
-// All seven account roles. Order = how they appear in the role picker.
+// Order = how roles appear in the account picker.
 const ROLES = [
   { value: "super_admin", label: "Super Admin", hint: "Full access, including admin accounts" },
   { value: "admin", label: "Admin", hint: "Views everything; manages accounts below admin" },
   { value: "warehouse_manager", label: "Warehouse Manager", hint: "Manages stock, kits and links" },
   { value: "warehouse_operator", label: "Warehouse Operator", hint: "Allocates kits and dispatches" },
+  { value: "project_manager", label: "Project Manager", hint: "Approves dispatch requests" },
+  { value: "ceo", label: "CEO", hint: "Approves costed dispatch requests" },
+  { value: "site_manager", label: "Site Manager", hint: "Confirms delivery for assigned sites" },
   { value: "site_engineer", label: "Site Engineer", hint: "Views kits, staging and field ops" },
   { value: "client", label: "Client", hint: "Sees only their own links" },
   { value: "field_worker", label: "Site Worker", hint: "Submits Site Work reports (needs a company)" },
@@ -40,12 +43,15 @@ const ROLE_COLORS = {
   admin: "var(--amber)",
   warehouse_manager: "var(--blue)",
   warehouse_operator: "var(--blue)",
+  project_manager: "var(--violet)",
+  ceo: "var(--amber)",
+  site_manager: "var(--teal)",
   site_engineer: "var(--violet)",
   client: "var(--teal)",
   field_worker: "var(--teal)",
 };
 
-const EMPTY_FORM = { username: "", email: "", company: "", role: "client", password: "" };
+const EMPTY_FORM = { username: "", email: "", company: "", role: "client", password: "", assignedSites: [] };
 const NEW_COMPANY = "__new_company__";
 const COMPANIES = [
   "Tesla Services Limited",
@@ -77,6 +83,9 @@ export function UserManagementPage({ isSuper = false }) {
   const assignableRoles = isSuper ? ROLES : ROLES.filter((r) => !PRIVILEGED_ROLES.includes(r.value));
   const [view, setView] = useState("list"); // list, create, edit
   const [users, setUsers] = useState([]);
+  const [sites, setSites] = useState([]);
+  const [sitesError, setSitesError] = useState("");
+  const [sitesLoading, setSitesLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [listError, setListError] = useState("");
@@ -110,6 +119,13 @@ export function UserManagementPage({ isSuper = false }) {
     loadUsers();
   }, []);
 
+  useEffect(() => {
+    getSites()
+      .then(({ sites: availableSites }) => setSites(Array.isArray(availableSites) ? availableSites : []))
+      .catch((err) => setSitesError(err.message || "Failed to load sites."))
+      .finally(() => setSitesLoading(false));
+  }, []);
+
   const handleChange = (e) => {
     setFormError("");
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -139,7 +155,14 @@ export function UserManagementPage({ isSuper = false }) {
     setFormError("");
     setEditingUser(user);
     setIsNewCompany(false);
-    setFormData({ username: user.username, email: user.email, company: user.company?.trim() || "", role: user.role, password: "" });
+    setFormData({
+      username: user.username,
+      email: user.email,
+      company: user.company?.trim() || "",
+      role: user.role,
+      password: "",
+      assignedSites: (user.assignedSites || []).map((site) => String(site._id || site)),
+    });
     setView("edit");
   };
 
@@ -158,6 +181,11 @@ export function UserManagementPage({ isSuper = false }) {
         if (formData.email.trim().toLowerCase() !== editingUser.email) payload.email = formData.email.trim();
         if (formData.role !== editingUser.role) payload.role = formData.role;
         if (formData.role === "field_worker" && company !== (editingUser.company || "")) payload.company = company;
+        const previousSites = (editingUser.assignedSites || []).map((site) => String(site._id || site)).sort();
+        const assignedSites = [...formData.assignedSites].sort();
+        if (formData.role === "site_manager" && (
+          editingUser.role !== "site_manager" || JSON.stringify(previousSites) !== JSON.stringify(assignedSites)
+        )) payload.assignedSites = assignedSites;
         if (Object.keys(payload).length) {
           const updated = await updateUser(editingUser.id, payload);
           setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
@@ -170,7 +198,11 @@ export function UserManagementPage({ isSuper = false }) {
           setFormError(problem);
           return;
         }
-        const result = await createUser({ ...formData, company });
+        const result = await createUser({
+          ...formData,
+          company,
+          assignedSites: formData.role === "site_manager" ? formData.assignedSites : undefined,
+        });
         setCreatedAccount({
           username: result.user.username,
           email: result.user.email,
@@ -361,6 +393,43 @@ export function UserManagementPage({ isSuper = false }) {
                 )}
               </fieldset>
 
+                {formData.role === "site_manager" && (
+                  <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+                    <legend style={labelStyle}>Assigned sites *</legend>
+                    {sitesError ? (
+                      <ErrorBox>{sitesError}</ErrorBox>
+                    ) : sitesLoading ? (
+                      <div className="faint" style={{ fontSize: 12 }}>Loading sites…</div>
+                    ) : sites.length === 0 ? (
+                      <div className="faint" style={{ fontSize: 12 }}>No sites are available to assign.</div>
+                    ) : (
+                      <div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>
+                        {sites.map((site) => (
+                          <label key={site._id} style={{ display: "flex", gap: 9, alignItems: "center", fontSize: 13 }}>
+                            <input
+                              type="checkbox"
+                              checked={formData.assignedSites.includes(String(site._id))}
+                              onChange={(event) => {
+                                setFormError("");
+                                setFormData((previous) => ({
+                                  ...previous,
+                                  assignedSites: event.target.checked
+                                    ? [...previous.assignedSites, String(site._id)]
+                                    : previous.assignedSites.filter((id) => id !== String(site._id)),
+                                }));
+                              }}
+                            />
+                            <span>{site.siteId} · {site.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {formData.assignedSites.length === 0 && !sitesError && (
+                      <div style={{ color: "var(--red)", fontSize: 11, marginTop: 6 }}>Select at least one site.</div>
+                    )}
+                  </fieldset>
+                )}
+
               <div>
                 <label style={labelStyle} htmlFor="um-name">Full Name *</label>
                 <input id="um-name" type="text" name="username" className="form-input" placeholder="e.g. John Doe"
@@ -444,7 +513,7 @@ export function UserManagementPage({ isSuper = false }) {
               <div style={{ display: "flex", gap: "12px", marginTop: "8px", flexWrap: "wrap" }}>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !formData.username || !formData.email || (!isEdit && !isPasswordValid(formData.password))}
+                  disabled={isSubmitting || !formData.username || !formData.email || (!isEdit && !isPasswordValid(formData.password)) || (formData.role === "site_manager" && (sitesLoading || formData.assignedSites.length === 0 || Boolean(sitesError)))}
                   className="btn amber"
                   style={{ flex: 1, justifyContent: "center" }}
                 >
@@ -546,6 +615,7 @@ export function UserManagementPage({ isSuper = false }) {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th>Assigned Sites</th>
                   <th>Company</th>
                   <th>Created</th>
                   <th>Status</th>
@@ -568,6 +638,14 @@ export function UserManagementPage({ isSuper = false }) {
                         <span className="role-badge" style={{ color, borderColor: color }}>
                           {ROLE_LABELS[user.role] || user.role}
                         </span>
+                      </td>
+                      <td style={{ color: "var(--muted)" }}>
+                        {user.role === "site_manager"
+                          ? (user.assignedSiteNames?.join(", ") || (user.assignedSites || [])
+                            .map((id) => sites.find((site) => String(site._id) === String(id))?.name)
+                            .filter(Boolean)
+                            .join(", ") || "No sites assigned")
+                          : "—"}
                       </td>
                       <td style={{ color: "var(--muted)" }}>{user.company || "—"}</td>
                       <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{fmtDate(user.createdAt)}</td>

@@ -11,7 +11,7 @@ import { SiteWorkPage } from "./pages/SiteWorkPage";
 
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
-import { canEdit, getAccessLevel, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin } from "./utils/access";
+import { canEdit, canViewAssetTracking, DISPATCH_CREATOR_ROLES, getAccessLevel, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin } from "./utils/access";
 
 import "./styles/globals.css";
 import "./styles/layout.css";
@@ -23,11 +23,8 @@ import "./styles/tracking.css";
 import "./styles/change-password.css";
 import "./styles/movement-plan.css";
 
-// These pages are only ever rendered for an admin/full-access session (see
-// the hasWriteAccess/isAdmin checks in renderCurrentView below). Loading
-// them lazily means their code is bundled into separate chunks that a
-// client or field_worker session never fetches — the dynamic import()
-// call itself only fires at the moment one of these actually renders.
+// Operations and administration pages are lazy-loaded; renderCurrentView
+// enforces each page's role gate before its dynamic import is evaluated.
 const Dispatch = lazy(() => import("./pages/Dispatch").then((m) => ({ default: m.Dispatch })));
 const FleetManagement = lazy(() => import("./pages/FleetManagement").then((m) => ({ default: m.FleetManagement })));
 const AssetTracking = lazy(() => import("./pages/AssetTracking").then((m) => ({ default: m.AssetTracking })));
@@ -149,7 +146,7 @@ export default function App() {
    */
   const [linkCounts, setLinkCounts] = useState({ live: 0, planned: 0 });
   useEffect(() => {
-    if (!user || user.role === "field_worker") return;
+    if (!user || ["field_worker", "project_manager", "ceo", "site_manager"].includes(user.role)) return;
     let cancelled = false;
     api.getLinks()
       .then((links) => {
@@ -202,8 +199,8 @@ export default function App() {
         return <SitesPage canEdit={hasWriteAccess} />;
 
       case "dispatch":
-        return fullView ? (
-          <Dispatch canEdit={hasWriteAccess} onNavigate={setCurrentTab} />
+        return fullView || DISPATCH_CREATOR_ROLES.has(user?.role) ? (
+          <Dispatch canEdit={hasWriteAccess || DISPATCH_CREATOR_ROLES.has(user?.role)} onNavigate={setCurrentTab} />
         ) : (
           <MissionControl />
         );
@@ -219,8 +216,8 @@ export default function App() {
         return <MovementPlanPage user={user} />;
 
       case "tracking":
-        return fullView ? (
-          <AssetTracking onNavigate={setCurrentTab} />
+        return canViewAssetTracking(user) ? (
+          <AssetTracking user={user} onNavigate={setCurrentTab} />
         ) : (
           <MissionControl />
         );
@@ -270,9 +267,15 @@ export default function App() {
               : getAccessLevel(user) === "field_worker"
                 ? "Field Worker"
                 : ["site_engineer", "warehouse_manager"].includes(user?.role)
-                  ? "Movement Planner"
+                    ? "Movement Planner"
                   : user?.role === "warehouse_operator"
                     ? "Fleet Staff · View"
+                    : user?.role === "project_manager"
+                      ? "Project Manager"
+                      : user?.role === "ceo"
+                        ? "CEO"
+                        : user?.role === "site_manager"
+                          ? "Site Manager"
                     : "Client View Only",
 
           initials: (user?.firstName || "U").slice(0, 2).toUpperCase(),

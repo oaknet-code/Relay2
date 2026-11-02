@@ -356,8 +356,8 @@ export const importSiteKitsExcel = async (file) => {
 };
 
 /**
- * Dispatch — decrements the matching Site Kit's component availability
- * server-side and records a waybill.
+ * Dispatch — submits a request for approval. Inventory is released only
+ * after all required approval steps are complete.
  */
 export const createDispatch = async (payload) => {
   const { data } = await axiosInstance.post("/api/dispatch", payload);
@@ -371,6 +371,16 @@ export const getDispatches = async ({ kitId, linkId } = {}) => {
   if (kitId) params.kitId = kitId;
   if (linkId) params.linkId = linkId;
   const { data } = await axiosInstance.get("/api/dispatch", { params });
+  return data;
+};
+
+export const decideDispatchApproval = async (dispatchId, decision, comment = "") => {
+  const { data } = await axiosInstance.post(`/api/dispatch/${dispatchId}/approval`, { decision, comment });
+  return data;
+};
+
+export const receiveDispatch = async (dispatchId, receipt) => {
+  const { data } = await axiosInstance.post(`/api/dispatch/${dispatchId}/receipt`, receipt);
   return data;
 };
 
