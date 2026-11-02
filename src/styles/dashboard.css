@@ -1293,9 +1293,9 @@
 /* Mission Control: sites without GPS aren't on the map yet */
 .mc-gps-note {
   position: absolute;
-  top: 12px;
+  top: 54px;
   left: 12px;
-  right: 12px;
+  right: auto;
   z-index: 500;
   width: fit-content;
   max-width: calc(100% - 24px);
