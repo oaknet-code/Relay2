@@ -170,8 +170,8 @@ function AddJobCardForm({ onSent, onCancel }) {
           padding: "12px 14px", background: "var(--bg)", border: "1px solid var(--line)",
           borderRadius: "8px", color: "var(--muted)", fontSize: "12px", lineHeight: 1.5,
         }}>
-          Generates a printable job card with a system-assigned reference and the civil, tower, detector,
-          equipment, and completion-photo checklist from the job-card template.
+          Uses the supplied six-page RFI card layout, including the 17-task register, evidence log,
+          corrective-action register, completion summary, and sign-off tables. Long entries may add pages.
         </div>
       )}
 
@@ -181,10 +181,10 @@ function AddJobCardForm({ onSent, onCancel }) {
           id="jc-title"
           type="text"
           className="form-input"
-          placeholder={mode === "generate" ? "e.g. Civil works — Modika" : "e.g. Fibre splicing — Summit North to Lamu Town"}
+          placeholder={mode === "generate" ? "e.g. Civil Works for RFI" : "e.g. Fibre splicing — Summit North to Lamu Town"}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          maxLength={200}
+          maxLength={mode === "generate" ? 120 : 200}
           required
         />
       </div>
@@ -282,7 +282,7 @@ function AddJobCardForm({ onSent, onCancel }) {
               placeholder="Enter names separated by commas or new lines"
               value={teamMembers}
               onChange={(e) => setTeamMembers(e.target.value)}
-              maxLength={1000}
+              maxLength={300}
               style={{ resize: "vertical", fontFamily: "inherit" }}
             />
           </div>
@@ -294,7 +294,7 @@ function AddJobCardForm({ onSent, onCancel }) {
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              maxLength={3000}
+              maxLength={500}
               required
               style={{ resize: "vertical", fontFamily: "inherit" }}
             />
