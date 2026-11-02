@@ -79,10 +79,13 @@ export function WeatherForecast({ site, weather, loading, error, onRetry }) {
   }
 
   if (error || !weather?.current || !weather?.daily) {
+    const message = error === "Weather service is not configured."
+      ? "Weather service setup is required. Ask your administrator to configure OPEN_METEO_API_KEY in the backend deployment environment."
+      : error || "Weather forecast is unavailable.";
     return (
       <div className="sd-section weather-panel" aria-live="polite">
         <h5>Weather outlook</h5>
-        <p className="weather-message">{error || "Weather forecast is unavailable."}</p>
+        <p className="weather-message">{message}</p>
         <button type="button" className="btn sm ghost weather-retry" onClick={onRetry}>Retry</button>
       </div>
     );
@@ -107,7 +110,12 @@ export function WeatherForecast({ site, weather, loading, error, onRetry }) {
     <div className="sd-section weather-panel" aria-live="polite">
       <div className="weather-heading">
         <h5>Weather outlook</h5>
-        <span>{weather.timezone_abbreviation || weather.timezone || ""}</span>
+        <span title="Conditions are refreshed automatically every 10 minutes">
+          {weather.current.time
+            ? `Updated ${weather.current.time.slice(11, 16)}${weather.timezone_abbreviation ? ` ${weather.timezone_abbreviation}` : ""}`
+            : weather.timezone_abbreviation || weather.timezone || ""}
+          {" · 10 min"}
+        </span>
       </div>
       <div className="weather-current">
         <CurrentIcon size={28} aria-hidden="true" />

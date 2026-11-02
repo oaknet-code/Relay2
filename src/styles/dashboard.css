@@ -517,7 +517,7 @@
   grid-template-columns: 1.15fr 0.85fr;
   gap: 16px;
   padding: 16px;
-  min-height: 480px;
+  min-height: 560px;
 }
 
 @media (max-width: 800px) {
@@ -535,7 +535,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 400px;
+  min-height: 540px;
 }
 
 .kenya-map-svg {
@@ -890,14 +890,20 @@
 /* Mission Control map: darken the OpenStreetMap tiles to match the
    console theme (same treatment as the Fleet map). */
 .mc-map .leaflet-tile-pane {
-  filter: brightness(0.68) contrast(1.15) saturate(0.7) hue-rotate(180deg) invert(1);
+  filter: none;
 }
 
-.map-fit-button {
+.map-actions {
   position: absolute;
   z-index: 500;
   top: 12px;
-  right: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-action-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -912,10 +918,73 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
-.map-fit-button:hover,
-.map-fit-button:focus-visible {
+.map-action-button:hover,
+.map-action-button:focus-visible,
+.map-weather-toggle.active {
   border-color: var(--teal);
   outline: none;
+}
+
+.map-weather-toggle.active {
+  color: var(--teal);
+}
+
+.map-weather-refresh {
+  width: 32px;
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.weather-map-icon {
+  border: 0;
+  background: transparent;
+}
+
+.weather-map-chip {
+  display: inline-flex;
+  min-width: 62px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 14px;
+  background: rgba(15, 23, 35, 0.94);
+  color: #eaf5ff;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
+.weather-map-chip.caution {
+  border-color: #ffb05c;
+  background: rgba(113, 48, 23, 0.96);
+  color: #fff3e6;
+}
+
+.map-weather-status {
+  position: absolute;
+  z-index: 500;
+  right: 12px;
+  bottom: 60px;
+  max-width: min(390px, calc(100% - 24px));
+  padding: 7px 10px;
+  border: 1px solid var(--line2);
+  border-radius: 7px;
+  background: rgba(11, 15, 21, 0.92);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.map-weather-status.error {
+  border-color: rgba(245, 165, 36, 0.7);
+  color: #ffd08b;
 }
 
 .weather-panel {

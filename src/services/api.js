@@ -487,6 +487,11 @@ export const getSiteWeather = async (siteId, signal) => {
   return data;
 };
 
+export const getMapWeather = async (signal) => {
+  const { data } = await axiosInstance.get("/api/weather/map", { signal });
+  return data;
+};
+
 /**
  * Links
  */

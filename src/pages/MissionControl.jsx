@@ -1,12 +1,12 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import {
   Gauge, PackageCheck, Truck, Boxes, Layers, MapPin, List,
-  Loader2, AlertTriangle, RefreshCw, Package, ExternalLink, LocateFixed
+  Loader2, AlertTriangle, RefreshCw, Package, ExternalLink, LocateFixed, CloudSun
 } from 'lucide-react';
 import { Ring, Band, Dot } from '../components/ui';
 import { WeatherForecast } from '../components/WeatherForecast';
 import { LINK_STATUS } from '../constants/states';
-import { getDashboard, getSiteWeather } from '../services/api';
+import { getDashboard, getMapWeather, getSiteWeather } from '../services/api';
 
 // Everything here comes from GET /api/dashboard (live links, sites, kits,
 // reserved stock and assets) — no sample data.
@@ -55,6 +55,27 @@ const siteState = (s) =>
 
 const hasGps = (s) => typeof s.latitude === "number" && typeof s.longitude === "number";
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
+const WEATHER_REFRESH_INTERVAL = 10 * 60 * 1000;
+const weatherLabel = (code) => ({
+  0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+  45: "Fog", 48: "Rime fog", 51: "Light drizzle", 53: "Drizzle",
+  55: "Dense drizzle", 56: "Freezing drizzle", 57: "Dense freezing drizzle",
+  61: "Light rain", 63: "Moderate rain", 65: "Heavy rain", 66: "Light freezing rain",
+  67: "Heavy freezing rain", 71: "Light snow", 73: "Moderate snow", 75: "Heavy snow",
+  77: "Snow grains", 80: "Light showers", 81: "Rain showers", 82: "Heavy showers",
+  85: "Snow showers", 86: "Heavy snow showers", 95: "Thunderstorm",
+  96: "Thunderstorm with hail", 99: "Severe thunderstorm",
+}[code] || "Conditions unavailable");
+const weatherSymbol = (code) => {
+  if ([0, 1].includes(code)) return "☀";
+  if ([2, 3].includes(code)) return "☁";
+  if ([45, 48].includes(code)) return "≋";
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "☂";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "❄";
+  if ([95, 96, 99].includes(code)) return "⚡";
+  return "·";
+};
+const needsWeatherCaution = (code) => [61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code);
 
 export function MissionControl() {
   const [data, setData] = useState(null);
@@ -67,10 +88,16 @@ export function MissionControl() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState("");
   const [weatherRefresh, setWeatherRefresh] = useState(0);
+  const [weatherOnMap, setWeatherOnMap] = useState(false);
+  const [mapWeather, setMapWeather] = useState(null);
+  const [mapWeatherLoading, setMapWeatherLoading] = useState(false);
+  const [mapWeatherError, setMapWeatherError] = useState("");
+  const [mapWeatherRefresh, setMapWeatherRefresh] = useState(0);
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layersRef = useRef(null);
+  const weatherLayersRef = useRef(null);
   const lastFitKeyRef = useRef("");
 
   const load = useCallback(async () => {
@@ -112,7 +139,7 @@ export function MissionControl() {
   );
 
   useEffect(() => {
-    if (!selected || !hasGps(selected)) {
+    if (activeTab !== "map" || !selected || !hasGps(selected)) {
       setWeather(null);
       setWeatherLoading(false);
       setWeatherError("");
@@ -120,22 +147,59 @@ export function MissionControl() {
     }
 
     const controller = new AbortController();
+    let active = true;
     setWeather(null);
-    setWeatherLoading(true);
-    setWeatherError("");
-    getSiteWeather(selected.siteId, controller.signal)
-      .then(setWeather)
-      .catch((err) => {
-        if (err.code !== "ERR_CANCELED") {
+    const loadForecast = async () => {
+      setWeatherLoading(true);
+      setWeatherError("");
+      try {
+        const forecast = await getSiteWeather(selected.siteId, controller.signal);
+        if (active) setWeather(forecast);
+      } catch (err) {
+        if (active && err.code !== "ERR_CANCELED") {
           setWeatherError(err.response?.data?.message || "Couldn't load the site forecast.");
         }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setWeatherLoading(false);
-      });
+      } finally {
+        if (active) setWeatherLoading(false);
+      }
+    };
+    loadForecast();
+    const interval = window.setInterval(loadForecast, WEATHER_REFRESH_INTERVAL);
 
-    return () => controller.abort();
-  }, [selected, weatherRefresh]);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      controller.abort();
+    };
+  }, [activeTab, selected, weatherRefresh]);
+
+  useEffect(() => {
+    if (!weatherOnMap || activeTab !== "map") return undefined;
+    const controller = new AbortController();
+    let active = true;
+    const loadMapWeather = async () => {
+      setMapWeatherLoading(true);
+      setMapWeatherError("");
+      try {
+        const conditions = await getMapWeather(controller.signal);
+        if (active) setMapWeather(conditions);
+      } catch (err) {
+        if (active && err.code !== "ERR_CANCELED") {
+          setMapWeatherError(err.response?.data?.message || "Couldn't load weather conditions for the map.");
+        }
+      } finally {
+        if (active) setMapWeatherLoading(false);
+      }
+    };
+    loadMapWeather();
+    const interval = window.setInterval(loadMapWeather, WEATHER_REFRESH_INTERVAL);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      controller.abort();
+    };
+  }, [activeTab, weatherOnMap, mapWeatherRefresh]);
 
   // Create the map while the Map tab is shown.
   useEffect(() => {
@@ -144,12 +208,22 @@ export function MissionControl() {
     if (!L) return;
     const map = L.map(mapRef.current, { center: [0.2, 38.3], zoom: 6, zoomControl: false });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-    // OpenStreetMap tiles, darkened via CSS (.mc-map .leaflet-tile-pane).
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
+    });
+    const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics',
+    });
+    streetMap.addTo(map);
+    L.control.layers({ "Street map": streetMap, "Satellite": satelliteMap }, null, {
+      position: "topright",
+      collapsed: true,
     }).addTo(map);
+    L.control.scale({ position: "bottomright", metric: true, imperial: false }).addTo(map);
     layersRef.current = L.layerGroup().addTo(map);
+    weatherLayersRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
     lastFitKeyRef.current = "";
     const t = setTimeout(() => map.invalidateSize(), 150);
@@ -158,6 +232,7 @@ export function MissionControl() {
       map.remove();
       mapInstanceRef.current = null;
       layersRef.current = null;
+      weatherLayersRef.current = null;
     };
   }, [activeTab, data, isClient]);
 
@@ -165,9 +240,11 @@ export function MissionControl() {
   useEffect(() => {
     const L = window.L;
     const layers = layersRef.current;
+    const weatherLayers = weatherLayersRef.current;
     const map = mapInstanceRef.current;
-    if (activeTab !== 'map' || !L || !layers || !map) return;
+    if (activeTab !== 'map' || !L || !layers || !weatherLayers || !map) return;
     layers.clearLayers();
+    weatherLayers.clearLayers();
 
     for (const l of shownLinks) {
       const a = siteById.get(l.siteA?.siteId), b = siteById.get(l.siteB?.siteId);
@@ -195,12 +272,40 @@ export function MissionControl() {
         .on('click', () => setSelectedId(s.siteId))
         .addTo(layers);
     }
+
+    if (weatherOnMap && mapWeather?.sites) {
+      for (const site of shownSites.filter(hasGps)) {
+        const conditions = mapWeather.sites[site.siteId]?.current;
+        if (!conditions || !Number.isFinite(conditions.temperature_2m)) continue;
+
+        const badge = document.createElement("span");
+        badge.className = `weather-map-chip${needsWeatherCaution(conditions.weather_code) ? " caution" : ""}`;
+        badge.textContent = `${weatherSymbol(conditions.weather_code)} ${Math.round(conditions.temperature_2m)}°`;
+        const marker = L.marker([site.latitude, site.longitude], {
+          icon: L.divIcon({
+            className: "weather-map-icon",
+            html: badge,
+            iconSize: [72, 30],
+            iconAnchor: [-6, 40],
+          }),
+          keyboard: false,
+          zIndexOffset: 500,
+        });
+        const details = document.createElement("div");
+        details.textContent = `${weatherLabel(conditions.weather_code)} · ${Number.isFinite(conditions.precipitation) ? `${conditions.precipitation.toFixed(1)} mm rain` : "Rain unavailable"} · ${Number.isFinite(conditions.wind_speed_10m) ? `${Math.round(conditions.wind_speed_10m)} km/h wind` : "Wind unavailable"}`;
+        marker
+          .bindTooltip(details, { direction: "top", offset: [0, -6] })
+          .on("click", () => setSelectedId(site.siteId))
+          .addTo(weatherLayers);
+      }
+    }
+
     const fitKey = shownSites.filter(hasGps).map((s) => `${s.siteId}:${s.latitude},${s.longitude}`).join("|");
     if (fitKey !== lastFitKeyRef.current) {
       lastFitKeyRef.current = fitKey;
       fitMapToSites();
     }
-  }, [activeTab, shownSites, shownLinks, siteById, selectedId, fitMapToSites]);
+  }, [activeTab, shownSites, shownLinks, siteById, selectedId, fitMapToSites, weatherOnMap, mapWeather]);
 
   const openSite = (siteId) => {
     if (!siteId || !siteById.has(siteId)) return;
@@ -335,15 +440,51 @@ export function MissionControl() {
             <div className="map-view-container">
               <div className="map-wrapper">
                 <div ref={mapRef} className="mc-map" style={{ width: '100%', height: '100%', minHeight: '400px', background: 'var(--bg)' }} />
-                <button type="button" className="map-fit-button" onClick={fitMapToSites} title="Fit all visible sites">
-                  <LocateFixed size={14} /> Fit sites
-                </button>
+                <div className="map-actions">
+                  <button type="button" className="map-action-button" onClick={fitMapToSites} title="Fit all visible sites">
+                    <LocateFixed size={14} /> Fit sites
+                  </button>
+                  <button
+                    type="button"
+                    className={`map-action-button map-weather-toggle${weatherOnMap ? " active" : ""}`}
+                    onClick={() => setWeatherOnMap((enabled) => !enabled)}
+                    aria-pressed={weatherOnMap}
+                    title="Toggle weather conditions on the map"
+                  >
+                    <CloudSun size={14} /> Weather {weatherOnMap ? "on" : "off"}
+                  </button>
+                  {weatherOnMap && (
+                    <button
+                      type="button"
+                      className="map-action-button map-weather-refresh"
+                      onClick={() => setMapWeatherRefresh((value) => value + 1)}
+                      title="Refresh weather now"
+                      aria-label="Refresh weather now"
+                    >
+                      <RefreshCw size={13} className={mapWeatherLoading ? "spin" : ""} />
+                    </button>
+                  )}
+                </div>
                 <div className="map-legend">
                   <span><Dot c="var(--teal)" /> Link live</span>
                   <span><Dot c="var(--violet)" /> Kit stocked</span>
                   <span><Dot c={OUTSTANDING} /> Stock outstanding</span>
                   <span><Dot c="var(--faint)" /> No kit</span>
+                  {weatherOnMap && <span><CloudSun size={12} /> Site weather</span>}
                 </div>
+                {weatherOnMap && (
+                  <div className={`map-weather-status${mapWeatherError ? " error" : ""}`} aria-live="polite">
+                    {mapWeatherError
+                      ? mapWeatherError === "Weather service is not configured."
+                        ? "Configure OPEN_METEO_API_KEY in the backend environment to enable weather."
+                        : mapWeatherError
+                      : mapWeatherLoading && !mapWeather
+                        ? "Loading site weather…"
+                        : mapWeather?.updatedAt
+                          ? `Updated ${new Date(mapWeather.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 10 min`
+                          : "Weather conditions unavailable"}
+                  </div>
+                )}
                 {gpsCount < shownSites.length && (
                   <div className="mc-gps-note">
                     {gpsCount} of {shownSites.length} sites have GPS · the rest appear once GPS is added on the Sites page
