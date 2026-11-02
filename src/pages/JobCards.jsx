@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { FileText, Loader, Loader2, AlertTriangle, Download, Trash2, Building2, ClipboardList } from "lucide-react";
 import { getJobCards, jobCardFileUrl } from "../services/api";
 
@@ -40,6 +40,9 @@ function JobCardRow({ card, showCompany, onDelete, deleting }) {
       <FileText size={22} style={{ color: "var(--muted)", flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "14px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis" }}>{card.title}</div>
+        {card.jobCardNumber && (
+          <div style={{ fontSize: "12px", color: "var(--teal)", marginTop: 3 }}>{card.jobCardNumber}</div>
+        )}
         {card.notes && <div className="faint" style={{ fontSize: "13px", marginTop: 4, whiteSpace: "pre-wrap" }}>{card.notes}</div>}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", fontSize: "12px", color: "var(--muted)", marginTop: 6 }}>
           {showCompany && (

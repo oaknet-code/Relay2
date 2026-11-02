@@ -1,6 +1,12 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { FileText, Upload, Loader, CheckCircle2, X } from "lucide-react";
-import { getJobCardContractors, createJobCard, deleteJobCard } from "../services/api";
+import {
+  getJobCardContractors,
+  getSites,
+  createJobCard,
+  createGeneratedJobCard,
+  deleteJobCard,
+} from "../services/api";
 import { ErrorNote, JobCardList, useJobCards } from "./JobCards";
 
 // Admin / super admin side of job cards (see JobCards.jsx). Imported only
@@ -11,24 +17,39 @@ const isPdfFile = (file) => file.name.toLowerCase().endsWith(".pdf") && file.typ
 
 const labelStyle = { display: "block", fontSize: "12px", fontWeight: "500", marginBottom: "6px", color: "var(--muted)" };
 
-// Admin / super admin form: pick a contractor, give the card a title,
-// attach one PDF.
+// Admin / super admin form: generate a checklist-based job card or upload
+// an existing PDF, then send it to the selected contractor.
 function AddJobCardForm({ onSent, onCancel }) {
   const [contractors, setContractors] = useState([]);
-  const [loadingContractors, setLoadingContractors] = useState(true);
+  const [sites, setSites] = useState([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [mode, setMode] = useState("generate");
   const [company, setCompany] = useState("");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
+  const [siteId, setSiteId] = useState("");
+  const [project, setProject] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [teamLead, setTeamLead] = useState("");
+  const [supervisor, setSupervisor] = useState("");
+  const [supervisorPhone, setSupervisorPhone] = useState("");
+  const [teamMembers, setTeamMembers] = useState("");
+  const [workOrder, setWorkOrder] = useState("");
+  const [description, setDescription] = useState("");
   const [file, setFile] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    getJobCardContractors()
-      .then((data) => { if (!cancelled) setContractors(data.contractors || []); })
+    Promise.all([getJobCardContractors(), getSites()])
+      .then(([contractorData, siteData]) => {
+        if (cancelled) return;
+        setContractors(contractorData.contractors || []);
+        setSites(siteData.sites || []);
+      })
       .catch((err) => { if (!cancelled) setError(err.message); })
-      .finally(() => { if (!cancelled) setLoadingContractors(false); });
+      .finally(() => { if (!cancelled) setLoadingOptions(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -53,11 +74,28 @@ function AddJobCardForm({ onSent, onCancel }) {
     setError("");
     if (!company) return setError("Choose a contractor.");
     if (!title.trim()) return setError("Title is required.");
-    if (!file) return setError("Attach the job card as a PDF.");
+    if (mode === "upload" && !file) return setError("Attach the job card as a PDF.");
+    if (mode === "generate" && !siteId) return setError("Choose a site.");
 
     setIsSending(true);
     try {
-      const data = await createJobCard({ title: title.trim(), notes: notes.trim(), company, file });
+      const data = mode === "generate"
+        ? await createGeneratedJobCard({
+          template: "civil_works_rfi_v1",
+          title: title.trim(),
+          notes: notes.trim(),
+          company,
+          siteId,
+          project: project.trim(),
+          startDate,
+          teamLead: teamLead.trim(),
+          supervisor: supervisor.trim(),
+          supervisorPhone: supervisorPhone.trim(),
+          teamMembers: teamMembers.trim(),
+          workOrder: workOrder.trim(),
+          description: description.trim(),
+        })
+        : await createJobCard({ title: title.trim(), notes: notes.trim(), company, file });
       onSent(data.jobCard);
     } catch (err) {
       setError(err.message);
@@ -83,6 +121,25 @@ function AddJobCardForm({ onSent, onCancel }) {
 
       {error && <ErrorNote>{error}</ErrorNote>}
 
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          className={`btn sm ${mode === "generate" ? "amber" : "ghost"}`}
+          onClick={() => setMode("generate")}
+          aria-pressed={mode === "generate"}
+        >
+          <FileText size={14} /> Generate from system
+        </button>
+        <button
+          type="button"
+          className={`btn sm ${mode === "upload" ? "amber" : "ghost"}`}
+          onClick={() => setMode("upload")}
+          aria-pressed={mode === "upload"}
+        >
+          <Upload size={14} /> Upload existing PDF
+        </button>
+      </div>
+
       <div>
         <label style={labelStyle} htmlFor="jc-company">Contractor *</label>
         <select
@@ -90,12 +147,12 @@ function AddJobCardForm({ onSent, onCancel }) {
           className="form-input"
           value={company}
           onChange={(e) => setCompany(e.target.value)}
-          disabled={loadingContractors}
+          disabled={loadingOptions}
           required
         >
           <option value="">
-            {loadingContractors
-              ? "Loading contractors…"
+            {loadingOptions
+              ? "Loading options…"
               : contractors.length
                 ? "Select a contractor"
                 : "No contractors yet — register site workers with a company first"}
@@ -108,19 +165,176 @@ function AddJobCardForm({ onSent, onCancel }) {
         </select>
       </div>
 
+      {mode === "generate" && (
+        <div style={{
+          padding: "12px 14px", background: "var(--bg)", border: "1px solid var(--line)",
+          borderRadius: "8px", color: "var(--muted)", fontSize: "12px", lineHeight: 1.5,
+        }}>
+          Generates a printable job card with a system-assigned reference and the civil, tower, detector,
+          equipment, and completion-photo checklist from the job-card template.
+        </div>
+      )}
+
       <div>
-        <label style={labelStyle} htmlFor="jc-title">Title *</label>
+        <label style={labelStyle} htmlFor="jc-title">Job card title *</label>
         <input
           id="jc-title"
           type="text"
           className="form-input"
-          placeholder="e.g. Fibre splicing — Summit North to Lamu Town"
+          placeholder={mode === "generate" ? "e.g. Civil works — Modika" : "e.g. Fibre splicing — Summit North to Lamu Town"}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={200}
           required
         />
       </div>
+
+      {mode === "generate" ? (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+            <div>
+              <label style={labelStyle} htmlFor="jc-site">Site *</label>
+              <select
+                id="jc-site"
+                className="form-input"
+                value={siteId}
+                onChange={(e) => setSiteId(e.target.value)}
+                disabled={loadingOptions}
+                required
+              >
+                <option value="">{loadingOptions ? "Loading sites…" : "Select a site"}</option>
+                {sites.map((site) => (
+                  <option key={site._id} value={site._id}>{site.siteId} — {site.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle} htmlFor="jc-project">Project *</label>
+              <input
+                id="jc-project"
+                className="form-input"
+                value={project}
+                onChange={(e) => setProject(e.target.value)}
+                maxLength={160}
+                required
+              />
+            </div>
+            <div>
+              <label style={labelStyle} htmlFor="jc-start-date">Job start date *</label>
+              <input
+                id="jc-start-date"
+                type="date"
+                className="form-input"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label style={labelStyle} htmlFor="jc-work-order">Work order / PO reference</label>
+              <input
+                id="jc-work-order"
+                className="form-input"
+                value={workOrder}
+                onChange={(e) => setWorkOrder(e.target.value)}
+                maxLength={120}
+              />
+            </div>
+            <div>
+              <label style={labelStyle} htmlFor="jc-team-lead">Assigned team lead *</label>
+              <input
+                id="jc-team-lead"
+                className="form-input"
+                value={teamLead}
+                onChange={(e) => setTeamLead(e.target.value)}
+                maxLength={120}
+                required
+              />
+            </div>
+            <div>
+              <label style={labelStyle} htmlFor="jc-supervisor">Contractor site supervisor</label>
+              <input
+                id="jc-supervisor"
+                className="form-input"
+                value={supervisor}
+                onChange={(e) => setSupervisor(e.target.value)}
+                maxLength={120}
+              />
+            </div>
+            <div>
+              <label style={labelStyle} htmlFor="jc-supervisor-phone">Supervisor phone</label>
+              <input
+                id="jc-supervisor-phone"
+                type="tel"
+                className="form-input"
+                value={supervisorPhone}
+                onChange={(e) => setSupervisorPhone(e.target.value)}
+                maxLength={60}
+              />
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle} htmlFor="jc-team-members">Team members</label>
+            <textarea
+              id="jc-team-members"
+              className="form-input"
+              rows={2}
+              placeholder="Enter names separated by commas or new lines"
+              value={teamMembers}
+              onChange={(e) => setTeamMembers(e.target.value)}
+              maxLength={1000}
+              style={{ resize: "vertical", fontFamily: "inherit" }}
+            />
+          </div>
+          <div>
+            <label style={labelStyle} htmlFor="jc-description">Job description *</label>
+            <textarea
+              id="jc-description"
+              className="form-input"
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={3000}
+              required
+              style={{ resize: "vertical", fontFamily: "inherit" }}
+            />
+          </div>
+        </>
+      ) : (
+        <div>
+          <label style={labelStyle}>Job Card PDF *</label>
+          {file ? (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              background: "var(--bg)", border: "1px solid var(--line2)", borderRadius: "8px",
+              padding: "10px 12px", fontSize: "13px", color: "var(--ink)",
+            }}>
+              <FileText size={15} style={{ color: "var(--muted)", flexShrink: 0 }} />
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
+              <button
+                type="button"
+                onClick={() => setFile(null)}
+                aria-label="Remove file"
+                style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", display: "flex" }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <label
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                border: "1px dashed var(--line2)", borderRadius: "8px", padding: "20px",
+                cursor: "pointer", color: "var(--muted)", fontSize: "13px",
+              }}
+            >
+              <Upload size={16} />
+              Choose the job card (PDF only · max 5 MB)
+              <input type="file" accept=".pdf,application/pdf" onChange={handleFileChange} style={{ display: "none" }} />
+            </label>
+          )}
+        </div>
+      )}
 
       <div>
         <label style={labelStyle} htmlFor="jc-notes">Notes</label>
@@ -136,44 +350,10 @@ function AddJobCardForm({ onSent, onCancel }) {
         />
       </div>
 
-      <div>
-        <label style={labelStyle}>Job Card PDF *</label>
-        {file ? (
-          <div style={{
-            display: "flex", alignItems: "center", gap: "8px",
-            background: "var(--bg)", border: "1px solid var(--line2)", borderRadius: "8px",
-            padding: "10px 12px", fontSize: "13px", color: "var(--ink)",
-          }}>
-            <FileText size={15} style={{ color: "var(--muted)", flexShrink: 0 }} />
-            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
-            <button
-              type="button"
-              onClick={() => setFile(null)}
-              aria-label="Remove file"
-              style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", display: "flex" }}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ) : (
-          <label
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-              border: "1px dashed var(--line2)", borderRadius: "8px", padding: "20px",
-              cursor: "pointer", color: "var(--muted)", fontSize: "13px",
-            }}
-          >
-            <Upload size={16} />
-            Choose the job card (PDF only · max 5 MB)
-            <input type="file" accept=".pdf,application/pdf" onChange={handleFileChange} style={{ display: "none" }} />
-          </label>
-        )}
-      </div>
-
       <div style={{ display: "flex", gap: "10px" }}>
         <button type="submit" className="btn amber" disabled={isSending} style={{ flex: 1, justifyContent: "center" }}>
-          {isSending ? <Loader size={14} className="spin" /> : <Upload size={15} />}
-          {isSending ? "Sending…" : "Send Job Card"}
+          {isSending ? <Loader size={14} className="spin" /> : mode === "generate" ? <FileText size={15} /> : <Upload size={15} />}
+          {isSending ? "Sending…" : mode === "generate" ? "Generate & Send Job Card" : "Send Existing PDF"}
         </button>
         <button type="button" className="btn" onClick={onCancel} disabled={isSending}>Cancel</button>
       </div>
@@ -192,7 +372,7 @@ export function AdminJobCards({ formOpen, onCloseForm }) {
 
   const handleSent = (card) => {
     setCards((prev) => [card, ...prev]);
-    setSentNote(`Job card "${card.title}" sent to ${card.company}.`);
+    setSentNote(`Job card "${card.title}"${card.jobCardNumber ? ` (${card.jobCardNumber})` : ""} sent to ${card.company}.`);
     onCloseForm();
     load(); // picks up the sender's name
   };
@@ -263,4 +443,3 @@ export function AdminJobCards({ formOpen, onCloseForm }) {
     </div>
   );
 }
-

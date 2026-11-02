@@ -292,6 +292,16 @@ export const createJobCard = async ({ title, notes, company, file }) => {
   }
 };
 
+export const createGeneratedJobCard = async (payload) => {
+  try {
+    const { data } = await axiosInstance.post("/api/job-cards", payload);
+    return data;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to generate the job card";
+    throw new Error(message);
+  }
+};
+
 export const deleteJobCard = async (id) => {
   try {
     const { data } = await axiosInstance.delete(`/api/job-cards/${id}`);
@@ -770,6 +780,7 @@ export const api = {
   getJobCardContractors,
   getJobCards,
   createJobCard,
+  createGeneratedJobCard,
   deleteJobCard,
 };
 
