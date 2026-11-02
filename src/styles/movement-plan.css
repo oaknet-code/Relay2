@@ -131,7 +131,63 @@
 }
 
 .mp-team-picker {
-  max-width: 520px;
+  max-width: 620px;
+}
+
+.mp-member-results {
+  display: grid;
+  max-height: 220px;
+  overflow: auto;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.mp-member-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.mp-member-option + .mp-member-option {
+  border-top: 1px solid var(--line);
+}
+
+.mp-member-option input {
+  margin-top: 2px;
+  accent-color: var(--amber);
+}
+
+.mp-member-option span {
+  display: grid;
+  gap: 2px;
+}
+
+.mp-member-option small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.mp-external-member-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px 14px;
+  max-width: 760px;
+  padding: 12px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg2);
+}
+
+.mp-external-member-form button {
+  justify-self: start;
 }
 
 .mp-hint {
@@ -148,7 +204,7 @@
 
 .mp-roster-chip {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 7px;
   padding: 5px 9px;
   border: 1px solid var(--line);
@@ -160,6 +216,38 @@
 .mp-roster-chip small {
   color: var(--muted);
   font-size: 10px;
+}
+
+.mp-remove-member {
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  text-decoration: underline;
+}
+
+.mp-vehicle-picker {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mp-vehicle-picker legend {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mp-assignment-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
 }
 
 .mp-trip-card {
@@ -338,7 +426,8 @@
   }
 
   .mp-details-grid,
-  .mp-trip-grid {
+  .mp-trip-grid,
+  .mp-external-member-form {
     grid-template-columns: 1fr;
   }
 
