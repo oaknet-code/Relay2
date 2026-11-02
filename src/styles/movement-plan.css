@@ -1,0 +1,135 @@
+.movement-plan-page {
+  display: grid;
+  gap: 16px;
+}
+
+.mp-head {
+  position: relative;
+  padding-right: 240px;
+}
+
+.mp-export {
+  position: absolute;
+  top: 32px;
+  right: 0;
+}
+
+.mp-section {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mp-description {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mp-title-input {
+  margin-bottom: 14px;
+}
+
+.mp-plan-summary {
+  margin: 0 0 14px;
+}
+
+.mp-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-top: 18px;
+}
+
+.mp-details-grid .form-label {
+  font-size: 11px;
+}
+
+.mp-input {
+  min-width: 110px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.mp-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.mp-edit-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mp-edit-table th {
+  padding: 8px 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.mp-edit-table td {
+  padding: 5px 4px;
+  vertical-align: middle;
+}
+
+.mp-edit-table th:first-child,
+.mp-edit-table td:first-child {
+  padding-left: 0;
+}
+
+.mp-edit-table .mp-action-cell {
+  width: 38px;
+}
+
+.mp-edit-table .mp-empty-row {
+  padding: 14px 4px;
+  color: var(--faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.mp-date-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mp-date-heading .iconbtn {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.mp-action-cell .iconbtn {
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+}
+
+.mp-add-row {
+  margin-top: 10px;
+}
+
+.mp-error {
+  margin-top: 10px !important;
+  color: var(--red) !important;
+}
+
+@media (max-width: 700px) {
+  .mp-head {
+    padding-right: 0;
+  }
+
+  .mp-export {
+    position: static;
+    margin-top: 14px;
+  }
+
+  .mp-details-grid {
+    grid-template-columns: 1fr;
+  }
+}

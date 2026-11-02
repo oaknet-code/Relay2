@@ -21,6 +21,7 @@ import "./styles/auth.css";
 import "./styles/fleet.css";
 import "./styles/tracking.css";
 import "./styles/change-password.css";
+import "./styles/movement-plan.css";
 
 // These pages are only ever rendered for an admin/full-access session (see
 // the hasWriteAccess/isAdmin checks in renderCurrentView below). Loading
@@ -30,6 +31,7 @@ import "./styles/change-password.css";
 const Dispatch = lazy(() => import("./pages/Dispatch").then((m) => ({ default: m.Dispatch })));
 const FleetManagement = lazy(() => import("./pages/FleetManagement").then((m) => ({ default: m.FleetManagement })));
 const AssetTracking = lazy(() => import("./pages/AssetTracking").then((m) => ({ default: m.AssetTracking })));
+const MovementPlanPage = lazy(() => import("./pages/MovementPlanPage").then((m) => ({ default: m.MovementPlanPage })));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const UserManagementPage = lazy(() =>
   import("./pages/UserManagementPage").then((m) => ({ default: m.UserManagementPage }))
@@ -212,6 +214,9 @@ export default function App() {
         ) : (
           <MissionControl />
         );
+
+      case "movement-plan":
+        return fullView ? <MovementPlanPage /> : <MissionControl />;
 
       case "tracking":
         return fullView ? (
