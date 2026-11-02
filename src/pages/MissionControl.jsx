@@ -475,13 +475,18 @@ export function MissionControl() {
                 {weatherOnMap && (
                   <div className={`map-weather-status${mapWeatherError ? " error" : ""}`} aria-live="polite">
                     {mapWeatherError
-                      ? mapWeatherError === "Weather service is not configured."
-                        ? "Configure OPEN_METEO_API_KEY in the backend environment to enable weather."
-                        : mapWeatherError
+                      ? mapWeatherError
                       : mapWeatherLoading && !mapWeather
                         ? "Loading site weather…"
                         : mapWeather?.updatedAt
-                          ? `Updated ${new Date(mapWeather.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes every 10 min`
+                          ? (
+                            <>
+                              MET Norway forecast · updated {new Date(mapWeather.updatedAt).toLocaleString()} ·{" "}
+                              <a href="https://api.met.no/doc/License" target="_blank" rel="noopener noreferrer">
+                                CC BY 4.0 / NLOD 2.0
+                              </a>
+                            </>
+                          )
                           : "Weather conditions unavailable"}
                   </div>
                 )}

@@ -987,6 +987,10 @@
   color: #ffd08b;
 }
 
+.map-weather-status a {
+  color: inherit;
+}
+
 .weather-panel {
   padding: 12px;
   border: 1px solid var(--line);

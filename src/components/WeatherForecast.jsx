@@ -79,9 +79,7 @@ export function WeatherForecast({ site, weather, loading, error, onRetry }) {
   }
 
   if (error || !weather?.current || !weather?.daily) {
-    const message = error === "Weather service is not configured."
-      ? "Weather service setup is required. Ask your administrator to configure OPEN_METEO_API_KEY in the backend deployment environment."
-      : error || "Weather forecast is unavailable.";
+    const message = error || "Weather forecast is unavailable.";
     return (
       <div className="sd-section weather-panel" aria-live="polite">
         <h5>Weather outlook</h5>
@@ -102,7 +100,7 @@ export function WeatherForecast({ site, weather, loading, error, onRetry }) {
       description: weatherDescriptions[code] || "Conditions unavailable",
       high: weather.daily.temperature_2m_max[index],
       low: weather.daily.temperature_2m_min[index],
-      rainChance: weather.daily.precipitation_probability_max[index],
+      rain: weather.daily.precipitation_sum?.[index],
     };
   });
 
@@ -110,11 +108,11 @@ export function WeatherForecast({ site, weather, loading, error, onRetry }) {
     <div className="sd-section weather-panel" aria-live="polite">
       <div className="weather-heading">
         <h5>Weather outlook</h5>
-        <span title="Conditions are refreshed automatically every 10 minutes">
+        <span title="Conditions are checked every 10 minutes; MET Norway forecast updates vary by location">
           {weather.current.time
-            ? `Updated ${weather.current.time.slice(11, 16)}${weather.timezone_abbreviation ? ` ${weather.timezone_abbreviation}` : ""}`
+            ? `Forecast ${weather.current.time.slice(11, 16)}${weather.timezone_abbreviation ? ` ${weather.timezone_abbreviation}` : ""}`
             : weather.timezone_abbreviation || weather.timezone || ""}
-          {" · 10 min"}
+          {" · MET Norway"}
         </span>
       </div>
       <div className="weather-current">
@@ -125,13 +123,13 @@ export function WeatherForecast({ site, weather, loading, error, onRetry }) {
         </div>
       </div>
       <div className="weather-metrics">
-        <span>Feels like <strong>{valueWithUnit(weather.current.apparent_temperature, "°")}</strong></span>
         <span>Humidity <strong>{valueWithUnit(weather.current.relative_humidity_2m, "%")}</strong></span>
         <span>Wind <strong>{valueWithUnit(weather.current.wind_speed_10m, " km/h")}</strong></span>
         <span>Rain <strong>{valueWithUnit(weather.current.precipitation, " mm")}</strong></span>
+        <span>Cloud cover <strong>{valueWithUnit(weather.current.cloud_cover, "%")}</strong></span>
       </div>
       <div className="weather-forecast" aria-label="Seven-day forecast">
-        {forecast.map(({ date, Icon, description, high, low, rainChance }) => (
+        {forecast.map(({ date, Icon, description, high, low, rain }) => (
           <div className="weather-day" key={date} title={description}>
             <span className="weather-day-name">{formatDay(date)}</span>
             <Icon size={16} aria-hidden="true" />
@@ -139,16 +137,16 @@ export function WeatherForecast({ site, weather, loading, error, onRetry }) {
               {valueWithUnit(high, "°")} <span>{valueWithUnit(low, "°")}</span>
             </span>
             <span className="weather-day-rain">
-              {Number.isFinite(rainChance) ? `${Math.round(rainChance)}% rain` : "—"}
+              {Number.isFinite(rain) ? `${rain.toFixed(1)} mm` : "—"}
             </span>
           </div>
         ))}
       </div>
       <div className="weather-attribution">
         Weather data by{" "}
-        <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>
+        <a href="https://api.met.no/" target="_blank" rel="noopener noreferrer">MET Norway</a>
         {" · "}
-        <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>
+        <a href="https://api.met.no/doc/License" target="_blank" rel="noopener noreferrer">CC BY 4.0 / NLOD 2.0</a>
       </div>
     </div>
   );
