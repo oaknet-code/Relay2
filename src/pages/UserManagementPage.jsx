@@ -29,7 +29,7 @@ const ROLES = [
   { value: "warehouse_manager", label: "Warehouse Manager", hint: "Manages stock, kits and links" },
   { value: "warehouse_operator", label: "Warehouse Operator", hint: "Allocates kits and dispatches" },
   { value: "project_manager", label: "Project Manager", hint: "Approves dispatch requests" },
-  { value: "ceo", label: "CEO", hint: "Approves costed dispatch requests" },
+  { value: "ceo", label: "CEO", hint: "Super-admin access; approves costed dispatch requests" },
   { value: "site_manager", label: "Site Manager", hint: "Confirms delivery for assigned sites" },
   { value: "site_engineer", label: "Site Engineer", hint: "Views kits, staging and field ops" },
   { value: "client", label: "Client", hint: "Sees only their own links" },
@@ -37,7 +37,7 @@ const ROLES = [
 ];
 const ROLE_LABELS = Object.fromEntries(ROLES.map((r) => [r.value, r.label]));
 // Only a super admin can create, edit or delete these.
-const PRIVILEGED_ROLES = ["super_admin", "admin"];
+const PRIVILEGED_ROLES = ["super_admin", "admin", "ceo"];
 const ROLE_COLORS = {
   super_admin: "var(--red)",
   admin: "var(--amber)",

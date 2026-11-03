@@ -175,6 +175,7 @@ function formFromPlan(plan, sites) {
       passengerIds: (trip.passengerIds || []).map(String),
       departTime: trip.departTime || "",
       overnight: trip.overnight || "",
+      outsideMetro: Boolean(trip.outsideMetro),
     })),
     accommodation: (plan.accommodation || []).map((row) => ({ ...row })),
     logistics: (plan.logistics || []).map((row) => ({ ...row })),
@@ -441,6 +442,7 @@ export function MovementPlanPage({ user }) {
       passengerIds: trip.passengerIds,
       departTime: trip.departTime,
       overnight: trip.overnight,
+      outsideMetro: Boolean(trip.outsideMetro),
     })),
     accommodation: form.accommodation,
     logistics: form.logistics,
@@ -685,6 +687,7 @@ export function MovementPlanPage({ user }) {
       passengerIds: [],
       departTime: "",
       overnight: "",
+      outsideMetro: false,
     }]);
   };
 
@@ -792,7 +795,7 @@ export function MovementPlanPage({ user }) {
           trip.driverName,
           approvedAssignments.filter((item) => String(item.vehicleId) === String(trip.vehicleId)).map((item) => item.tripId).join(", "),
         ])),
-        ...documentSection("4. Movement schedule", ["Trip", "Date", "Route", "Purpose", "Vehicle", "Passengers", "Depart", "Overnight"], approvedPlan.trips.map((trip) => [
+        ...documentSection("4. Movement schedule", ["Trip", "Date", "Route", "Purpose", "Vehicle", "Passengers", "Depart", "Overnight", "Outside Nairobi Metro"], approvedPlan.trips.map((trip) => [
           trip.tripId,
           trip.startDate === trip.endDate ? displayDate(trip.startDate) : `${displayDate(trip.startDate)} – ${displayDate(trip.endDate)}`,
           `${trip.originName} → ${trip.destinationSiteId} — ${trip.destinationName}`,
@@ -803,6 +806,7 @@ export function MovementPlanPage({ user }) {
           trip.passengerIds.map((id) => teamById.get(String(id))?.name).filter(Boolean).join(", "),
           trip.departTime,
           trip.overnight,
+          trip.outsideMetro ? "Yes — per diem applies" : "No",
         ])),
         ...documentSection("5. Vehicle allocation by day", ["Vehicle", ...planDates.map(displayDate)], assignedVehicles.map(([vehicleId, savedTrip]) => [
           savedTrip.plate || savedTrip.vehicle?.plate || vehicleById.get(vehicleId)?.plate || "—",
@@ -1047,6 +1051,17 @@ export function MovementPlanPage({ user }) {
                           <TextInput label="Purpose" value={trip.purpose} disabled={!canEdit} required onChange={(value) => updateTrip(rowIndex, "purpose", value)} />
                           <TextInput label="Departure time" type="time" value={trip.departTime} disabled={!canEdit} onChange={(value) => updateTrip(rowIndex, "departTime", value)} />
                           <TextInput label="Overnight location" value={trip.overnight} disabled={!canEdit} onChange={(value) => updateTrip(rowIndex, "overnight", value)} />
+                          <label className="mp-field mp-passengers">
+                            <span className="mp-checkbox-label">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(trip.outsideMetro)}
+                                disabled={!canEdit}
+                                onChange={(event) => updateTrip(rowIndex, "outsideMetro", event.target.checked)}
+                              />
+                              Outside Nairobi Metropolitan Area (driver per diem applies)
+                            </span>
+                          </label>
                           <fieldset className="mp-vehicle-picker mp-passengers">
                             <legend>Fleet vehicles for this trip</legend>
                             <div className="mp-member-results">

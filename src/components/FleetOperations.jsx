@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Fuel, Loader2, Plus, Wrench, Package, Gauge, AlertTriangle } from "lucide-react";
+import { Fuel, Loader2, Plus, Wrench, Package, Wallet, AlertTriangle } from "lucide-react";
 import {
-  adjustSparePartStock,
   createFuelLog,
   createMaintenanceRecord,
-  createMileageRecord,
-  createSparePart,
-  decideMileageRecord,
+  createPartSourcingRecord,
+  createPerDiemRecord,
+  decidePerDiemRecord,
   getDrivers,
   getFuelLogs,
   getMaintenanceRecords,
-  getMileageOptions,
-  getMileageRecords,
-  getSpareParts,
+  getPartSourcingRecords,
+  getPerDiemOptions,
+  getPerDiemRecords,
   getVehicles,
   updateMaintenanceStatus,
 } from "../services/api";
@@ -20,10 +19,17 @@ import {
 const today = () => new Date().toISOString().slice(0, 10);
 const EMPTY_FUEL = { vehicleId: "", date: today(), odometerKm: "", litres: "", totalCost: "", supplier: "", reference: "", notes: "" };
 const EMPTY_MAINTENANCE = { vehicleId: "", date: today(), description: "", vendor: "", cost: "", odometerKm: "", nextDueOdometerKm: "", notes: "" };
-const EMPTY_PART = { name: "", code: "", unit: "each", quantity: 0, reorderLevel: 0, unitCost: 0, notes: "" };
-const EMPTY_MILEAGE = { movementPlanId: "", tripId: "", vehicleId: "", driverId: "", startOdometerKm: "", endOdometerKm: "" };
+const EMPTY_PART_SOURCING = { vehicleId: "", maintenanceRecordId: "", date: today(), partDescription: "", source: "cfao", supplier: "", totalCost: "", reference: "", notes: "" };
+const EMPTY_PER_DIEM = { movementPlanId: "", tripId: "", vehicleId: "", driverId: "" };
 const formatKes = (value) => `KES ${Number(value || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const displayDate = (value) => value ? new Date(value).toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+const inclusiveDays = (start, end) => {
+  if (!start || !end) return 0;
+  const first = new Date(`${start.slice(0, 10)}T00:00:00.000Z`);
+  const last = new Date(`${end.slice(0, 10)}T00:00:00.000Z`);
+  const days = Math.floor((last.getTime() - first.getTime()) / 86400000) + 1;
+  return Number.isInteger(days) && days > 0 ? days : 0;
+};
 const driverLabel = (record) => `${record.driverName} · ${record.planReference} / ${record.tripId}`;
 
 function Status({ value }) {
@@ -36,36 +42,34 @@ export function FleetOperations({ user }) {
   const [drivers, setDrivers] = useState([]);
   const [fuelLogs, setFuelLogs] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
-  const [parts, setParts] = useState([]);
-  const [mileage, setMileage] = useState([]);
+  const [partSourcing, setPartSourcing] = useState([]);
+  const [perDiems, setPerDiems] = useState([]);
   const [plans, setPlans] = useState([]);
   const [fuelForm, setFuelForm] = useState({ ...EMPTY_FUEL });
   const [maintenanceForm, setMaintenanceForm] = useState({ ...EMPTY_MAINTENANCE });
-  const [partForm, setPartForm] = useState({ ...EMPTY_PART });
-  const [mileageForm, setMileageForm] = useState({ ...EMPTY_MILEAGE });
-  const [stockForm, setStockForm] = useState(null);
+  const [partSourcingForm, setPartSourcingForm] = useState({ ...EMPTY_PART_SOURCING });
+  const [perDiemForm, setPerDiemForm] = useState({ ...EMPTY_PER_DIEM });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const role = user?.role;
-  const canRecordFuel = ["warehouse_manager", "warehouse_operator", "site_engineer", "site_manager", "super_admin"].includes(role);
-  const canMaintain = ["warehouse_manager", "site_engineer", "super_admin"].includes(role);
-  const canManageParts = ["warehouse_manager", "super_admin"].includes(role);
-  const canAdjustParts = ["warehouse_manager", "warehouse_operator", "super_admin"].includes(role);
-  const canReviewMileage = ["warehouse_manager", "site_engineer", "super_admin"].includes(role);
+  const canRecordFuel = ["warehouse_manager", "warehouse_operator", "site_engineer", "site_manager", "admin", "ceo", "super_admin"].includes(role);
+  const canMaintain = ["warehouse_manager", "site_engineer", "admin", "ceo", "super_admin"].includes(role);
+  const canManageParts = ["warehouse_manager", "admin", "ceo", "super_admin"].includes(role);
+  const canReviewPerDiem = ["admin", "ceo", "super_admin"].includes(role);
 
   const load = async () => {
     try {
-      const [vehicleRows, driverRows, fuels, maintenanceRows, partRows, mileageRows, planRows] = await Promise.all([
-        getVehicles(), getDrivers(), getFuelLogs(), getMaintenanceRecords(), getSpareParts(), getMileageRecords(), getMileageOptions(),
+      const [vehicleRows, driverRows, fuels, maintenanceRows, partRows, perDiemRows, planRows] = await Promise.all([
+        getVehicles(), getDrivers(), getFuelLogs(), getMaintenanceRecords(), getPartSourcingRecords(), getPerDiemRecords(), getPerDiemOptions(),
       ]);
       setVehicles(vehicleRows);
       setDrivers(driverRows);
       setFuelLogs(fuels);
       setMaintenance(maintenanceRows);
-      setParts(partRows);
-      setMileage(mileageRows);
+      setPartSourcing(partRows);
+      setPerDiems(perDiemRows);
       setPlans(planRows);
       setError("");
     } catch (err) {
@@ -76,18 +80,17 @@ export function FleetOperations({ user }) {
   };
   useEffect(() => { load(); }, []);
 
-  const selectedPlan = plans.find((plan) => plan._id === mileageForm.movementPlanId);
-  const selectedTrip = selectedPlan?.trips.find((trip) => trip.tripId === mileageForm.tripId);
+  const selectedPlan = plans.find((plan) => plan._id === perDiemForm.movementPlanId);
+  const selectedTrip = selectedPlan?.trips.find((trip) => trip.tripId === perDiemForm.tripId);
   const selectedAssignment = selectedTrip?.assignments.find((assignment) =>
-    assignment.vehicleId === mileageForm.vehicleId && assignment.driverId === mileageForm.driverId
+    assignment.vehicleId === perDiemForm.vehicleId && assignment.driverId === perDiemForm.driverId
   );
-  const selectedDriver = drivers.find((driver) => driver._id === mileageForm.driverId);
-  const estimatedKm = Number(mileageForm.endOdometerKm) - Number(mileageForm.startOdometerKm);
-  const estimatedEarnings = estimatedKm > 0 && selectedDriver ? estimatedKm * selectedDriver.ratePerKm : 0;
-  const approvedEarnings = useMemo(() => mileage
+  const selectedDriver = drivers.find((driver) => driver._id === perDiemForm.driverId);
+  const selectedEligibleDays = inclusiveDays(selectedTrip?.startDate || "", selectedTrip?.endDate || "");
+  const estimatedPerDiem = selectedEligibleDays && selectedDriver ? selectedEligibleDays * selectedDriver.perDiemRate : 0;
+  const approvedPerDiems = useMemo(() => perDiems
     .filter((record) => record.status === "approved")
-    .reduce((sum, record) => sum + record.earnings, 0), [mileage]);
-  const lowStock = parts.filter((part) => part.quantity <= part.reorderLevel).length;
+    .reduce((sum, record) => sum + record.totalAmount, 0), [perDiems]);
 
   const run = async (action, success) => {
     setBusy(true);
@@ -123,43 +126,35 @@ export function FleetOperations({ user }) {
     if (success) setMaintenanceForm({ ...EMPTY_MAINTENANCE });
   };
 
-  const submitPart = async (event) => {
+  const submitPartSourcing = async (event) => {
     event.preventDefault();
-    const payload = { ...partForm, quantity: Number(partForm.quantity), reorderLevel: Number(partForm.reorderLevel), unitCost: Number(partForm.unitCost) };
-    const success = await run(() => createSparePart(payload), "Spare part added to stock.");
-    if (success) setPartForm({ ...EMPTY_PART });
+    const payload = {
+      ...partSourcingForm,
+      maintenanceRecordId: partSourcingForm.maintenanceRecordId || null,
+      totalCost: Number(partSourcingForm.totalCost),
+    };
+    const success = await run(() => createPartSourcingRecord(payload), "Workshop/imported part cost recorded.");
+    if (success) setPartSourcingForm({ ...EMPTY_PART_SOURCING });
   };
 
-  const submitStock = async (event) => {
+  const submitPerDiem = async (event) => {
     event.preventDefault();
-    if (!stockForm) return;
-    const { partId, ...payload } = stockForm;
-    const success = await run(() => adjustSparePartStock(partId, { ...payload, quantity: Number(payload.quantity) }), "Spare-part stock updated.");
-    if (success) setStockForm(null);
+    const success = await run(() => createPerDiemRecord(perDiemForm), "Driver per diem submitted for review.");
+    if (success) setPerDiemForm({ ...EMPTY_PER_DIEM });
   };
 
-  const submitMileage = async (event) => {
-    event.preventDefault();
-    const success = await run(() => createMileageRecord({
-      ...mileageForm,
-      startOdometerKm: Number(mileageForm.startOdometerKm),
-      endOdometerKm: Number(mileageForm.endOdometerKm),
-    }), "Mileage submitted for review.");
-    if (success) setMileageForm({ ...EMPTY_MILEAGE });
-  };
-
-  const reviewMileage = async (record, decision) => {
-    const comment = window.prompt(`Optional comment for ${decision} mileage for ${record.driverName}:`);
+  const reviewPerDiem = async (record, decision) => {
+    const comment = window.prompt(`Optional comment for ${decision} per diem for ${record.driverName}:`);
     if (comment === null) return;
-    await run(() => decideMileageRecord(record._id, decision, comment), `Mileage ${decision}.`);
+    await run(() => decidePerDiemRecord(record._id, decision, comment), `Driver per diem ${decision}.`);
   };
 
   const updatePlan = (planId) => {
     const plan = plans.find((item) => item._id === planId);
     const trip = plan?.trips[0];
     const assignment = trip?.assignments[0];
-    setMileageForm({
-      ...EMPTY_MILEAGE,
+    setPerDiemForm({
+      ...EMPTY_PER_DIEM,
       movementPlanId: planId,
       tripId: trip?.tripId || "",
       vehicleId: assignment?.vehicleId || "",
@@ -169,14 +164,14 @@ export function FleetOperations({ user }) {
   const updateTrip = (tripId) => {
     const trip = selectedPlan?.trips.find((item) => item.tripId === tripId);
     const assignment = trip?.assignments[0];
-    setMileageForm((current) => ({ ...current, tripId, vehicleId: assignment?.vehicleId || "", driverId: assignment?.driverId || "" }));
+    setPerDiemForm((current) => ({ ...current, tripId, vehicleId: assignment?.vehicleId || "", driverId: assignment?.driverId || "" }));
   };
 
   const tabs = [
     { id: "fuel", label: "Fuel", icon: Fuel },
-    { id: "mileage", label: "Mileage & earnings", icon: Gauge },
+    { id: "per-diem", label: "Driver per diem", icon: Wallet },
     { id: "maintenance", label: "Maintenance", icon: Wrench },
-    { id: "parts", label: "Spare parts", icon: Package },
+    { id: "parts", label: "Parts sourcing", icon: Package },
   ];
 
   if (loading) return <div className="fleet-operation-empty"><Loader2 size={18} className="spin" /> Loading fleet operations…</div>;
@@ -190,7 +185,6 @@ export function FleetOperations({ user }) {
           {tabs.map(({ id, label, icon: Icon }) => (
             <button type="button" role="tab" aria-selected={tab === id} className={`fleet-operation-tab ${tab === id ? "active" : ""}`} key={id} onClick={() => setTab(id)}>
               <Icon size={14} /> {label}
-              {id === "parts" && lowStock > 0 && <span className="fleet-operation-count">{lowStock}</span>}
             </button>
           ))}
         </div>
@@ -226,43 +220,51 @@ export function FleetOperations({ user }) {
           </>
         )}
 
-        {tab === "mileage" && (
+        {tab === "per-diem" && (
           <>
-            <div className="fleet-operation-summary">Approved driver earnings to date: <b>{formatKes(approvedEarnings)}</b>. Pending mileage is not included in payable income.</div>
+            <div className="fleet-operation-summary">
+              <span>Approved driver per diem to date</span>
+              <b>{formatKes(approvedPerDiems)}</b>
+            </div>
             {plans.length > 0 && (
-              <form className="fleet-operation-form" onSubmit={submitMileage}>
+              <form className="fleet-operation-form" onSubmit={submitPerDiem}>
                 <label>Published movement plan *
-                  <select className="form-input" required value={mileageForm.movementPlanId} onChange={(event) => updatePlan(event.target.value)}>
+                  <select className="form-input" required value={perDiemForm.movementPlanId} onChange={(event) => updatePlan(event.target.value)}>
                     <option value="">Select a plan</option>{plans.map((plan) => <option key={plan._id} value={plan._id}>{plan.reference} · {plan.title}</option>)}
                   </select>
                 </label>
-                <label>Trip *
-                  <select className="form-input" required value={mileageForm.tripId} onChange={(event) => updateTrip(event.target.value)} disabled={!selectedPlan}>
-                    <option value="">Select a trip</option>{selectedPlan?.trips.map((trip) => <option key={trip.tripId} value={trip.tripId}>{trip.tripId} · {trip.originName} to {trip.destinationName}</option>)}
+                <label>Trip outside Nairobi Metropolitan Area *
+                  <select className="form-input" required value={perDiemForm.tripId} onChange={(event) => updateTrip(event.target.value)} disabled={!selectedPlan}>
+                    <option value="">Select an eligible trip</option>{selectedPlan?.trips.map((trip) => <option key={trip.tripId} value={trip.tripId}>{trip.tripId} · {trip.originName} to {trip.destinationName}</option>)}
                   </select>
                 </label>
                 <label>Vehicle and driver *
-                  <select className="form-input" required value={`${mileageForm.vehicleId}|${mileageForm.driverId}`} onChange={(event) => {
+                  <select className="form-input" required value={`${perDiemForm.vehicleId}|${perDiemForm.driverId}`} onChange={(event) => {
                     const [vehicleId, driverId] = event.target.value.split("|");
-                    setMileageForm((current) => ({ ...current, vehicleId, driverId }));
+                    setPerDiemForm((current) => ({ ...current, vehicleId, driverId }));
                   }} disabled={!selectedTrip}>
                     <option value="|">Select assignment</option>{selectedTrip?.assignments.map((assignment) => <option key={`${assignment.vehicleId}|${assignment.driverId}`} value={`${assignment.vehicleId}|${assignment.driverId}`}>{assignment.vehiclePlate} · {assignment.driverName}</option>)}
                   </select>
                 </label>
-                <label>Start odometer (km) *<input className="form-input" type="number" min="0" required value={mileageForm.startOdometerKm} onChange={(event) => setMileageForm((current) => ({ ...current, startOdometerKm: event.target.value }))} /></label>
-                <label>End odometer (km) *<input className="form-input" type="number" min={Number(mileageForm.startOdometerKm) + 0.01} step="0.01" required value={mileageForm.endOdometerKm} onChange={(event) => setMileageForm((current) => ({ ...current, endOdometerKm: event.target.value }))} /></label>
-                <div className="fleet-operation-estimate"><span>Rate: {formatKes(selectedDriver?.ratePerKm || 0)} / km</span><strong>Estimated income: {formatKes(estimatedEarnings)}</strong></div>
-                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy || !selectedAssignment || !selectedDriver?.ratePerKm}><Plus size={13} /> Submit mileage</button></div>
+                <div className="fleet-operation-estimate">
+                  <span>{selectedTrip ? `${selectedEligibleDays} calendar day${selectedEligibleDays === 1 ? "" : "s"} · ${displayDate(selectedTrip.startDate)}–${displayDate(selectedTrip.endDate)}` : "Per diem is only available for trips marked outside Nairobi Metropolitan Area."}</span>
+                  <strong>{formatKes(selectedDriver?.perDiemRate || 0)} / day · Total {formatKes(estimatedPerDiem)}</strong>
+                </div>
+                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy || !selectedAssignment || !selectedDriver?.perDiemRate}><Plus size={13} /> Submit per diem</button></div>
               </form>
             )}
-            {plans.length === 0 && <div className="fleet-operation-help">Mileage can be recorded for published movement plans that include you. Drivers need a per-kilometre rate configured by a fleet manager.</div>}
+            {plans.length === 0 && <div className="fleet-operation-help">Per diem is calculated per driver, per calendar day, for published movement-plan trips marked outside Nairobi Metropolitan Area. Set the daily rate for each driver in Fleet → Drivers.</div>}
             <div className="fleet-operation-list">
-              {mileage.length === 0 && <div className="fleet-operation-empty">No mileage submitted yet.</div>}
-              {mileage.map((record) => (
+              {perDiems.length === 0 && <div className="fleet-operation-empty">No driver per diem submitted yet.</div>}
+              {perDiems.map((record) => (
                 <article className="fleet-operation-row" key={record._id}>
-                  <div className="fleet-operation-main"><strong>{driverLabel(record)} · {record.vehiclePlate}</strong><span>{record.distanceKm.toLocaleString()} km · {record.startOdometerKm.toLocaleString()} → {record.endOdometerKm.toLocaleString()} km · {formatKes(record.ratePerKm)} / km</span>{record.decisionComment && <small>Review note: {record.decisionComment}</small>}</div>
-                  <div className="fleet-operation-meta"><b>{formatKes(record.earnings)}</b><Status value={record.status} />
-                    {canReviewMileage && record.status === "pending" && <div className="fleet-operation-actions"><button className="btn sm amber" disabled={busy} onClick={() => reviewMileage(record, "approved")}>Approve</button><button className="btn sm ghost" disabled={busy} onClick={() => reviewMileage(record, "rejected")}>Reject</button></div>}
+                  <div className="fleet-operation-main">
+                    <strong>{driverLabel(record)} · {record.vehiclePlate}</strong>
+                    <span>{record.eligibleDays} day{record.eligibleDays === 1 ? "" : "s"} · {displayDate(record.startDate)}–{displayDate(record.endDate)} · {formatKes(record.ratePerDay)} / day</span>
+                    {record.decisionComment && <small>Review note: {record.decisionComment}</small>}
+                  </div>
+                  <div className="fleet-operation-meta"><b>{formatKes(record.totalAmount)}</b><Status value={record.status} />
+                    {canReviewPerDiem && record.status === "pending" && <div className="fleet-operation-actions"><button className="btn sm amber" disabled={busy} onClick={() => reviewPerDiem(record, "approved")}>Approve</button><button className="btn sm ghost" disabled={busy} onClick={() => reviewPerDiem(record, "rejected")}>Reject</button></div>}
                   </div>
                 </article>
               ))}
@@ -282,12 +284,13 @@ export function FleetOperations({ user }) {
                 <label>Date *<input className="form-input" type="date" required value={maintenanceForm.date} onChange={(event) => setMaintenanceForm((current) => ({ ...current, date: event.target.value }))} /></label>
                 <label className="wide">Work / issue *<input className="form-input" required maxLength={300} value={maintenanceForm.description} onChange={(event) => setMaintenanceForm((current) => ({ ...current, description: event.target.value }))} /></label>
                 <label>Vendor<input className="form-input" maxLength={120} value={maintenanceForm.vendor} onChange={(event) => setMaintenanceForm((current) => ({ ...current, vendor: event.target.value }))} /></label>
-                <label>Cost (KES)<input className="form-input" type="number" min="0" step="0.01" value={maintenanceForm.cost} onChange={(event) => setMaintenanceForm((current) => ({ ...current, cost: event.target.value }))} /></label>
+                <label>Labour / service cost (KES)<input className="form-input" type="number" min="0" step="0.01" value={maintenanceForm.cost} onChange={(event) => setMaintenanceForm((current) => ({ ...current, cost: event.target.value }))} /></label>
                 <label>Odometer (km)<input className="form-input" type="number" min="0" value={maintenanceForm.odometerKm} onChange={(event) => setMaintenanceForm((current) => ({ ...current, odometerKm: event.target.value }))} /></label>
                 <label>Next service (km)<input className="form-input" type="number" min="0" value={maintenanceForm.nextDueOdometerKm} onChange={(event) => setMaintenanceForm((current) => ({ ...current, nextDueOdometerKm: event.target.value }))} /></label>
                 <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy}><Plus size={13} /> Add maintenance record</button></div>
               </form>
             )}
+            {canMaintain && <div className="fleet-operation-help">Enter workshop labour or service charges here. Record separately sourced parts under Parts sourcing to avoid duplicating their cost.</div>}
             <div className="fleet-operation-list">
               {maintenance.length === 0 && <div className="fleet-operation-empty">No maintenance records.</div>}
               {maintenance.map((record) => (
@@ -303,30 +306,50 @@ export function FleetOperations({ user }) {
         {tab === "parts" && (
           <>
             {canManageParts && (
-              <form className="fleet-operation-form" onSubmit={submitPart}>
-                <label>Part name *<input className="form-input" required minLength={2} maxLength={120} value={partForm.name} onChange={(event) => setPartForm((current) => ({ ...current, name: event.target.value }))} /></label>
-                <label>Part code<input className="form-input" maxLength={40} value={partForm.code} onChange={(event) => setPartForm((current) => ({ ...current, code: event.target.value }))} /></label>
-                <label>Unit<input className="form-input" maxLength={20} value={partForm.unit} onChange={(event) => setPartForm((current) => ({ ...current, unit: event.target.value }))} /></label>
-                <label>Opening stock<input className="form-input" type="number" min="0" value={partForm.quantity} onChange={(event) => setPartForm((current) => ({ ...current, quantity: event.target.value }))} /></label>
-                <label>Reorder at<input className="form-input" type="number" min="0" value={partForm.reorderLevel} onChange={(event) => setPartForm((current) => ({ ...current, reorderLevel: event.target.value }))} /></label>
-                <label>Unit cost (KES)<input className="form-input" type="number" min="0" step="0.01" value={partForm.unitCost} onChange={(event) => setPartForm((current) => ({ ...current, unitCost: event.target.value }))} /></label>
-                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy}><Plus size={13} /> Add part</button></div>
+              <form className="fleet-operation-form" onSubmit={submitPartSourcing}>
+                <label>Vehicle *
+                  <select className="form-input" required value={partSourcingForm.vehicleId} onChange={(event) => setPartSourcingForm((current) => ({ ...current, vehicleId: event.target.value, maintenanceRecordId: "" }))}>
+                    <option value="">Select a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.plate} · {vehicle.make}</option>)}
+                  </select>
+                </label>
+                <label>Date *<input className="form-input" type="date" required value={partSourcingForm.date} onChange={(event) => setPartSourcingForm((current) => ({ ...current, date: event.target.value }))} /></label>
+                <label>Source *
+                  <select className="form-input" value={partSourcingForm.source} onChange={(event) => setPartSourcingForm((current) => ({ ...current, source: event.target.value }))}>
+                    <option value="cfao">CFAO workshop / parts</option><option value="isuzu">Isuzu workshop / parts</option><option value="imported">Imported</option>
+                  </select>
+                </label>
+                <label className="wide">Part(s) or work description *
+                  <input className="form-input" required maxLength={200} value={partSourcingForm.partDescription} onChange={(event) => setPartSourcingForm((current) => ({ ...current, partDescription: event.target.value }))} placeholder="Describe parts supplied or fitted" />
+                </label>
+                <label>Workshop / supplier<input className="form-input" maxLength={120} value={partSourcingForm.supplier} onChange={(event) => setPartSourcingForm((current) => ({ ...current, supplier: event.target.value }))} /></label>
+                <label>Total cost (KES) *
+                  <input className="form-input" type="number" min="0" step="0.01" required value={partSourcingForm.totalCost} onChange={(event) => setPartSourcingForm((current) => ({ ...current, totalCost: event.target.value }))} />
+                </label>
+                <label>Related maintenance record
+                  <select className="form-input" value={partSourcingForm.maintenanceRecordId} onChange={(event) => setPartSourcingForm((current) => ({ ...current, maintenanceRecordId: event.target.value }))} disabled={!partSourcingForm.vehicleId}>
+                    <option value="">Not linked</option>
+                    {maintenance.filter((record) => record.vehicle?._id === partSourcingForm.vehicleId).map((record) => (
+                      <option key={record._id} value={record._id}>{displayDate(record.date)} · {record.description}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>Invoice / reference<input className="form-input" maxLength={120} value={partSourcingForm.reference} onChange={(event) => setPartSourcingForm((current) => ({ ...current, reference: event.target.value }))} /></label>
+                <label className="wide">Notes<input className="form-input" maxLength={500} value={partSourcingForm.notes} onChange={(event) => setPartSourcingForm((current) => ({ ...current, notes: event.target.value }))} /></label>
+                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy}><Plus size={13} /> Record part cost</button></div>
               </form>
             )}
-            {stockForm && (
-              <form className="fleet-operation-form stock-adjustment" onSubmit={submitStock}>
-                <strong className="wide">{stockForm.partName} · Adjust stock</strong>
-                <label>Action<select className="form-input" value={stockForm.direction} onChange={(event) => setStockForm((current) => ({ ...current, direction: event.target.value }))}><option value="receive">Receive stock</option><option value="issue">Issue stock</option></select></label>
-                <label>Quantity<input className="form-input" type="number" min="0.01" step="0.01" required value={stockForm.quantity} onChange={(event) => setStockForm((current) => ({ ...current, quantity: event.target.value }))} /></label>
-                <div className="fleet-operation-actions"><button className="btn amber sm" type="submit" disabled={busy}>Update stock</button><button type="button" className="btn ghost sm" onClick={() => setStockForm(null)}>Cancel</button></div>
-              </form>
-            )}
+            <div className="fleet-operation-help">Parts are sourced for the specific repair through CFAO, Isuzu or imports; no depot stock is tracked here.</div>
             <div className="fleet-operation-list">
-              {parts.length === 0 && <div className="fleet-operation-empty">No spare parts in stock.</div>}
-              {parts.map((part) => (
-                <article className="fleet-operation-row" key={part._id}>
-                  <div className="fleet-operation-main"><strong>{part.name}{part.code ? ` · ${part.code}` : ""}</strong><span>{formatKes(part.unitCost)} per {part.unit} · reorder level {part.reorderLevel}</span></div>
-                  <div className="fleet-operation-meta"><b className={part.quantity <= part.reorderLevel ? "fleet-low-stock" : ""}>{part.quantity} {part.unit}</b>{part.quantity <= part.reorderLevel && <span className="fleet-status maintenance">Low stock</span>}{canAdjustParts && <button className="btn sm ghost" onClick={() => setStockForm({ partId: part._id, partName: part.name, direction: "receive", quantity: "" })}>Adjust</button>}</div>
+              {partSourcing.length === 0 && <div className="fleet-operation-empty">No workshop or imported-part costs recorded.</div>}
+              {partSourcing.map((record) => (
+                <article className="fleet-operation-row" key={record._id}>
+                  <div className="fleet-operation-main">
+                    <strong>{record.vehicle?.plate || "Vehicle"} · {record.partDescription}</strong>
+                    <span>{displayDate(record.date)} · {record.source === "cfao" ? "CFAO" : record.source === "isuzu" ? "Isuzu" : "Imported"}{record.supplier ? ` · ${record.supplier}` : ""}</span>
+                    {record.maintenanceRecord && <small>Maintenance: {record.maintenanceRecord.description}</small>}
+                    {record.reference && <small>Invoice / reference: {record.reference}</small>}
+                  </div>
+                  <div className="fleet-operation-meta"><b>{formatKes(record.totalCost)}</b></div>
                 </article>
               ))}
             </div>

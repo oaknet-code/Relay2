@@ -695,6 +695,7 @@ export const createVehicle = (payload) => fleetCall("post", "/api/fleet/vehicles
 export const updateVehicle = (id, payload) => fleetCall("put", `/api/fleet/vehicles/${id}`, payload);
 export const deleteVehicle = (id) => fleetCall("delete", `/api/fleet/vehicles/${id}`);
 export const getDrivers = () => fleetCall("get", "/api/fleet/drivers");
+export const getFleetTeamMembers = () => fleetCall("get", "/api/fleet/team-members");
 export const createDriver = (payload) => fleetCall("post", "/api/fleet/drivers", payload);
 export const updateDriver = (id, payload) => fleetCall("put", `/api/fleet/drivers/${id}`, payload);
 export const deleteDriver = (id) => fleetCall("delete", `/api/fleet/drivers/${id}`);
@@ -703,14 +704,13 @@ export const createFuelLog = (payload) => fleetCall("post", "/api/fleet/fuel", p
 export const getMaintenanceRecords = () => fleetCall("get", "/api/fleet/maintenance");
 export const createMaintenanceRecord = (payload) => fleetCall("post", "/api/fleet/maintenance", payload);
 export const updateMaintenanceStatus = (id, status) => fleetCall("patch", `/api/fleet/maintenance/${id}/status`, { status });
-export const getSpareParts = () => fleetCall("get", "/api/fleet/spare-parts");
-export const createSparePart = (payload) => fleetCall("post", "/api/fleet/spare-parts", payload);
-export const adjustSparePartStock = (id, payload) => fleetCall("patch", `/api/fleet/spare-parts/${id}/stock`, payload);
-export const getMileageRecords = () => fleetCall("get", "/api/fleet/mileage");
-export const getMileageOptions = () => fleetCall("get", "/api/fleet/mileage/options");
-export const createMileageRecord = (payload) => fleetCall("post", "/api/fleet/mileage", payload);
-export const decideMileageRecord = (id, decision, comment = "") =>
-  fleetCall("patch", `/api/fleet/mileage/${id}/decision`, { decision, comment });
+export const getPartSourcingRecords = () => fleetCall("get", "/api/fleet/parts-sourcing");
+export const createPartSourcingRecord = (payload) => fleetCall("post", "/api/fleet/parts-sourcing", payload);
+export const getPerDiemRecords = () => fleetCall("get", "/api/fleet/per-diem");
+export const getPerDiemOptions = () => fleetCall("get", "/api/fleet/per-diem/options");
+export const createPerDiemRecord = (payload) => fleetCall("post", "/api/fleet/per-diem", payload);
+export const decidePerDiemRecord = (id, decision, comment = "") =>
+  fleetCall("patch", `/api/fleet/per-diem/${id}/decision`, { decision, comment });
 
 const claimCall = async (method, url, body) => {
   try {

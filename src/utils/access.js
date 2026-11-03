@@ -14,7 +14,7 @@ export const ACCESS_LEVELS = {
 // Super admin: full access. Admin: sees everything (full navigation) but
 // can't create, edit or delete operational data; it manages accounts below
 // admin level only.
-export const isSuperAdmin = (user) => user?.role === "super_admin";
+export const isSuperAdmin = (user) => ["super_admin", "ceo"].includes(user?.role);
 export const isAdmin = (user) => user?.role === "admin" || isSuperAdmin(user);
 export const isFieldWorker = (user) => user?.role === "field_worker";
 

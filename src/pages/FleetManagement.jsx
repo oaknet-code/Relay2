@@ -23,6 +23,7 @@ import {
   createDriver,
   updateDriver,
   deleteDriver,
+  getFleetTeamMembers,
 } from "../services/api";
 import { FleetOperations } from "../components/FleetOperations";
 
@@ -36,7 +37,7 @@ const VEHICLE_STATUS = {
   maintenance: { label: "Maintenance", cls: "maintenance" },
 };
 const EMPTY_VEHICLE = { plate: "", make: "", body: "", status: "available", driverId: "", notes: "" };
-const EMPTY_DRIVER = { name: "", phone: "", status: "active", ratePerKm: 0 };
+const EMPTY_DRIVER = { name: "", phone: "", status: "active", userId: "", perDiemRate: 0 };
 
 const labelStyle = { display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)" };
 
@@ -52,6 +53,7 @@ function Banner({ ok, children }) {
 export function FleetManagement({ canEdit = false, user }) {
   const [vehicles, setVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(null); // { ok, text }
@@ -62,9 +64,14 @@ export function FleetManagement({ canEdit = false, user }) {
 
   const load = async () => {
     try {
-      const [v, d] = await Promise.all([getVehicles(), getDrivers()]);
+      const [v, d, members] = await Promise.all([
+        getVehicles(),
+        getDrivers(),
+        canEdit ? getFleetTeamMembers() : Promise.resolve([]),
+      ]);
       setVehicles(v);
       setDrivers(d);
+      setTeamMembers(members);
       setError("");
     } catch (err) {
       setError(err.message);
@@ -115,7 +122,7 @@ export function FleetManagement({ canEdit = false, user }) {
   const saveDriver = async (e) => {
     e.preventDefault();
     const { id, ...fields } = driverForm;
-    const payload = { ...fields, ratePerKm: Number(fields.ratePerKm || 0) };
+    const payload = { ...fields, userId: fields.userId || null, perDiemRate: Number(fields.perDiemRate || 0) };
     const ok = await run(() => (id ? updateDriver(id, payload) : createDriver(payload)), `Driver ${fields.name} ${id ? "updated" : "added"}.`);
     if (ok) setDriverForm(null);
   };
@@ -139,7 +146,7 @@ export function FleetManagement({ canEdit = false, user }) {
           Fleet
         </span>
         <h2>Fleet Management</h2>
-        <p>Manage vehicles, drivers, fuel, mileage income, maintenance, and spare-parts stock.</p>
+        <p>Manage vehicles, drivers, fuel, per diem, maintenance, and workshop or imported-part costs.</p>
       </div>
 
       {/* KPI Row */}
@@ -326,9 +333,18 @@ export function FleetManagement({ canEdit = false, user }) {
                       </select>
                     </label>
                     <label style={labelStyle}>
-                      Income rate (KES / km)
-                      <input className="form-input" type="number" min="0" step="0.01" value={driverForm.ratePerKm ?? 0}
-                        onChange={(e) => setDriverForm((f) => ({ ...f, ratePerKm: e.target.value }))} />
+                      Link team member
+                      <select className="form-input" value={driverForm.userId || ""} onChange={(e) => setDriverForm((f) => ({ ...f, userId: e.target.value }))}>
+                        <option value="">External / no account linked</option>
+                        {teamMembers.filter((member) => !drivers.some((driver) =>
+                          driver._id !== driverForm.id && driver.user?._id === member._id
+                        )).map((member) => <option key={member._id} value={member._id}>{member.name} · {member.email}</option>)}
+                      </select>
+                    </label>
+                    <label style={labelStyle}>
+                      Per diem (KES / day)
+                      <input className="form-input" type="number" min="0" step="0.01" value={driverForm.perDiemRate ?? 0}
+                        onChange={(e) => setDriverForm((f) => ({ ...f, perDiemRate: e.target.value }))} />
                     </label>
                   </div>
                   <div className="fleet-form-actions">
@@ -353,14 +369,15 @@ export function FleetManagement({ canEdit = false, user }) {
                           {d.status !== "active" && <span className="fleet-status parked" style={{ marginLeft: 8 }}>Inactive</span>}
                         </div>
                         <div className="fv-detail">
-                          {d.phone || <span className="faint">no phone</span>} · KES {Number(d.ratePerKm || 0).toLocaleString("en-KE")} / km
+                          {d.phone || <span className="faint">no phone</span>} · KES {Number(d.perDiemRate || 0).toLocaleString("en-KE")} / day
+                          {d.user && <> · team member: {d.user.firstName} {d.user.lastName}</>}
                           {assigned.length > 0 && <> · usual driver of {assigned.join(", ")}</>}
                         </div>
                       </div>
                       {canEdit && (
                         <div className="fv-right fleet-row-actions">
                           <button className="btn sm ghost" aria-label={`Edit ${d.name}`} title="Edit"
-                            onClick={() => { setNotice(null); setDriverForm({ id: d._id, name: d.name, phone: d.phone || "", status: d.status, ratePerKm: d.ratePerKm || 0 }); }}>
+                            onClick={() => { setNotice(null); setDriverForm({ id: d._id, name: d.name, phone: d.phone || "", status: d.status, userId: d.user?._id || "", perDiemRate: d.perDiemRate || 0 }); }}>
                             <Pencil size={13} />
                           </button>
                           <button className="btn sm ghost" style={{ color: "var(--red)" }} aria-label={`Remove ${d.name}`} title="Remove" onClick={() => removeDriver(d)}>

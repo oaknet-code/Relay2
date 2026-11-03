@@ -208,7 +208,7 @@ export default function App() {
 
       case "fleet":
         return canViewFleet(user) ? (
-          <FleetManagement canEdit={hasWriteAccess || user?.role === "warehouse_manager"} user={user} />
+          <FleetManagement canEdit={hasWriteAccess || ["admin", "warehouse_manager"].includes(user?.role)} user={user} />
         ) : (
           <MissionControl />
         );
@@ -265,7 +265,7 @@ export default function App() {
 
           title:
             isSuperAdmin(user)
-              ? "Super Admin · Full Access"
+              ? user?.role === "ceo" ? "CEO · Super Admin · Full Access" : "Super Admin · Full Access"
               : getAccessLevel(user) === "full"
               ? "Admin · View Access"
               : getAccessLevel(user) === "field_worker"
