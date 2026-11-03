@@ -11,7 +11,7 @@ import { SiteWorkPage } from "./pages/SiteWorkPage";
 
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
-import { canEdit, canViewAssetTracking, DISPATCH_CREATOR_ROLES, getAccessLevel, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin } from "./utils/access";
+import { canEdit, canViewAssetTracking, canViewFleet, DISPATCH_CREATOR_ROLES, getAccessLevel, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin } from "./utils/access";
 
 import "./styles/globals.css";
 import "./styles/layout.css";
@@ -29,6 +29,7 @@ const Dispatch = lazy(() => import("./pages/Dispatch").then((m) => ({ default: m
 const FleetManagement = lazy(() => import("./pages/FleetManagement").then((m) => ({ default: m.FleetManagement })));
 const AssetTracking = lazy(() => import("./pages/AssetTracking").then((m) => ({ default: m.AssetTracking })));
 const MovementPlanPage = lazy(() => import("./pages/MovementPlanPage").then((m) => ({ default: m.MovementPlanPage })));
+const ExpenseClaimsPage = lazy(() => import("./pages/ExpenseClaimsPage").then((m) => ({ default: m.ExpenseClaimsPage })));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const UserManagementPage = lazy(() =>
   import("./pages/UserManagementPage").then((m) => ({ default: m.UserManagementPage }))
@@ -206,14 +207,17 @@ export default function App() {
         );
 
       case "fleet":
-        return fullView ? (
-          <FleetManagement canEdit={hasWriteAccess} />
+        return canViewFleet(user) ? (
+          <FleetManagement canEdit={hasWriteAccess || user?.role === "warehouse_manager"} user={user} />
         ) : (
           <MissionControl />
         );
 
       case "movement-plan":
         return <MovementPlanPage user={user} />;
+
+      case "expense-claims":
+        return user?.role !== "client" ? <ExpenseClaimsPage user={user} /> : <MissionControl />;
 
       case "tracking":
         return canViewAssetTracking(user) ? (

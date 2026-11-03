@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MapPin,
   Truck,
@@ -24,6 +24,7 @@ import {
   updateDriver,
   deleteDriver,
 } from "../services/api";
+import { FleetOperations } from "../components/FleetOperations";
 
 // Company vehicles and drivers, from the database. Live tracking (map,
 // speed, fuel, trips) needs GPS trackers, which aren't connected yet — the
@@ -35,7 +36,7 @@ const VEHICLE_STATUS = {
   maintenance: { label: "Maintenance", cls: "maintenance" },
 };
 const EMPTY_VEHICLE = { plate: "", make: "", body: "", status: "available", driverId: "", notes: "" };
-const EMPTY_DRIVER = { name: "", phone: "", status: "active" };
+const EMPTY_DRIVER = { name: "", phone: "", status: "active", ratePerKm: 0 };
 
 const labelStyle = { display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--muted)" };
 
@@ -48,7 +49,7 @@ function Banner({ ok, children }) {
   );
 }
 
-export function FleetManagement({ canEdit = false }) {
+export function FleetManagement({ canEdit = false, user }) {
   const [vehicles, setVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,7 +115,8 @@ export function FleetManagement({ canEdit = false }) {
   const saveDriver = async (e) => {
     e.preventDefault();
     const { id, ...fields } = driverForm;
-    const ok = await run(() => (id ? updateDriver(id, fields) : createDriver(fields)), `Driver ${fields.name} ${id ? "updated" : "added"}.`);
+    const payload = { ...fields, ratePerKm: Number(fields.ratePerKm || 0) };
+    const ok = await run(() => (id ? updateDriver(id, payload) : createDriver(payload)), `Driver ${fields.name} ${id ? "updated" : "added"}.`);
     if (ok) setDriverForm(null);
   };
 
@@ -137,7 +139,7 @@ export function FleetManagement({ canEdit = false }) {
           Fleet
         </span>
         <h2>Fleet Management</h2>
-        <p>Company vehicles and drivers used for dispatch runs.</p>
+        <p>Manage vehicles, drivers, fuel, mileage income, maintenance, and spare-parts stock.</p>
       </div>
 
       {/* KPI Row */}
@@ -323,6 +325,11 @@ export function FleetManagement({ canEdit = false }) {
                         <option value="inactive">Inactive</option>
                       </select>
                     </label>
+                    <label style={labelStyle}>
+                      Income rate (KES / km)
+                      <input className="form-input" type="number" min="0" step="0.01" value={driverForm.ratePerKm ?? 0}
+                        onChange={(e) => setDriverForm((f) => ({ ...f, ratePerKm: e.target.value }))} />
+                    </label>
                   </div>
                   <div className="fleet-form-actions">
                     <button className="btn amber sm" type="submit" disabled={busy}>
@@ -346,14 +353,14 @@ export function FleetManagement({ canEdit = false }) {
                           {d.status !== "active" && <span className="fleet-status parked" style={{ marginLeft: 8 }}>Inactive</span>}
                         </div>
                         <div className="fv-detail">
-                          {d.phone || <span className="faint">no phone</span>}
+                          {d.phone || <span className="faint">no phone</span>} · KES {Number(d.ratePerKm || 0).toLocaleString("en-KE")} / km
                           {assigned.length > 0 && <> · usual driver of {assigned.join(", ")}</>}
                         </div>
                       </div>
                       {canEdit && (
                         <div className="fv-right fleet-row-actions">
                           <button className="btn sm ghost" aria-label={`Edit ${d.name}`} title="Edit"
-                            onClick={() => { setNotice(null); setDriverForm({ id: d._id, name: d.name, phone: d.phone || "", status: d.status }); }}>
+                            onClick={() => { setNotice(null); setDriverForm({ id: d._id, name: d.name, phone: d.phone || "", status: d.status, ratePerKm: d.ratePerKm || 0 }); }}>
                             <Pencil size={13} />
                           </button>
                           <button className="btn sm ghost" style={{ color: "var(--red)" }} aria-label={`Remove ${d.name}`} title="Remove" onClick={() => removeDriver(d)}>
@@ -369,6 +376,7 @@ export function FleetManagement({ canEdit = false }) {
           </div>
         </div>
       )}
+      {!loading && !error && <FleetOperations user={user} />}
     </div>
   );
 }

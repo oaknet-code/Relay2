@@ -413,6 +413,227 @@
   border-radius: 3px;
 }
 
+.fleet-operations {
+  margin-top: 16px;
+}
+
+.fleet-operation-tabs {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.fleet-operation-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  padding: 8px 11px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.fleet-operation-tab.active {
+  color: var(--amber);
+  border-color: rgba(95, 168, 255, 0.4);
+  background: rgba(95, 168, 255, 0.1);
+}
+
+.fleet-operation-count {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 9px;
+  padding: 0 4px;
+  color: var(--red);
+  background: rgba(255, 95, 95, 0.12);
+  font: 600 10px var(--mono);
+}
+
+.fleet-operation-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  margin: 0 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(8, 11, 16, 0.35);
+}
+
+.fleet-operation-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.fleet-operation-form .wide {
+  grid-column: 1 / -1;
+}
+
+.fleet-operation-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.fleet-operation-form .fleet-operation-actions {
+  grid-column: 1 / -1;
+}
+
+.fleet-operation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fleet-operation-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(8, 11, 16, 0.35);
+}
+
+.fleet-operation-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.fleet-operation-main strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.fleet-operation-main small {
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+.fleet-operation-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex: none;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.fleet-operation-meta .fleet-operation-actions {
+  justify-content: flex-end;
+}
+
+.fleet-operation-empty,
+.fleet-operation-help,
+.fleet-operation-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.fleet-operation-summary {
+  justify-content: space-between;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(51, 220, 174, 0.05);
+}
+
+.fleet-operation-summary b {
+  color: var(--teal);
+}
+
+.fleet-operation-help {
+  color: var(--faint);
+}
+
+.fleet-operation-estimate {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.fleet-operation-estimate strong {
+  color: var(--teal);
+}
+
+.fleet-operation-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(51, 220, 174, 0.25);
+  border-radius: 8px;
+  color: var(--teal);
+  background: rgba(51, 220, 174, 0.07);
+  font-size: 11px;
+}
+
+.fleet-operation-notice.error {
+  border-color: rgba(255, 95, 95, 0.25);
+  color: var(--red);
+  background: rgba(255, 95, 95, 0.07);
+}
+
+.fleet-low-stock {
+  color: var(--red);
+}
+
+@media (max-width: 760px) {
+  .fleet-operation-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .fleet-operation-form {
+    grid-template-columns: 1fr;
+  }
+
+  .fleet-operation-form .wide,
+  .fleet-operation-form .fleet-operation-actions,
+  .fleet-operation-estimate {
+    grid-column: auto;
+  }
+
+  .fleet-operation-row {
+    align-items: flex-start;
+  }
+
+  .fleet-operation-meta {
+    max-width: 45%;
+  }
+
+  .fleet-operation-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 /* Status Pill - Fleet specific */
 .fleet-status {
   display: inline-flex;

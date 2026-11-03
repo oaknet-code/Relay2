@@ -698,6 +698,34 @@ export const getDrivers = () => fleetCall("get", "/api/fleet/drivers");
 export const createDriver = (payload) => fleetCall("post", "/api/fleet/drivers", payload);
 export const updateDriver = (id, payload) => fleetCall("put", `/api/fleet/drivers/${id}`, payload);
 export const deleteDriver = (id) => fleetCall("delete", `/api/fleet/drivers/${id}`);
+export const getFuelLogs = () => fleetCall("get", "/api/fleet/fuel");
+export const createFuelLog = (payload) => fleetCall("post", "/api/fleet/fuel", payload);
+export const getMaintenanceRecords = () => fleetCall("get", "/api/fleet/maintenance");
+export const createMaintenanceRecord = (payload) => fleetCall("post", "/api/fleet/maintenance", payload);
+export const updateMaintenanceStatus = (id, status) => fleetCall("patch", `/api/fleet/maintenance/${id}/status`, { status });
+export const getSpareParts = () => fleetCall("get", "/api/fleet/spare-parts");
+export const createSparePart = (payload) => fleetCall("post", "/api/fleet/spare-parts", payload);
+export const adjustSparePartStock = (id, payload) => fleetCall("patch", `/api/fleet/spare-parts/${id}/stock`, payload);
+export const getMileageRecords = () => fleetCall("get", "/api/fleet/mileage");
+export const getMileageOptions = () => fleetCall("get", "/api/fleet/mileage/options");
+export const createMileageRecord = (payload) => fleetCall("post", "/api/fleet/mileage", payload);
+export const decideMileageRecord = (id, decision, comment = "") =>
+  fleetCall("patch", `/api/fleet/mileage/${id}/decision`, { decision, comment });
+
+const claimCall = async (method, url, body) => {
+  try {
+    const { data } = await axiosInstance[method](url, body);
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Expense claim request failed");
+  }
+};
+export const getExpenseClaimOptions = () => claimCall("get", "/api/expense-claims/options");
+export const getExpenseClaims = () => claimCall("get", "/api/expense-claims");
+export const createExpenseClaim = (payload) => claimCall("post", "/api/expense-claims", payload);
+export const decideExpenseClaim = (id, decision, comment = "") =>
+  claimCall("patch", `/api/expense-claims/${id}/decision`, { decision, comment });
+export const markExpenseClaimPaid = (id) => claimCall("patch", `/api/expense-claims/${id}/paid`, {});
 
 /**
  * Gate Pass (Dispatch)

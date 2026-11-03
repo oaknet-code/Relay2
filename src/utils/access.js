@@ -30,12 +30,14 @@ export const canEdit = (user) => isSuperAdmin(user);
 
 export const CLIENT_NAV_IDS = ["control", "links"];
 // Field worker accounts are restricted to solely the Site Work page —
-// no Mission Control, no other pipeline stages, no admin views.
-export const FIELD_WORKER_NAV_IDS = ["site-work"];
+// and their own expense claims.
+export const FIELD_WORKER_NAV_IDS = ["site-work", "expense-claims"];
 const MOVEMENT_PLAN_ROLES = new Set(["super_admin", "admin", "warehouse_manager", "warehouse_operator", "site_engineer"]);
 export const ASSET_TRACKING_ROLES = new Set(["warehouse_manager", "warehouse_operator", "project_manager", "ceo", "site_manager"]);
 export const DISPATCH_CREATOR_ROLES = new Set(["warehouse_manager", "warehouse_operator"]);
+export const FLEET_VIEW_ROLES = new Set(["warehouse_manager", "warehouse_operator", "site_engineer", "project_manager", "ceo", "site_manager"]);
 export const canViewAssetTracking = (user) => hasFullView(user) || ASSET_TRACKING_ROLES.has(user?.role);
+export const canViewFleet = (user) => hasFullView(user) || FLEET_VIEW_ROLES.has(user?.role);
 
 export const getAllowedNavigation = (navigation, user) => {
   if (isFieldWorker(user)) {
@@ -44,12 +46,15 @@ export const getAllowedNavigation = (navigation, user) => {
   if (MOVEMENT_PLAN_ROLES.has(user?.role) && !isAdmin(user)) {
     return navigation.filter(item =>
       item.id === "movement-plan" ||
+      item.id === "expense-claims" ||
+      (FLEET_VIEW_ROLES.has(user.role) && item.id === "fleet") ||
       (ASSET_TRACKING_ROLES.has(user.role) && item.id === "tracking") ||
       (DISPATCH_CREATOR_ROLES.has(user.role) && item.id === "dispatch")
     );
   }
   if (ASSET_TRACKING_ROLES.has(user?.role) && !isAdmin(user)) {
-    return navigation.filter(item => item.id === "tracking");
+    return navigation.filter(item => item.id === "tracking" || item.id === "expense-claims" ||
+      (FLEET_VIEW_ROLES.has(user.role) && item.id === "fleet"));
   }
   return hasFullView(user) ? navigation : navigation.filter(item => CLIENT_NAV_IDS.includes(item.id));
 };
