@@ -6,13 +6,11 @@ import {
   createPartSourcingRecord,
   createPerDiemRecord,
   decidePerDiemRecord,
-  getDrivers,
   getFuelLogs,
   getMaintenanceRecords,
   getPartSourcingRecords,
   getPerDiemOptions,
   getPerDiemRecords,
-  getVehicles,
   updateMaintenanceStatus,
 } from "../services/api";
 
@@ -39,10 +37,11 @@ function Status({ value }) {
   return <span className={`fleet-status ${value === "approved" || value === "completed" ? "moving" : value === "rejected" || value === "open" ? "maintenance" : "parked"}`}>{value}</span>;
 }
 
-export function FleetOperations({ user }) {
+// Vehicles and drivers come from the Fleet page so both stay in sync;
+// onFleetChange reloads them there (e.g. after maintenance changes a
+// vehicle's status).
+export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChange }) {
   const [tab, setTab] = useState("fuel");
-  const [vehicles, setVehicles] = useState([]);
-  const [drivers, setDrivers] = useState([]);
   const [fuelLogs, setFuelLogs] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
   const [partSourcing, setPartSourcing] = useState([]);
@@ -64,11 +63,9 @@ export function FleetOperations({ user }) {
 
   const load = async () => {
     try {
-      const [vehicleRows, driverRows, fuels, maintenanceRows, partRows, perDiemRows, planRows] = await Promise.all([
-        getVehicles(), getDrivers(), getFuelLogs(), getMaintenanceRecords(), getPartSourcingRecords(), getPerDiemRecords(), getPerDiemOptions(),
+      const [fuels, maintenanceRows, partRows, perDiemRows, planRows] = await Promise.all([
+        getFuelLogs(), getMaintenanceRecords(), getPartSourcingRecords(), getPerDiemRecords(), getPerDiemOptions(),
       ]);
-      setVehicles(vehicleRows);
-      setDrivers(driverRows);
       setFuelLogs(fuels);
       setMaintenance(maintenanceRows);
       setPartSourcing(partRows);
@@ -100,7 +97,7 @@ export function FleetOperations({ user }) {
     setNotice("");
     try {
       const result = await action();
-      await load();
+      await Promise.all([load(), onFleetChange?.()]);
       setNotice(result?.notificationWarning ? `${success} ${result.notificationWarning}` : success);
       return true;
     } catch (err) {
@@ -265,6 +262,7 @@ export function FleetOperations({ user }) {
                     <strong>{driverLabel(record)} · {record.vehiclePlate}</strong>
                     <span>{record.eligibleDays} day{record.eligibleDays === 1 ? "" : "s"} · {displayDate(record.startDate)}–{displayDate(record.endDate)} · {formatKes(record.ratePerDay)} / day · Submitted by {record.submittedByName || userLabel(record.submittedBy)}</span>
                     {record.decisionComment && <small>Review note: {record.decisionComment}</small>}
+                    {record.status === "rejected" && <small>To resubmit, choose the same plan, trip and vehicle in the form above.</small>}
                   </div>
                   <div className="fleet-operation-meta"><b>{formatKes(record.totalAmount)}</b><Status value={record.status} />
                     {canReviewPerDiem && record.status === "pending" && <div className="fleet-operation-actions"><button className="btn sm amber" disabled={busy} onClick={() => reviewPerDiem(record, "approved")}>Approve</button><button className="btn sm ghost" disabled={busy} onClick={() => reviewPerDiem(record, "rejected")}>Reject</button></div>}

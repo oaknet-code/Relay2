@@ -83,6 +83,19 @@ export function FleetManagement({ canEdit = false, user }) {
 
   useEffect(() => { load(); }, []);
 
+  // Called by Fleet Operations after it changes something (e.g. maintenance
+  // moves a vehicle in or out of "maintenance"). Unlike load(), a failure
+  // here keeps the page up and just says so.
+  const refreshFleet = async () => {
+    try {
+      const [v, d] = await Promise.all([getVehicles(), getDrivers()]);
+      setVehicles(v);
+      setDrivers(d);
+    } catch (err) {
+      setNotice({ ok: false, text: `Couldn't refresh vehicles and drivers: ${err.message}` });
+    }
+  };
+
   const counts = useMemo(() => ({
     all: vehicles.length,
     available: vehicles.filter((v) => v.status === "available").length,
@@ -395,7 +408,7 @@ export function FleetManagement({ canEdit = false, user }) {
         </div>
       )}
       {!loading && !error && <FleetSchedule vehicles={vehicles} />}
-      {!loading && !error && <FleetOperations user={user} />}
+      {!loading && !error && <FleetOperations user={user} vehicles={vehicles} drivers={drivers} onFleetChange={refreshFleet} />}
     </div>
   );
 }
