@@ -559,6 +559,65 @@
   background: rgba(51, 220, 174, 0.05);
 }
 
+.fleet-schedule {
+  margin-top: 16px;
+}
+
+.fleet-schedule-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.fleet-schedule-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.fleet-schedule-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.fleet-schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.fleet-schedule-table th,
+.fleet-schedule-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.fleet-schedule-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.fleet-schedule-table td {
+  color: var(--ink);
+}
+
+.fleet-schedule-table td small {
+  display: block;
+  margin-top: 3px;
+  color: var(--faint);
+}
+
+.fleet-schedule-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 .fleet-operation-summary b {
   color: var(--teal);
 }
@@ -607,6 +666,10 @@
   .fleet-operation-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .fleet-schedule-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 520px) {
@@ -618,6 +681,10 @@
   .fleet-operation-form .fleet-operation-actions,
   .fleet-operation-estimate {
     grid-column: auto;
+  }
+
+  .fleet-schedule-filters {
+    grid-template-columns: 1fr;
   }
 
   .fleet-operation-row {

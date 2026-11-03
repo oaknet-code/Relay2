@@ -691,6 +691,14 @@ const fleetCall = async (method, url, body) => {
   }
 };
 export const getVehicles = () => fleetCall("get", "/api/fleet/vehicles");
+export const getFleetSchedule = async (params) => {
+  try {
+    const { data } = await axiosInstance.get("/api/fleet/schedule", { params });
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Fleet schedule request failed");
+  }
+};
 export const createVehicle = (payload) => fleetCall("post", "/api/fleet/vehicles", payload);
 export const updateVehicle = (id, payload) => fleetCall("put", `/api/fleet/vehicles/${id}`, payload);
 export const deleteVehicle = (id) => fleetCall("delete", `/api/fleet/vehicles/${id}`);
