@@ -724,6 +724,27 @@
   text-align: right;
 }
 
+.vehicle-transactions-filters {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+}
+
+.vehicle-transactions-desc {
+  min-width: 220px;
+  white-space: normal !important;
+}
+
+.vehicle-summary-plate {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--teal);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .vehicle-summary-table tfoot td {
   border-top: 1px solid var(--line);
   border-bottom: 0;

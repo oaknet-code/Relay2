@@ -699,6 +699,14 @@ export const getVehicleSummary = async (params) => {
     throw new Error(error.response?.data?.message || "Vehicle summary request failed");
   }
 };
+export const getFleetTransactions = async (params) => {
+  try {
+    const { data } = await axiosInstance.get("/api/fleet/transactions", { params });
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Fleet transactions request failed");
+  }
+};
 export const getFleetSchedule = async (params) => {
   try {
     const { data } = await axiosInstance.get("/api/fleet/schedule", { params });

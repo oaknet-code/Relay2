@@ -28,6 +28,7 @@ import {
 import { FleetOperations } from "../components/FleetOperations";
 import { FleetSchedule } from "../components/FleetSchedule";
 import { VehicleSummary } from "../components/VehicleSummary";
+import { VehicleTransactions } from "../components/VehicleTransactions";
 
 // Company vehicles and drivers, from the database. Live tracking (map,
 // speed, fuel, trips) needs GPS trackers, which aren't connected yet — the
@@ -63,6 +64,9 @@ export function FleetManagement({ canEdit = false, user }) {
   const [vehicleForm, setVehicleForm] = useState(null); // { id?, ...fields } while adding/editing
   const [driverForm, setDriverForm] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Set when a plate is clicked in the Vehicle summary; new object each time
+  // so clicking the same plate again still scrolls to the transactions.
+  const [transactionsRequest, setTransactionsRequest] = useState(null);
 
   const load = async () => {
     try {
@@ -408,7 +412,8 @@ export function FleetManagement({ canEdit = false, user }) {
           </div>
         </div>
       )}
-      {!loading && !error && <VehicleSummary vehicles={vehicles} />}
+      {!loading && !error && <VehicleSummary vehicles={vehicles} onViewTransactions={(req) => setTransactionsRequest({ ...req })} />}
+      {!loading && !error && <VehicleTransactions vehicles={vehicles} request={transactionsRequest} />}
       {!loading && !error && <FleetSchedule vehicles={vehicles} />}
       {!loading && !error && <FleetOperations user={user} vehicles={vehicles} drivers={drivers} onFleetChange={refreshFleet} />}
     </div>

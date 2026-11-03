@@ -16,7 +16,7 @@ const kes = (value) => `KES ${Number(value || 0).toLocaleString("en-KE", { maxim
 const num = (value, digits = 0) => Number(value || 0).toLocaleString("en-KE", { maximumFractionDigits: digits });
 const EMPTY_RANGE = { from: "", to: "" };
 
-export function VehicleSummary({ vehicles }) {
+export function VehicleSummary({ vehicles, onViewTransactions }) {
   const [range, setRange] = useState(EMPTY_RANGE);
   const [applied, setApplied] = useState(EMPTY_RANGE);
   const [summary, setSummary] = useState(null);
@@ -80,6 +80,7 @@ export function VehicleSummary({ vehicles }) {
         <p className="mp-description">
           Running costs per vehicle for {periodLabel}. Maintenance is labour and service only; parts are counted separately.
           {showPerDiem ? " Per diem counts approved amounts." : ""}
+          {onViewTransactions ? " Click a plate to see its transactions." : ""}
         </p>
         <form className="fleet-schedule-filters vehicle-summary-filters" onSubmit={submit}>
           <label>From<input className="form-input" type="date" value={range.from} max={range.to || undefined}
@@ -133,7 +134,13 @@ export function VehicleSummary({ vehicles }) {
                     return (
                       <tr key={r.vehicleId}>
                         <td>
-                          <strong>{r.plate}</strong> <span className={`fleet-status ${st.cls}`}>{st.label}</span>
+                          {onViewTransactions ? (
+                            <button type="button" className="vehicle-summary-plate" title={`View ${r.plate} transactions`}
+                              onClick={() => onViewTransactions({ vehicleId: r.vehicleId, from: applied.from, to: applied.to })}>
+                              {r.plate}
+                            </button>
+                          ) : <strong>{r.plate}</strong>}{" "}
+                          <span className={`fleet-status ${st.cls}`}>{st.label}</span>
                           <small>{r.make}{r.body ? ` · ${r.body}` : ""}{r.driverName ? ` · ${r.driverName}` : ""}</small>
                         </td>
                         <td>
