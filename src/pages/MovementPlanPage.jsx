@@ -16,6 +16,7 @@ import {
 import { Check, Download, FileText, Plus, Send, Trash2 } from "lucide-react";
 import {
   createMovementPlan,
+  deleteMovementPlan,
   decideMovementPlan,
   getApprovedMovementPlan,
   getMovementPlanOptions,
@@ -376,19 +377,49 @@ export function MovementPlanPage({ user }) {
     setNotice("");
   };
 
-  const createDraft = async () => {
+  const removeDraft = async (selected) => {
+    if (!selected?._id || selected.status !== "draft") return;
+    if (!window.confirm(`Delete draft ${selected.reference}? This cannot be undone.`)) return;
     setWorking(true);
     setError("");
     setNotice("");
     try {
-      const created = await createMovementPlan();
-      await refresh(created._id);
-      setNotice(`Draft ${created.reference} created.`);
+      await deleteMovementPlan(selected._id);
+      const remaining = plans.filter((item) => item._id !== selected._id);
+      setPlans(remaining);
+      if (plan?._id === selected._id) {
+        const nextPlan = remaining[0] || null;
+        setPlan(nextPlan);
+        setForm(nextPlan ? formFromPlan(nextPlan, options.sites) : EMPTY_FORM);
+        setDirty(false);
+      }
+      setNotice(`Draft ${selected.reference} deleted.`);
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
       setWorking(false);
     }
+  };
+
+  const createDraft = async () => {
+    setPlan({
+      _id: null,
+      reference: "Assigned when saved",
+      status: "unsaved",
+      preparedBy: {
+        name: user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "Current user",
+      },
+      team: [],
+      trips: [],
+      approvals: [],
+      rejectionReason: "",
+      canEditDraft: true,
+    });
+    setForm({ ...EMPTY_FORM, teamUserIds: [], externalTeam: [], trips: [], accommodation: [], logistics: [] });
+    setDirty(false);
+    setNotice("");
+    setError("");
+    setMemberSearch("");
   };
 
   const payload = {
@@ -421,9 +452,13 @@ export function MovementPlanPage({ user }) {
     setError("");
     setNotice("");
     try {
-      const saved = await updateMovementPlan(plan._id, payload);
+      const saved = plan._id
+        ? await updateMovementPlan(plan._id, payload)
+        : await createMovementPlan(payload);
       setPlan(saved);
-      setPlans((current) => current.map((item) => item._id === saved._id ? saved : item));
+      setPlans((current) => current.some((item) => item._id === saved._id)
+        ? current.map((item) => item._id === saved._id ? saved : item)
+        : [saved, ...current]);
       setForm(formFromPlan(saved, options.sites));
       setDirty(false);
       setNotice(`Draft ${saved.reference} saved.`);
@@ -819,6 +854,7 @@ export function MovementPlanPage({ user }) {
   };
 
   const statusLabel = (status) => ({
+    unsaved: "Not saved",
     draft: "Draft",
     pending_approval: "Awaiting approval",
     rejected: "Rejected — revise and resubmit",
@@ -831,7 +867,7 @@ export function MovementPlanPage({ user }) {
       <div className="view-head mp-head">
         <span className="tagchip"><FileText size={11} /> Operations · Movement planning</span>
         <h2>Movement Plan</h2>
-        <p>Sites, vehicle and driver information, and schedule availability are loaded from Relay. Plans require approval before download or publication.</p>
+        <p>Sites, vehicle and driver information, and schedule availability are loaded from Relay. New plans are saved only when you choose Save draft or Submit for approval.</p>
         {canPrepare && (
           <button className="btn amber mp-export" type="button" onClick={createDraft} disabled={working || loading}>
             <Plus size={15} /> New movement plan
@@ -850,16 +886,28 @@ export function MovementPlanPage({ user }) {
             <div className="panel-b">
               {plans.length === 0 && <p className="mp-description">No movement plans yet.</p>}
               {plans.map((item) => (
-                <button
-                  type="button"
-                  key={item._id}
-                  className={`mp-plan-card${plan?._id === item._id ? " selected" : ""}`}
-                  onClick={() => selectPlan(item)}
-                >
-                  <strong>{item.reference}</strong>
-                  <span>{item.project || item.title}</span>
-                  <small>{statusLabel(item.status)}</small>
-                </button>
+                <div className="mp-plan-card-wrap" key={item._id}>
+                  <button
+                    type="button"
+                    className={`mp-plan-card${plan?._id === item._id ? " selected" : ""}`}
+                    onClick={() => selectPlan(item)}
+                  >
+                    <strong>{item.reference}</strong>
+                    <span>{item.project || item.title}</span>
+                    <small>{statusLabel(item.status)}</small>
+                  </button>
+                  {item.status === "draft" && item.canEditDraft && (
+                    <button
+                      className="btn sm ghost mp-delete-draft"
+                      type="button"
+                      disabled={working}
+                      aria-label={`Delete draft ${item.reference}`}
+                      onClick={() => removeDraft(item)}
+                    >
+                      <Trash2 size={14} /> Delete draft
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </aside>
@@ -868,7 +916,7 @@ export function MovementPlanPage({ user }) {
             <section className="panel mp-empty-state">
               <FileText size={25} />
               <h3>Select a movement plan</h3>
-              {canPrepare && <p>Create a draft to start planning dates, routes, vehicles, and team.</p>}
+              {canPrepare && <p>Start a plan to enter dates, routes, vehicles, and team. It will not be saved until you choose Save draft or Submit for approval.</p>}
             </section>
           )}
 

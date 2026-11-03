@@ -594,6 +594,11 @@ export const updateMovementPlan = async (id, payload) => {
   return data;
 };
 
+export const deleteMovementPlan = async (id) => {
+  const { data } = await axiosInstance.delete(`/api/movement-plans/${encodeURIComponent(id)}`);
+  return data;
+};
+
 export const submitMovementPlan = async (id) => {
   const { data } = await axiosInstance.post(`/api/movement-plans/${encodeURIComponent(id)}/submit`);
   return data;

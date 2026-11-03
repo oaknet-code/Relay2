@@ -27,12 +27,15 @@
   overflow: hidden;
 }
 
+.mp-plan-card-wrap {
+  margin-bottom: 8px;
+}
+
 .mp-plan-card {
   display: grid;
   width: 100%;
   gap: 5px;
   padding: 11px 12px;
-  margin-bottom: 8px;
   text-align: left;
   color: var(--ink);
   background: var(--bg);
@@ -59,6 +62,10 @@
 .mp-plan-card small {
   color: var(--muted);
   font-size: 10px;
+}
+
+.mp-delete-draft {
+  margin-top: 6px;
 }
 
 .mp-form-column {
