@@ -672,6 +672,102 @@
   color: var(--red);
 }
 
+/* Fleet page sections: one tab per area. Scrolls sideways inside itself on
+   narrow screens instead of widening the page. */
+.fleet-tabs {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 16px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.fleet-tabs .fleet-operation-tab {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The tab bar already spaces the content below it. */
+.fleet-tab-body > .panel:first-child {
+  margin-top: 0;
+}
+
+.panel-h .ff-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font: 600 10px var(--mono);
+}
+
+/* Pop-up forms */
+.fleet-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 16px 16px;
+  overflow-y: auto;
+  background: rgba(6, 17, 31, 0.8);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.fleet-modal {
+  width: 100%;
+  max-width: 560px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+}
+
+.fleet-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 18px 0;
+}
+
+.fleet-modal-head h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.fleet-modal-description {
+  margin: 6px 18px 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.fleet-modal-body {
+  padding: 14px 18px 18px;
+}
+
+.fleet-operation-form.fleet-modal-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.fleet-modal-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 .vehicle-summary {
   margin-top: 16px;
 }
@@ -788,6 +884,14 @@
   .fleet-operation-summary {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .fleet-operation-form.fleet-modal-form {
+    grid-template-columns: 1fr;
+  }
+
+  .fleet-modal-overlay {
+    padding-top: 16px;
   }
 }
 

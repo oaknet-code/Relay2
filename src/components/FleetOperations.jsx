@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Fuel, Loader2, Plus, Wrench, Package, Wallet, AlertTriangle } from "lucide-react";
+import { Fuel, Loader2, Plus, Wrench, Package, Wallet, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { FleetModal } from "./FleetModal";
 import {
   createFuelLog,
   createMaintenanceRecord,
@@ -38,11 +39,13 @@ function Status({ value, label = value }) {
   return <span className={`fleet-status ${["approved", "completed", "paid"].includes(value) ? "moving" : value === "rejected" || value === "open" ? "maintenance" : "parked"}`}>{label}</span>;
 }
 
-// Vehicles and drivers come from the Fleet page so both stay in sync;
-// onFleetChange reloads them there (e.g. after maintenance changes a
-// vehicle's status).
-export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChange }) {
-  const [tab, setTab] = useState("fuel");
+// One Fleet page tab ("fuel", "maintenance", "parts" or "per-diem"): the
+// records as a list, with the form to add one in a pop-up. Vehicles and
+// drivers come from the Fleet page so both stay in sync; onFleetChange
+// reloads them there (e.g. after maintenance changes a vehicle's status).
+export function FleetOperations({ user, section = "fuel", vehicles = [], drivers = [], onFleetChange }) {
+  const [formOpen, setFormOpen] = useState(null); // section whose form is showing
+  const [formError, setFormError] = useState("");
   const [fuelLogs, setFuelLogs] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
   const [partSourcing, setPartSourcing] = useState([]);
@@ -57,7 +60,7 @@ export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChan
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState(null); // { ok, text }
   const role = user?.role;
   const canRecordFuel = ["warehouse_manager", "warehouse_operator", "site_engineer", "site_manager", "admin", "ceo", "super_admin"].includes(role);
   const canMaintain = ["warehouse_manager", "site_engineer", "admin", "ceo", "super_admin"].includes(role);
@@ -97,20 +100,37 @@ export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChan
     .filter((record) => record.status === "approved")
     .reduce((sum, record) => sum + record.totalAmount, 0), [perDiems]);
 
+  // Errors from a form stay in its pop-up so nothing typed is lost; a
+  // success closes the pop-up and shows the message on the tab.
   const run = async (action, success) => {
+    const fromForm = Boolean(formOpen);
     setBusy(true);
-    setNotice("");
+    setNotice(null);
+    setFormError("");
     try {
       const result = await action();
       await Promise.all([load(), onFleetChange?.()]);
-      setNotice(result?.notificationWarning ? `${success} ${result.notificationWarning}` : success);
+      setFormOpen(null);
+      setNotice({ ok: true, text: result?.notificationWarning ? `${success} ${result.notificationWarning}` : success });
       return true;
     } catch (err) {
-      setNotice(err.message);
+      if (fromForm) setFormError(err.message);
+      else setNotice({ ok: false, text: err.message });
       return false;
     } finally {
       setBusy(false);
     }
+  };
+
+  const openForm = (name) => {
+    setNotice(null);
+    setFormError("");
+    setFormOpen(name);
+  };
+  const closeForm = () => {
+    if (busy) return;
+    setFormOpen(null);
+    setFormError("");
   };
 
   const submitFuel = async (event) => {
@@ -175,104 +195,84 @@ export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChan
     setPerDiemForm((current) => ({ ...current, tripId, vehicleId: assignment?.vehicleId || "", driverId: assignment?.driverId || "" }));
   };
 
-  const tabs = [
-    { id: "fuel", label: "Fuel", icon: Fuel },
-    { id: "per-diem", label: "Driver per diem", icon: Wallet },
-    { id: "maintenance", label: "Maintenance", icon: Wrench },
-    { id: "parts", label: "Parts sourcing", icon: Package },
-  ];
+  const SECTIONS = {
+    fuel: {
+      title: "Fuel", icon: Fuel, count: fuelLogs.length,
+      intro: "Each fuel entry is also submitted as an expense claim for CEO review.",
+      action: canRecordFuel && { label: "Record fuel", form: "fuel" },
+    },
+    maintenance: {
+      title: "Maintenance", icon: Wrench, count: maintenance.length,
+      intro: "Workshop labour and service charges. Parts bought for a repair go under Parts.",
+      action: canMaintain && { label: "Add maintenance", form: "maintenance" },
+    },
+    parts: {
+      title: "Parts", icon: Package, count: partSourcing.length,
+      intro: "Parts sourced for a specific repair through CFAO, Isuzu or imports. No depot stock is tracked here.",
+      action: canManageParts && { label: "Record part cost", form: "parts" },
+    },
+    "per-diem": {
+      title: "Driver per diem", icon: Wallet, count: perDiems.length,
+      intro: "Per driver, per calendar day, for published movement-plan trips outside Nairobi Metropolitan Area. Set each driver's daily rate under Vehicles & drivers.",
+      action: plans.length > 0 && { label: "Submit per diem", form: "per-diem" },
+    },
+  };
+  const current = SECTIONS[section] || SECTIONS.fuel;
+  const SectionIcon = current.icon;
 
-  if (loading) return <div className="fleet-operation-empty"><Loader2 size={18} className="spin" /> Loading fleet operations…</div>;
+  if (loading) return <div className="fleet-operation-empty"><Loader2 size={18} className="spin" /> Loading {current.title.toLowerCase()}…</div>;
   if (error) return <div className="fleet-operation-notice error" role="alert"><AlertTriangle size={14} /> {error} <button className="btn sm ghost" onClick={load}>Retry</button></div>;
+
+  const formErrorBanner = formError && (
+    <div className="fleet-operation-notice error wide" role="alert"><AlertTriangle size={14} /> {formError}</div>
+  );
+  const formActions = (label, disabled = false) => (
+    <div className="fleet-operation-actions wide fleet-modal-actions">
+      <button className="btn ghost sm" type="button" onClick={closeForm} disabled={busy}>Cancel</button>
+      <button className="btn amber sm" type="submit" disabled={busy || disabled}>
+        {busy ? <Loader2 size={13} className="spin" /> : <CheckCircle2 size={13} />} {label}
+      </button>
+    </div>
+  );
 
   return (
     <section className="panel fleet-operations">
-      <div className="panel-h"><Wrench size={15} className="ph-ico" /><h3>Fleet Operations</h3></div>
+      <div className="panel-h">
+        <SectionIcon size={15} className="ph-ico" />
+        <h3>{current.title}</h3>
+        <span className="ff-count">{current.count}</span>
+        {current.action && (
+          <button className="btn sm amber ph-r" type="button" onClick={() => openForm(current.action.form)}>
+            <Plus size={13} /> {current.action.label}
+          </button>
+        )}
+      </div>
       <div className="panel-b" style={{ padding: 14 }}>
-        <div className="fleet-operation-tabs" role="tablist" aria-label="Fleet operations">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button type="button" role="tab" aria-selected={tab === id} className={`fleet-operation-tab ${tab === id ? "active" : ""}`} key={id} onClick={() => setTab(id)}>
-              <Icon size={14} /> {label}
-            </button>
-          ))}
-        </div>
-        {notice && <div className="fleet-operation-notice" role="status">{notice}</div>}
-
-        {tab === "fuel" && (
-          <>
-            {canRecordFuel && (
-              <form className="fleet-operation-form" onSubmit={submitFuel}>
-                <label>Vehicle *
-                  <select className="form-input" required value={fuelForm.vehicleId} onChange={(event) => setFuelForm((current) => ({ ...current, vehicleId: event.target.value }))}>
-                    <option value="">Select a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.plate} · {vehicle.make}</option>)}
-                  </select>
-                </label>
-                <label>Movement plan
-                  <select className="form-input" value={fuelForm.movementPlanId} onChange={(event) => setFuelForm((current) => ({ ...current, movementPlanId: event.target.value }))}>
-                    <option value="">None — other errand</option>{claimPlans.map((plan) => <option key={plan._id} value={plan._id}>{plan.reference} · {plan.title}</option>)}
-                  </select>
-                </label>
-                <label className="wide">Purpose / errand{fuelForm.movementPlanId ? "" : " *"}
-                  <input className="form-input" maxLength={200} minLength={fuelForm.movementPlanId ? undefined : 2} required={!fuelForm.movementPlanId}
-                    placeholder={fuelForm.movementPlanId ? "Optional note" : "e.g. Collecting spares from CFAO Industrial Area"}
-                    value={fuelForm.purpose} onChange={(event) => setFuelForm((current) => ({ ...current, purpose: event.target.value }))} />
-                </label>
-                <label>Date *<input className="form-input" type="date" required value={fuelForm.date} onChange={(event) => setFuelForm((current) => ({ ...current, date: event.target.value }))} /></label>
-                <label>Odometer (km) *<input className="form-input" type="number" min="0" required value={fuelForm.odometerKm} onChange={(event) => setFuelForm((current) => ({ ...current, odometerKm: event.target.value }))} /></label>
-                <label>Fuel (litres) *<input className="form-input" type="number" min="0.01" step="0.01" required value={fuelForm.litres} onChange={(event) => setFuelForm((current) => ({ ...current, litres: event.target.value }))} /></label>
-                <label>Total cost (KES) *<input className="form-input" type="number" min="0.01" step="0.01" required value={fuelForm.totalCost} onChange={(event) => setFuelForm((current) => ({ ...current, totalCost: event.target.value }))} /></label>
-                <label>Supplier<input className="form-input" maxLength={120} value={fuelForm.supplier} onChange={(event) => setFuelForm((current) => ({ ...current, supplier: event.target.value }))} /></label>
-                <label>Receipt / reference<input className="form-input" maxLength={120} value={fuelForm.reference} onChange={(event) => setFuelForm((current) => ({ ...current, reference: event.target.value }))} /></label>
-                <div className="fleet-operation-help wide">Recording fuel also submits an expense claim for this cost in your name, for CEO review. Do not claim the same fuel again on the Expense Claims page.</div>
-                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy}><Plus size={13} /> Record fuel and claim</button></div>
-              </form>
-            )}
-            <div className="fleet-operation-list">
-              {fuelLogs.length === 0 && <div className="fleet-operation-empty">No fuel entries recorded.</div>}
-              {fuelLogs.map((record) => (
-                <article className="fleet-operation-row" key={record._id}>
-                  <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.litres} L</strong><span>{displayDate(record.date)} · {record.odometerKm.toLocaleString()} km{record.supplier ? ` · ${record.supplier}` : ""} · Logged by {userLabel(record.recordedBy)}</span>{record.reference && <small>Receipt / reference: {record.reference}</small>}{(record.movementPlan || record.purpose) && <small>{[record.movementPlan && `Plan ${record.movementPlan.reference}`, record.purpose].filter(Boolean).join(" · ")}</small>}</div>
-                  <div className="fleet-operation-meta"><b>{formatKes(record.totalCost)}</b>{record.expenseClaim ? <Status value={record.expenseClaim.status} label={`claim ${record.expenseClaim.status}`} /> : <small className="faint">no claim</small>}</div>
-                </article>
-              ))}
-            </div>
-          </>
+        <p className="mp-description">{current.intro}</p>
+        {notice && (
+          <div className={`fleet-operation-notice ${notice.ok ? "" : "error"}`} role={notice.ok ? "status" : "alert"}>
+            {notice.ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {notice.text}
+          </div>
         )}
 
-        {tab === "per-diem" && (
+        {section === "fuel" && (
+          <div className="fleet-operation-list">
+            {fuelLogs.length === 0 && <div className="fleet-operation-empty">No fuel entries recorded.</div>}
+            {fuelLogs.map((record) => (
+              <article className="fleet-operation-row" key={record._id}>
+                <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.litres} L</strong><span>{displayDate(record.date)} · {record.odometerKm.toLocaleString()} km{record.supplier ? ` · ${record.supplier}` : ""} · Logged by {userLabel(record.recordedBy)}</span>{record.reference && <small>Receipt / reference: {record.reference}</small>}{(record.movementPlan || record.purpose) && <small>{[record.movementPlan && `Plan ${record.movementPlan.reference}`, record.purpose].filter(Boolean).join(" · ")}</small>}</div>
+                <div className="fleet-operation-meta"><b>{formatKes(record.totalCost)}</b>{record.expenseClaim ? <Status value={record.expenseClaim.status} label={`claim ${record.expenseClaim.status}`} /> : <small className="faint">no claim</small>}</div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        {section === "per-diem" && (
           <>
             <div className="fleet-operation-summary">
               <span>Approved driver per diem to date</span>
               <b>{formatKes(approvedPerDiems)}</b>
             </div>
-            {plans.length > 0 && (
-              <form className="fleet-operation-form" onSubmit={submitPerDiem}>
-                <label>Published movement plan *
-                  <select className="form-input" required value={perDiemForm.movementPlanId} onChange={(event) => updatePlan(event.target.value)}>
-                    <option value="">Select a plan</option>{plans.map((plan) => <option key={plan._id} value={plan._id}>{plan.reference} · {plan.title}</option>)}
-                  </select>
-                </label>
-                <label>Trip outside Nairobi Metropolitan Area *
-                  <select className="form-input" required value={perDiemForm.tripId} onChange={(event) => updateTrip(event.target.value)} disabled={!selectedPlan}>
-                    <option value="">Select an eligible trip</option>{selectedPlan?.trips.map((trip) => <option key={trip.tripId} value={trip.tripId}>{trip.tripId} · {trip.originName} to {trip.destinationName}</option>)}
-                  </select>
-                </label>
-                <label>Vehicle and driver *
-                  <select className="form-input" required value={`${perDiemForm.vehicleId}|${perDiemForm.driverId}`} onChange={(event) => {
-                    const [vehicleId, driverId] = event.target.value.split("|");
-                    setPerDiemForm((current) => ({ ...current, vehicleId, driverId }));
-                  }} disabled={!selectedTrip}>
-                    <option value="|">Select assignment</option>{selectedTrip?.assignments.map((assignment) => <option key={`${assignment.vehicleId}|${assignment.driverId}`} value={`${assignment.vehicleId}|${assignment.driverId}`}>{assignment.vehiclePlate} · {assignment.driverName}</option>)}
-                  </select>
-                </label>
-                <div className="fleet-operation-estimate">
-                  <span>{selectedTrip ? `${selectedEligibleDays} calendar day${selectedEligibleDays === 1 ? "" : "s"} · ${displayDate(selectedTrip.startDate)}–${displayDate(selectedTrip.endDate)}` : "Per diem is only available for trips marked outside Nairobi Metropolitan Area."}</span>
-                  <strong>{formatKes(selectedDriver?.perDiemRate || 0)} / day · Total {formatKes(estimatedPerDiem)}</strong>
-                </div>
-                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy || !selectedAssignment || !selectedDriver?.perDiemRate}><Plus size={13} /> Submit per diem</button></div>
-              </form>
-            )}
-            {plans.length === 0 && <div className="fleet-operation-help">Per diem is calculated per driver, per calendar day, for published movement-plan trips marked outside Nairobi Metropolitan Area. Set the daily rate for each driver in Fleet → Drivers.</div>}
             <div className="fleet-operation-list">
               {perDiems.length === 0 && <div className="fleet-operation-empty">No driver per diem submitted yet.</div>}
               {perDiems.map((record) => (
@@ -281,7 +281,7 @@ export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChan
                     <strong>{driverLabel(record)} · {record.vehiclePlate}</strong>
                     <span>{record.eligibleDays} day{record.eligibleDays === 1 ? "" : "s"} · {displayDate(record.startDate)}–{displayDate(record.endDate)} · {formatKes(record.ratePerDay)} / day · Submitted by {record.submittedByName || userLabel(record.submittedBy)}</span>
                     {record.decisionComment && <small>Review note: {record.decisionComment}</small>}
-                    {record.status === "rejected" && <small>To resubmit, choose the same plan, trip and vehicle in the form above.</small>}
+                    {record.status === "rejected" && <small>To resubmit, use Submit per diem with the same plan, trip and vehicle.</small>}
                   </div>
                   <div className="fleet-operation-meta"><b>{formatKes(record.totalAmount)}</b><Status value={record.status} />
                     {canReviewPerDiem && record.status === "pending" && <div className="fleet-operation-actions"><button className="btn sm amber" disabled={busy} onClick={() => reviewPerDiem(record, "approved")}>Approve</button><button className="btn sm ghost" disabled={busy} onClick={() => reviewPerDiem(record, "rejected")}>Reject</button></div>}
@@ -292,91 +292,157 @@ export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChan
           </>
         )}
 
-        {tab === "maintenance" && (
-          <>
-            {canMaintain && (
-              <form className="fleet-operation-form" onSubmit={submitMaintenance}>
-                <label>Vehicle *
-                  <select className="form-input" required value={maintenanceForm.vehicleId} onChange={(event) => setMaintenanceForm((current) => ({ ...current, vehicleId: event.target.value }))}>
-                    <option value="">Select a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.plate} · {vehicle.make}</option>)}
-                  </select>
-                </label>
-                <label>Date *<input className="form-input" type="date" required value={maintenanceForm.date} onChange={(event) => setMaintenanceForm((current) => ({ ...current, date: event.target.value }))} /></label>
-                <label className="wide">Work / issue *<input className="form-input" required maxLength={300} value={maintenanceForm.description} onChange={(event) => setMaintenanceForm((current) => ({ ...current, description: event.target.value }))} /></label>
-                <label>Vendor<input className="form-input" maxLength={120} value={maintenanceForm.vendor} onChange={(event) => setMaintenanceForm((current) => ({ ...current, vendor: event.target.value }))} /></label>
-                <label>Labour / service cost (KES)<input className="form-input" type="number" min="0" step="0.01" value={maintenanceForm.cost} onChange={(event) => setMaintenanceForm((current) => ({ ...current, cost: event.target.value }))} /></label>
-                <label>Odometer (km)<input className="form-input" type="number" min="0" value={maintenanceForm.odometerKm} onChange={(event) => setMaintenanceForm((current) => ({ ...current, odometerKm: event.target.value }))} /></label>
-                <label>Next service (km)<input className="form-input" type="number" min="0" value={maintenanceForm.nextDueOdometerKm} onChange={(event) => setMaintenanceForm((current) => ({ ...current, nextDueOdometerKm: event.target.value }))} /></label>
-                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy}><Plus size={13} /> Add maintenance record</button></div>
-              </form>
-            )}
-            {canMaintain && <div className="fleet-operation-help">Enter workshop labour or service charges here. Record separately sourced parts under Parts sourcing to avoid duplicating their cost.</div>}
-            <div className="fleet-operation-list">
-              {maintenance.length === 0 && <div className="fleet-operation-empty">No maintenance records.</div>}
-              {maintenance.map((record) => (
-                <article className="fleet-operation-row" key={record._id}>
-                  <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.description}</strong><span>{displayDate(record.date)} · {record.vendor || "No vendor"}{record.odometerKm != null ? ` · ${record.odometerKm.toLocaleString()} km` : ""}{record.nextDueOdometerKm != null ? ` · next service at ${record.nextDueOdometerKm.toLocaleString()} km` : ""} · Logged by {userLabel(record.recordedBy)}</span></div>
-                  <div className="fleet-operation-meta"><b>{formatKes(record.cost)}</b><Status value={record.status} />{canMaintain && record.status === "open" && <button className="btn sm ghost" disabled={busy} onClick={() => run(() => updateMaintenanceStatus(record._id, "completed"), "Maintenance marked complete.")}>Complete</button>}</div>
-                </article>
-              ))}
-            </div>
-          </>
+        {section === "maintenance" && (
+          <div className="fleet-operation-list">
+            {maintenance.length === 0 && <div className="fleet-operation-empty">No maintenance records.</div>}
+            {maintenance.map((record) => (
+              <article className="fleet-operation-row" key={record._id}>
+                <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.description}</strong><span>{displayDate(record.date)} · {record.vendor || "No vendor"}{record.odometerKm != null ? ` · ${record.odometerKm.toLocaleString()} km` : ""}{record.nextDueOdometerKm != null ? ` · next service at ${record.nextDueOdometerKm.toLocaleString()} km` : ""} · Logged by {userLabel(record.recordedBy)}</span></div>
+                <div className="fleet-operation-meta"><b>{formatKes(record.cost)}</b><Status value={record.status} />{canMaintain && record.status === "open" && <button className="btn sm ghost" disabled={busy} onClick={() => run(() => updateMaintenanceStatus(record._id, "completed"), "Maintenance marked complete.")}>Complete</button>}</div>
+              </article>
+            ))}
+          </div>
         )}
 
-        {tab === "parts" && (
-          <>
-            {canManageParts && (
-              <form className="fleet-operation-form" onSubmit={submitPartSourcing}>
-                <label>Vehicle *
-                  <select className="form-input" required value={partSourcingForm.vehicleId} onChange={(event) => setPartSourcingForm((current) => ({ ...current, vehicleId: event.target.value, maintenanceRecordId: "" }))}>
-                    <option value="">Select a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.plate} · {vehicle.make}</option>)}
-                  </select>
-                </label>
-                <label>Date *<input className="form-input" type="date" required value={partSourcingForm.date} onChange={(event) => setPartSourcingForm((current) => ({ ...current, date: event.target.value }))} /></label>
-                <label>Source *
-                  <select className="form-input" value={partSourcingForm.source} onChange={(event) => setPartSourcingForm((current) => ({ ...current, source: event.target.value }))}>
-                    <option value="cfao">CFAO workshop / parts</option><option value="isuzu">Isuzu workshop / parts</option><option value="imported">Imported</option>
-                  </select>
-                </label>
-                <label className="wide">Part(s) or work description *
-                  <input className="form-input" required maxLength={200} value={partSourcingForm.partDescription} onChange={(event) => setPartSourcingForm((current) => ({ ...current, partDescription: event.target.value }))} placeholder="Describe parts supplied or fitted" />
-                </label>
-                <label>Workshop / supplier<input className="form-input" maxLength={120} value={partSourcingForm.supplier} onChange={(event) => setPartSourcingForm((current) => ({ ...current, supplier: event.target.value }))} /></label>
-                <label>Total cost (KES) *
-                  <input className="form-input" type="number" min="0" step="0.01" required value={partSourcingForm.totalCost} onChange={(event) => setPartSourcingForm((current) => ({ ...current, totalCost: event.target.value }))} />
-                </label>
-                <label>Related maintenance record
-                  <select className="form-input" value={partSourcingForm.maintenanceRecordId} onChange={(event) => setPartSourcingForm((current) => ({ ...current, maintenanceRecordId: event.target.value }))} disabled={!partSourcingForm.vehicleId}>
-                    <option value="">Not linked</option>
-                    {maintenance.filter((record) => record.vehicle?._id === partSourcingForm.vehicleId).map((record) => (
-                      <option key={record._id} value={record._id}>{displayDate(record.date)} · {record.description}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>Invoice / reference<input className="form-input" maxLength={120} value={partSourcingForm.reference} onChange={(event) => setPartSourcingForm((current) => ({ ...current, reference: event.target.value }))} /></label>
-                <label className="wide">Notes<input className="form-input" maxLength={500} value={partSourcingForm.notes} onChange={(event) => setPartSourcingForm((current) => ({ ...current, notes: event.target.value }))} /></label>
-                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy}><Plus size={13} /> Record part cost</button></div>
-              </form>
-            )}
-            <div className="fleet-operation-help">Parts are sourced for the specific repair through CFAO, Isuzu or imports; no depot stock is tracked here.</div>
-            <div className="fleet-operation-list">
-              {partSourcing.length === 0 && <div className="fleet-operation-empty">No workshop or imported-part costs recorded.</div>}
-              {partSourcing.map((record) => (
-                <article className="fleet-operation-row" key={record._id}>
-                  <div className="fleet-operation-main">
-                    <strong>{record.vehicle?.plate || "Vehicle"} · {record.partDescription}</strong>
-                    <span>{displayDate(record.date)} · {record.source === "cfao" ? "CFAO" : record.source === "isuzu" ? "Isuzu" : "Imported"}{record.supplier ? ` · ${record.supplier}` : ""}</span>
-                    <small>Logged by {userLabel(record.recordedBy)}</small>
-                    {record.maintenanceRecord && <small>Maintenance: {record.maintenanceRecord.description}</small>}
-                    {record.reference && <small>Invoice / reference: {record.reference}</small>}
-                  </div>
-                  <div className="fleet-operation-meta"><b>{formatKes(record.totalCost)}</b></div>
-                </article>
-              ))}
-            </div>
-          </>
+        {section === "parts" && (
+          <div className="fleet-operation-list">
+            {partSourcing.length === 0 && <div className="fleet-operation-empty">No workshop or imported-part costs recorded.</div>}
+            {partSourcing.map((record) => (
+              <article className="fleet-operation-row" key={record._id}>
+                <div className="fleet-operation-main">
+                  <strong>{record.vehicle?.plate || "Vehicle"} · {record.partDescription}</strong>
+                  <span>{displayDate(record.date)} · {record.source === "cfao" ? "CFAO" : record.source === "isuzu" ? "Isuzu" : "Imported"}{record.supplier ? ` · ${record.supplier}` : ""}</span>
+                  <small>Logged by {userLabel(record.recordedBy)}</small>
+                  {record.maintenanceRecord && <small>Maintenance: {record.maintenanceRecord.description}</small>}
+                  {record.reference && <small>Invoice / reference: {record.reference}</small>}
+                </div>
+                <div className="fleet-operation-meta"><b>{formatKes(record.totalCost)}</b></div>
+              </article>
+            ))}
+          </div>
         )}
       </div>
+
+      {formOpen === "fuel" && (
+        <FleetModal title="Record fuel" description="This also submits an expense claim for the cost in your name, for CEO review. Do not claim the same fuel again on the Expense Claims page." onClose={closeForm}>
+          <form className="fleet-operation-form fleet-modal-form" onSubmit={submitFuel}>
+            {formErrorBanner}
+            <label>Vehicle *
+              <select className="form-input" required value={fuelForm.vehicleId} onChange={(event) => setFuelForm((c) => ({ ...c, vehicleId: event.target.value }))}>
+                <option value="">Select a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.plate} · {vehicle.make}</option>)}
+              </select>
+            </label>
+            <label>Date *<input className="form-input" type="date" required value={fuelForm.date} onChange={(event) => setFuelForm((c) => ({ ...c, date: event.target.value }))} /></label>
+            <label className="wide">Movement plan
+              <select className="form-input" value={fuelForm.movementPlanId} onChange={(event) => setFuelForm((c) => ({ ...c, movementPlanId: event.target.value }))}>
+                <option value="">None — other errand</option>{claimPlans.map((plan) => <option key={plan._id} value={plan._id}>{plan.reference} · {plan.title}</option>)}
+              </select>
+            </label>
+            <label className="wide">Purpose / errand{fuelForm.movementPlanId ? "" : " *"}
+              <input className="form-input" maxLength={200} minLength={fuelForm.movementPlanId ? undefined : 2} required={!fuelForm.movementPlanId}
+                placeholder={fuelForm.movementPlanId ? "Optional note" : "e.g. Collecting spares from CFAO Industrial Area"}
+                value={fuelForm.purpose} onChange={(event) => setFuelForm((c) => ({ ...c, purpose: event.target.value }))} />
+            </label>
+            <label>Odometer (km) *<input className="form-input" type="number" min="0" required value={fuelForm.odometerKm} onChange={(event) => setFuelForm((c) => ({ ...c, odometerKm: event.target.value }))} /></label>
+            <label>Fuel (litres) *<input className="form-input" type="number" min="0.01" step="0.01" required value={fuelForm.litres} onChange={(event) => setFuelForm((c) => ({ ...c, litres: event.target.value }))} /></label>
+            <label>Total cost (KES) *<input className="form-input" type="number" min="0.01" step="0.01" required value={fuelForm.totalCost} onChange={(event) => setFuelForm((c) => ({ ...c, totalCost: event.target.value }))} /></label>
+            <label>Supplier<input className="form-input" maxLength={120} value={fuelForm.supplier} onChange={(event) => setFuelForm((c) => ({ ...c, supplier: event.target.value }))} /></label>
+            <label className="wide">Receipt / reference<input className="form-input" maxLength={120} value={fuelForm.reference} onChange={(event) => setFuelForm((c) => ({ ...c, reference: event.target.value }))} /></label>
+            {formActions("Record fuel and claim")}
+          </form>
+        </FleetModal>
+      )}
+
+      {formOpen === "maintenance" && (
+        <FleetModal title="Add maintenance" description="Labour or service charges only. The vehicle is marked as in maintenance until the record is completed." onClose={closeForm}>
+          <form className="fleet-operation-form fleet-modal-form" onSubmit={submitMaintenance}>
+            {formErrorBanner}
+            <label>Vehicle *
+              <select className="form-input" required value={maintenanceForm.vehicleId} onChange={(event) => setMaintenanceForm((c) => ({ ...c, vehicleId: event.target.value }))}>
+                <option value="">Select a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.plate} · {vehicle.make}</option>)}
+              </select>
+            </label>
+            <label>Date *<input className="form-input" type="date" required value={maintenanceForm.date} onChange={(event) => setMaintenanceForm((c) => ({ ...c, date: event.target.value }))} /></label>
+            <label className="wide">Work / issue *<input className="form-input" required maxLength={300} value={maintenanceForm.description} onChange={(event) => setMaintenanceForm((c) => ({ ...c, description: event.target.value }))} /></label>
+            <label>Vendor<input className="form-input" maxLength={120} value={maintenanceForm.vendor} onChange={(event) => setMaintenanceForm((c) => ({ ...c, vendor: event.target.value }))} /></label>
+            <label>Labour / service cost (KES)<input className="form-input" type="number" min="0" step="0.01" value={maintenanceForm.cost} onChange={(event) => setMaintenanceForm((c) => ({ ...c, cost: event.target.value }))} /></label>
+            <label>Odometer (km)<input className="form-input" type="number" min="0" value={maintenanceForm.odometerKm} onChange={(event) => setMaintenanceForm((c) => ({ ...c, odometerKm: event.target.value }))} /></label>
+            <label>Next service (km)<input className="form-input" type="number" min="0" value={maintenanceForm.nextDueOdometerKm} onChange={(event) => setMaintenanceForm((c) => ({ ...c, nextDueOdometerKm: event.target.value }))} /></label>
+            {formActions("Add maintenance record")}
+          </form>
+        </FleetModal>
+      )}
+
+      {formOpen === "parts" && (
+        <FleetModal title="Record part cost" description="Parts or work sourced for a repair. Link it to the maintenance record it belongs to, if there is one." onClose={closeForm}>
+          <form className="fleet-operation-form fleet-modal-form" onSubmit={submitPartSourcing}>
+            {formErrorBanner}
+            <label>Vehicle *
+              <select className="form-input" required value={partSourcingForm.vehicleId} onChange={(event) => setPartSourcingForm((c) => ({ ...c, vehicleId: event.target.value, maintenanceRecordId: "" }))}>
+                <option value="">Select a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.plate} · {vehicle.make}</option>)}
+              </select>
+            </label>
+            <label>Date *<input className="form-input" type="date" required value={partSourcingForm.date} onChange={(event) => setPartSourcingForm((c) => ({ ...c, date: event.target.value }))} /></label>
+            <label className="wide">Part(s) or work description *
+              <input className="form-input" required maxLength={200} value={partSourcingForm.partDescription} onChange={(event) => setPartSourcingForm((c) => ({ ...c, partDescription: event.target.value }))} placeholder="Describe parts supplied or fitted" />
+            </label>
+            <label>Source *
+              <select className="form-input" value={partSourcingForm.source} onChange={(event) => setPartSourcingForm((c) => ({ ...c, source: event.target.value }))}>
+                <option value="cfao">CFAO workshop / parts</option><option value="isuzu">Isuzu workshop / parts</option><option value="imported">Imported</option>
+              </select>
+            </label>
+            <label>Workshop / supplier<input className="form-input" maxLength={120} value={partSourcingForm.supplier} onChange={(event) => setPartSourcingForm((c) => ({ ...c, supplier: event.target.value }))} /></label>
+            <label>Total cost (KES) *
+              <input className="form-input" type="number" min="0" step="0.01" required value={partSourcingForm.totalCost} onChange={(event) => setPartSourcingForm((c) => ({ ...c, totalCost: event.target.value }))} />
+            </label>
+            <label>Invoice / reference<input className="form-input" maxLength={120} value={partSourcingForm.reference} onChange={(event) => setPartSourcingForm((c) => ({ ...c, reference: event.target.value }))} /></label>
+            <label className="wide">Related maintenance record
+              <select className="form-input" value={partSourcingForm.maintenanceRecordId} onChange={(event) => setPartSourcingForm((c) => ({ ...c, maintenanceRecordId: event.target.value }))} disabled={!partSourcingForm.vehicleId}>
+                <option value="">{partSourcingForm.vehicleId ? "Not linked" : "Select a vehicle first"}</option>
+                {maintenance.filter((record) => record.vehicle?._id === partSourcingForm.vehicleId).map((record) => (
+                  <option key={record._id} value={record._id}>{displayDate(record.date)} · {record.description}</option>
+                ))}
+              </select>
+            </label>
+            <label className="wide">Notes<input className="form-input" maxLength={500} value={partSourcingForm.notes} onChange={(event) => setPartSourcingForm((c) => ({ ...c, notes: event.target.value }))} /></label>
+            {formActions("Record part cost")}
+          </form>
+        </FleetModal>
+      )}
+
+      {formOpen === "per-diem" && (
+        <FleetModal title="Submit driver per diem" description="Choose the trip and the vehicle and driver on it. The amount is the driver's daily rate times the trip's calendar days." onClose={closeForm}>
+          <form className="fleet-operation-form fleet-modal-form" onSubmit={submitPerDiem}>
+            {formErrorBanner}
+            <label className="wide">Published movement plan *
+              <select className="form-input" required value={perDiemForm.movementPlanId} onChange={(event) => updatePlan(event.target.value)}>
+                <option value="">Select a plan</option>{plans.map((plan) => <option key={plan._id} value={plan._id}>{plan.reference} · {plan.title}</option>)}
+              </select>
+            </label>
+            <label className="wide">Trip outside Nairobi Metropolitan Area *
+              <select className="form-input" required value={perDiemForm.tripId} onChange={(event) => updateTrip(event.target.value)} disabled={!selectedPlan}>
+                <option value="">Select an eligible trip</option>{selectedPlan?.trips.map((trip) => <option key={trip.tripId} value={trip.tripId}>{trip.tripId} · {trip.originName} to {trip.destinationName}</option>)}
+              </select>
+            </label>
+            <label className="wide">Vehicle and driver *
+              <select className="form-input" required value={`${perDiemForm.vehicleId}|${perDiemForm.driverId}`} onChange={(event) => {
+                const [vehicleId, driverId] = event.target.value.split("|");
+                setPerDiemForm((c) => ({ ...c, vehicleId, driverId }));
+              }} disabled={!selectedTrip}>
+                <option value="|">Select assignment</option>{selectedTrip?.assignments.map((assignment) => <option key={`${assignment.vehicleId}|${assignment.driverId}`} value={`${assignment.vehicleId}|${assignment.driverId}`}>{assignment.vehiclePlate} · {assignment.driverName}</option>)}
+              </select>
+            </label>
+            <div className="fleet-operation-estimate">
+              <span>{selectedTrip ? `${selectedEligibleDays} calendar day${selectedEligibleDays === 1 ? "" : "s"} · ${displayDate(selectedTrip.startDate)}–${displayDate(selectedTrip.endDate)}` : "Select a trip to see the amount."}</span>
+              <strong>{formatKes(selectedDriver?.perDiemRate || 0)} / day · Total {formatKes(estimatedPerDiem)}</strong>
+            </div>
+            {selectedDriver && !selectedDriver.perDiemRate && (
+              <div className="fleet-operation-notice error wide" role="alert"><AlertTriangle size={14} /> {selectedDriver.name} has no daily per-diem rate. Set one under Vehicles &amp; drivers first.</div>
+            )}
+            {formActions("Submit per diem", !selectedAssignment || !selectedDriver?.perDiemRate)}
+          </form>
+        </FleetModal>
+      )}
     </section>
   );
 }
