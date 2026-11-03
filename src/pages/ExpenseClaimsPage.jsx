@@ -82,7 +82,7 @@ export function ExpenseClaimsPage({ user }) {
   };
 
   const decide = async (claim, decision) => {
-    const comment = window.prompt(`Optional comment for ${decision} claim ${claim.planReference}:`);
+    const comment = window.prompt(`Optional comment for ${decision} claim ${claim.planReference || claim.description}:`);
     if (comment === null) return;
     setBusy(true);
     setNotice("");
@@ -115,7 +115,7 @@ export function ExpenseClaimsPage({ user }) {
       <div className="view-head">
         <span className="tagchip"><Wallet size={11} /> Reimbursements</span>
         <h2>Expense Claims</h2>
-        <p>Record movement-plan expenses and follow each claim through review and reimbursement.</p>
+        <p>Record movement-plan expenses and follow each claim through review and reimbursement. Fuel recorded on the Fleet page is claimed here automatically.</p>
       </div>
 
       <div className="kpi-row" style={{ marginBottom: 16 }}>
@@ -160,6 +160,11 @@ export function ExpenseClaimsPage({ user }) {
                   {CATEGORIES.map((category) => <option key={category} value={category}>{category[0].toUpperCase() + category.slice(1)}</option>)}
                 </select>
               </label>
+              {form.category === "fuel" && (
+                <div className="fleet-operation-help wide">
+                  Fuel for a fleet vehicle is claimed automatically when it is recorded on the Fleet page. Only claim fuel here if it was not recorded there.
+                </div>
+              )}
               <label>Amount (KES) *
                 <input className="form-input" type="number" min="0.01" step="0.01" required value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} />
               </label>
@@ -190,8 +195,9 @@ export function ExpenseClaimsPage({ user }) {
               {visibleClaims.map((claim) => (
                 <article className="fleet-operation-row" key={claim._id}>
                   <div className="fleet-operation-main">
-                    <strong>{claim.planReference} · {claim.category}</strong>
+                    <strong>{claim.planReference || "Fleet errand"} · {claim.category}</strong>
                     <span>{claim.claimantName} · {displayDate(claim.expenseDate)} · {claim.description}</span>
+                    {claim.fuelLog && <small>From a fleet fuel log</small>}
                     {claim.receiptReference && <small>Receipt / reference: {claim.receiptReference}</small>}
                     {claim.decisionComment && <small>Reviewer note: {claim.decisionComment}</small>}
                   </div>

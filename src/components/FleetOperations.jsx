@@ -6,6 +6,7 @@ import {
   createPartSourcingRecord,
   createPerDiemRecord,
   decidePerDiemRecord,
+  getExpenseClaimOptions,
   getFuelLogs,
   getMaintenanceRecords,
   getPartSourcingRecords,
@@ -15,7 +16,7 @@ import {
 } from "../services/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
-const EMPTY_FUEL = { vehicleId: "", date: today(), odometerKm: "", litres: "", totalCost: "", supplier: "", reference: "", notes: "" };
+const EMPTY_FUEL = { vehicleId: "", movementPlanId: "", purpose: "", date: today(), odometerKm: "", litres: "", totalCost: "", supplier: "", reference: "", notes: "" };
 const EMPTY_MAINTENANCE = { vehicleId: "", date: today(), description: "", vendor: "", cost: "", odometerKm: "", nextDueOdometerKm: "", notes: "" };
 const EMPTY_PART_SOURCING = { vehicleId: "", maintenanceRecordId: "", date: today(), partDescription: "", source: "cfao", supplier: "", totalCost: "", reference: "", notes: "" };
 const EMPTY_PER_DIEM = { movementPlanId: "", tripId: "", vehicleId: "", driverId: "" };
@@ -33,8 +34,8 @@ const userLabel = (user) => user
   ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "Unknown"
   : "Unknown";
 
-function Status({ value }) {
-  return <span className={`fleet-status ${value === "approved" || value === "completed" ? "moving" : value === "rejected" || value === "open" ? "maintenance" : "parked"}`}>{value}</span>;
+function Status({ value, label = value }) {
+  return <span className={`fleet-status ${["approved", "completed", "paid"].includes(value) ? "moving" : value === "rejected" || value === "open" ? "maintenance" : "parked"}`}>{label}</span>;
 }
 
 // Vehicles and drivers come from the Fleet page so both stay in sync;
@@ -47,6 +48,8 @@ export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChan
   const [partSourcing, setPartSourcing] = useState([]);
   const [perDiems, setPerDiems] = useState([]);
   const [plans, setPlans] = useState([]);
+  // Plans the user can claim expenses against — each fuel log is claimed on one.
+  const [claimPlans, setClaimPlans] = useState([]);
   const [fuelForm, setFuelForm] = useState({ ...EMPTY_FUEL });
   const [maintenanceForm, setMaintenanceForm] = useState({ ...EMPTY_MAINTENANCE });
   const [partSourcingForm, setPartSourcingForm] = useState({ ...EMPTY_PART_SOURCING });
@@ -63,14 +66,16 @@ export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChan
 
   const load = async () => {
     try {
-      const [fuels, maintenanceRows, partRows, perDiemRows, planRows] = await Promise.all([
+      const [fuels, maintenanceRows, partRows, perDiemRows, planRows, claimPlanRows] = await Promise.all([
         getFuelLogs(), getMaintenanceRecords(), getPartSourcingRecords(), getPerDiemRecords(), getPerDiemOptions(),
+        canRecordFuel ? getExpenseClaimOptions() : Promise.resolve([]),
       ]);
       setFuelLogs(fuels);
       setMaintenance(maintenanceRows);
       setPartSourcing(partRows);
       setPerDiems(perDiemRows);
       setPlans(planRows);
+      setClaimPlans(claimPlanRows);
       setError("");
     } catch (err) {
       setError(err.message);
@@ -110,7 +115,10 @@ export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChan
 
   const submitFuel = async (event) => {
     event.preventDefault();
-    const success = await run(() => createFuelLog({ ...fuelForm, odometerKm: Number(fuelForm.odometerKm), litres: Number(fuelForm.litres), totalCost: Number(fuelForm.totalCost) }), "Fuel entry recorded.");
+    const success = await run(
+      () => createFuelLog({ ...fuelForm, odometerKm: Number(fuelForm.odometerKm), litres: Number(fuelForm.litres), totalCost: Number(fuelForm.totalCost) }),
+      "Fuel entry recorded and expense claim submitted for CEO review.",
+    );
     if (success) setFuelForm({ ...EMPTY_FUEL });
   };
 
@@ -199,21 +207,32 @@ export function FleetOperations({ user, vehicles = [], drivers = [], onFleetChan
                     <option value="">Select a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.plate} · {vehicle.make}</option>)}
                   </select>
                 </label>
+                <label>Movement plan
+                  <select className="form-input" value={fuelForm.movementPlanId} onChange={(event) => setFuelForm((current) => ({ ...current, movementPlanId: event.target.value }))}>
+                    <option value="">None — other errand</option>{claimPlans.map((plan) => <option key={plan._id} value={plan._id}>{plan.reference} · {plan.title}</option>)}
+                  </select>
+                </label>
+                <label className="wide">Purpose / errand{fuelForm.movementPlanId ? "" : " *"}
+                  <input className="form-input" maxLength={200} minLength={fuelForm.movementPlanId ? undefined : 2} required={!fuelForm.movementPlanId}
+                    placeholder={fuelForm.movementPlanId ? "Optional note" : "e.g. Collecting spares from CFAO Industrial Area"}
+                    value={fuelForm.purpose} onChange={(event) => setFuelForm((current) => ({ ...current, purpose: event.target.value }))} />
+                </label>
                 <label>Date *<input className="form-input" type="date" required value={fuelForm.date} onChange={(event) => setFuelForm((current) => ({ ...current, date: event.target.value }))} /></label>
                 <label>Odometer (km) *<input className="form-input" type="number" min="0" required value={fuelForm.odometerKm} onChange={(event) => setFuelForm((current) => ({ ...current, odometerKm: event.target.value }))} /></label>
                 <label>Fuel (litres) *<input className="form-input" type="number" min="0.01" step="0.01" required value={fuelForm.litres} onChange={(event) => setFuelForm((current) => ({ ...current, litres: event.target.value }))} /></label>
-                <label>Total cost (KES) *<input className="form-input" type="number" min="0" step="0.01" required value={fuelForm.totalCost} onChange={(event) => setFuelForm((current) => ({ ...current, totalCost: event.target.value }))} /></label>
+                <label>Total cost (KES) *<input className="form-input" type="number" min="0.01" step="0.01" required value={fuelForm.totalCost} onChange={(event) => setFuelForm((current) => ({ ...current, totalCost: event.target.value }))} /></label>
                 <label>Supplier<input className="form-input" maxLength={120} value={fuelForm.supplier} onChange={(event) => setFuelForm((current) => ({ ...current, supplier: event.target.value }))} /></label>
                 <label>Receipt / reference<input className="form-input" maxLength={120} value={fuelForm.reference} onChange={(event) => setFuelForm((current) => ({ ...current, reference: event.target.value }))} /></label>
-                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy}><Plus size={13} /> Record fuel</button></div>
+                <div className="fleet-operation-help wide">Recording fuel also submits an expense claim for this cost in your name, for CEO review. Do not claim the same fuel again on the Expense Claims page.</div>
+                <div className="fleet-operation-actions wide"><button className="btn amber sm" type="submit" disabled={busy}><Plus size={13} /> Record fuel and claim</button></div>
               </form>
             )}
             <div className="fleet-operation-list">
               {fuelLogs.length === 0 && <div className="fleet-operation-empty">No fuel entries recorded.</div>}
               {fuelLogs.map((record) => (
                 <article className="fleet-operation-row" key={record._id}>
-                  <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.litres} L</strong><span>{displayDate(record.date)} · {record.odometerKm.toLocaleString()} km{record.supplier ? ` · ${record.supplier}` : ""} · Logged by {userLabel(record.recordedBy)}</span>{record.reference && <small>Receipt / reference: {record.reference}</small>}</div>
-                  <div className="fleet-operation-meta"><b>{formatKes(record.totalCost)}</b></div>
+                  <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.litres} L</strong><span>{displayDate(record.date)} · {record.odometerKm.toLocaleString()} km{record.supplier ? ` · ${record.supplier}` : ""} · Logged by {userLabel(record.recordedBy)}</span>{record.reference && <small>Receipt / reference: {record.reference}</small>}{(record.movementPlan || record.purpose) && <small>{[record.movementPlan && `Plan ${record.movementPlan.reference}`, record.purpose].filter(Boolean).join(" · ")}</small>}</div>
+                  <div className="fleet-operation-meta"><b>{formatKes(record.totalCost)}</b>{record.expenseClaim ? <Status value={record.expenseClaim.status} label={`claim ${record.expenseClaim.status}`} /> : <small className="faint">no claim</small>}</div>
                 </article>
               ))}
             </div>
