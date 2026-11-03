@@ -27,6 +27,7 @@ import {
 } from "../services/api";
 import { FleetOperations } from "../components/FleetOperations";
 import { FleetSchedule } from "../components/FleetSchedule";
+import { VehicleSummary } from "../components/VehicleSummary";
 
 // Company vehicles and drivers, from the database. Live tracking (map,
 // speed, fuel, trips) needs GPS trackers, which aren't connected yet — the
@@ -407,6 +408,7 @@ export function FleetManagement({ canEdit = false, user }) {
           </div>
         </div>
       )}
+      {!loading && !error && <VehicleSummary vehicles={vehicles} />}
       {!loading && !error && <FleetSchedule vehicles={vehicles} />}
       {!loading && !error && <FleetOperations user={user} vehicles={vehicles} drivers={drivers} onFleetChange={refreshFleet} />}
     </div>

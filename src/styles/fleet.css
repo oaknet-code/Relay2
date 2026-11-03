@@ -672,6 +672,65 @@
   color: var(--red);
 }
 
+.vehicle-summary {
+  margin-top: 16px;
+}
+
+.vehicle-summary-filters {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+}
+
+.vehicle-summary-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.vehicle-summary-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.vehicle-summary-kpis > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(51, 220, 174, 0.05);
+}
+
+.vehicle-summary-kpis span,
+.vehicle-summary-kpis small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.vehicle-summary-kpis b {
+  color: var(--teal);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vehicle-summary-table td,
+.vehicle-summary-table th {
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+}
+
+.vehicle-summary-table .num {
+  text-align: right;
+}
+
+.vehicle-summary-table tfoot td {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
 @media (max-width: 760px) {
   .fleet-operation-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));

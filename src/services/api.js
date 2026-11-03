@@ -691,6 +691,14 @@ const fleetCall = async (method, url, body) => {
   }
 };
 export const getVehicles = () => fleetCall("get", "/api/fleet/vehicles");
+export const getVehicleSummary = async (params) => {
+  try {
+    const { data } = await axiosInstance.get("/api/fleet/summary", { params });
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Vehicle summary request failed");
+  }
+};
 export const getFleetSchedule = async (params) => {
   try {
     const { data } = await axiosInstance.get("/api/fleet/schedule", { params });
