@@ -347,7 +347,7 @@ export function Dispatch({ canEdit = true, onNavigate }) {
         <div className="view-head">
           <span className="tagchip"><ShieldCheck size={11} /> Dispatch approval</span>
           <h2>Request submitted</h2>
-          <p>Request <b>{waybill}</b> is waiting for the required approval. Inventory and the gate pass remain locked until approval is complete.</p>
+          <p>Request <b>{waybill}</b> is waiting for sequential approval from the Project Manager and CEO. Inventory and the gate pass remain locked until both approve.</p>
         </div>
         <div className="panel" style={{ padding: 24 }}>
           <div className="faint" style={{ fontSize: 12, marginBottom: 16 }}>

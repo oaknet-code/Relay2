@@ -185,7 +185,7 @@ export function DispatchCustodyTracker({ user }) {
                   <span><Clock3 size={12} /> {formatDateTime(dispatch.requestedAt || dispatch.createdAt)}</span>
                   {dispatch.financialAspect && (
                     <span style={{ color: "var(--amber)" }}>
-                      Costed · {Number(dispatch.estimatedValue || 0).toLocaleString()} recorded · CEO approval required
+                      Recorded serialized-asset value · {Number(dispatch.estimatedValue || 0).toLocaleString()}
                     </span>
                   )}
                 </div>
