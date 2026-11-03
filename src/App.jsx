@@ -188,7 +188,7 @@ export default function App() {
   const renderCurrentView = () => {
     switch (currentTab) {
       case "control":
-        return <MissionControl />;
+        return <MissionControl user={user} onNavigate={setCurrentTab} />;
 
       case "links":
         return <LinksView canEdit={hasWriteAccess} />;

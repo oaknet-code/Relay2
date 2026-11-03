@@ -6,7 +6,7 @@ import {
 import { Ring, Band, Dot } from '../components/ui';
 import { WeatherForecast } from '../components/WeatherForecast';
 import { LINK_STATUS } from '../constants/states';
-import { getDashboard, getMapWeather, getSiteWeather } from '../services/api';
+import { getDashboard, getFuelLogs, getMapWeather, getSiteWeather } from '../services/api';
 
 // Everything here comes from GET /api/dashboard (live links, sites, kits,
 // reserved stock and assets) — no sample data.
@@ -77,8 +77,11 @@ const weatherSymbol = (code) => {
 };
 const needsWeatherCaution = (code) => [61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code);
 
-export function MissionControl() {
+export function MissionControl({ user, onNavigate }) {
   const [data, setData] = useState(null);
+  const [fuelLogs, setFuelLogs] = useState([]);
+  const [fuelLogError, setFuelLogError] = useState("");
+  const [fuelLogsLoading, setFuelLogsLoading] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('map'); // 'map' | 'links'
@@ -93,6 +96,7 @@ export function MissionControl() {
   const [mapWeatherLoading, setMapWeatherLoading] = useState(false);
   const [mapWeatherError, setMapWeatherError] = useState("");
   const [mapWeatherRefresh, setMapWeatherRefresh] = useState(0);
+  const canViewFleetCosts = ["ceo", "super_admin"].includes(user?.role);
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -112,6 +116,25 @@ export function MissionControl() {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!canViewFleetCosts) return undefined;
+    let cancelled = false;
+    setFuelLogsLoading(true);
+    getFuelLogs()
+      .then((records) => {
+        if (!cancelled) {
+          setFuelLogs(records);
+          setFuelLogError("");
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setFuelLogError(err.message || "Couldn't load fleet fuel logs.");
+      })
+      .finally(() => {
+        if (!cancelled) setFuelLogsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [canViewFleetCosts]);
 
   const isClient = data && !data.sites; // clients only get their links
   const sites = useMemo(() => data?.sites || [], [data]);
@@ -404,6 +427,46 @@ export function MissionControl() {
           </>
         )}
       </div>
+
+      {canViewFleetCosts && (
+        <section className="panel" style={{ marginTop: 16 }}>
+          <div className="panel-h">
+            <Truck size={15} className="ph-ico" />
+            <h3>Fleet fuel log</h3>
+            <button className="btn sm ghost ph-r" type="button" onClick={() => onNavigate?.("fleet")}>Open Fleet</button>
+          </div>
+          <div className="panel-b" style={{ padding: 14 }}>
+            {fuelLogError && <div className="fleet-operation-notice error" role="alert">{fuelLogError}</div>}
+            {fuelLogsLoading ? (
+              <div className="fleet-operation-empty"><Loader2 size={16} className="spin" /> Loading fuel logs…</div>
+            ) : !fuelLogError && fuelLogs.length === 0 ? (
+              <div className="fleet-operation-empty">No fuel entries have been recorded.</div>
+            ) : !fuelLogError && (
+              <div className="fleet-operation-list">
+                {fuelLogs.slice(0, 10).map((record) => {
+                  const submitter = record.recordedBy
+                    ? [record.recordedBy.firstName, record.recordedBy.lastName].filter(Boolean).join(" ") || record.recordedBy.email
+                    : "Unknown";
+                  return (
+                    <article className="fleet-operation-row" key={record._id}>
+                      <div className="fleet-operation-main">
+                        <strong>{record.vehicle?.plate || "Vehicle"} · {record.litres} L</strong>
+                        <span>
+                          {new Date(record.date).toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" })}
+                          {record.odometerKm != null ? ` · ${record.odometerKm.toLocaleString()} km` : ""}
+                          {record.supplier ? ` · ${record.supplier}` : ""}
+                        </span>
+                        <small>Logged by {submitter}</small>
+                      </div>
+                      <div className="fleet-operation-meta"><b>KES {Number(record.totalCost || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b></div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <div style={{ marginTop: 16 }}>
         <div className="panel">
