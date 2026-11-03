@@ -27,6 +27,7 @@ function Status({ value }) {
 
 export function ExpenseClaimsPage({ user }) {
   const [claims, setClaims] = useState([]);
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [plans, setPlans] = useState([]);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [showForm, setShowForm] = useState(false);
@@ -56,16 +57,22 @@ export function ExpenseClaimsPage({ user }) {
     approved: claims.filter((claim) => ["approved", "paid"].includes(claim.status)).reduce((sum, claim) => sum + claim.amount, 0),
     paid: claims.filter((claim) => claim.status === "paid").reduce((sum, claim) => sum + claim.amount, 0),
   }), [claims]);
+  const visibleClaims = useMemo(
+    () => categoryFilter === "all" ? claims : claims.filter((claim) => claim.category === categoryFilter),
+    [categoryFilter, claims],
+  );
 
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
     setNotice("");
     try {
-      await createExpenseClaim({ ...form, amount: Number(form.amount) });
+      const result = await createExpenseClaim({ ...form, amount: Number(form.amount) });
       setForm({ ...EMPTY_FORM });
       setShowForm(false);
-      setNotice("Expense claim submitted for CEO review.");
+      setNotice(result?.notificationWarning
+        ? `Expense claim submitted for CEO review. ${result.notificationWarning}`
+        : "Expense claim submitted for CEO review.");
       await load();
     } catch (err) {
       setNotice(err.message);
@@ -129,6 +136,17 @@ export function ExpenseClaimsPage({ user }) {
           )}
         </div>
         <div className="panel-b" style={{ padding: "14px" }}>
+          <label className="expense-claim-category-filter">
+            Category
+            <select className="form-input" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+              <option value="all">All categories ({claims.length})</option>
+              {CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category[0].toUpperCase() + category.slice(1)} ({claims.filter((claim) => claim.category === category).length})
+                </option>
+              ))}
+            </select>
+          </label>
           {showForm && (
             <form className="fleet-operation-form" onSubmit={submit}>
               <label>Movement plan *
@@ -165,9 +183,11 @@ export function ExpenseClaimsPage({ user }) {
             <div className="fleet-operation-empty"><Loader2 size={18} className="spin" /> Loading expense claims…</div>
           ) : claims.length === 0 ? (
             <div className="fleet-operation-empty">No expense claims yet.</div>
+          ) : visibleClaims.length === 0 ? (
+            <div className="fleet-operation-empty">No {categoryFilter} claims found.</div>
           ) : (
             <div className="fleet-operation-list">
-              {claims.map((claim) => (
+              {visibleClaims.map((claim) => (
                 <article className="fleet-operation-row" key={claim._id}>
                   <div className="fleet-operation-main">
                     <strong>{claim.planReference} · {claim.category}</strong>

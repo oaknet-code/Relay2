@@ -31,6 +31,9 @@ const inclusiveDays = (start, end) => {
   return Number.isInteger(days) && days > 0 ? days : 0;
 };
 const driverLabel = (record) => `${record.driverName} · ${record.planReference} / ${record.tripId}`;
+const userLabel = (user) => user
+  ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "Unknown"
+  : "Unknown";
 
 function Status({ value }) {
   return <span className={`fleet-status ${value === "approved" || value === "completed" ? "moving" : value === "rejected" || value === "open" ? "maintenance" : "parked"}`}>{value}</span>;
@@ -96,9 +99,9 @@ export function FleetOperations({ user }) {
     setBusy(true);
     setNotice("");
     try {
-      await action();
+      const result = await action();
       await load();
-      setNotice(success);
+      setNotice(result?.notificationWarning ? `${success} ${result.notificationWarning}` : success);
       return true;
     } catch (err) {
       setNotice(err.message);
@@ -212,7 +215,7 @@ export function FleetOperations({ user }) {
               {fuelLogs.length === 0 && <div className="fleet-operation-empty">No fuel entries recorded.</div>}
               {fuelLogs.map((record) => (
                 <article className="fleet-operation-row" key={record._id}>
-                  <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.litres} L</strong><span>{displayDate(record.date)} · {record.odometerKm.toLocaleString()} km{record.supplier ? ` · ${record.supplier}` : ""}</span>{record.reference && <small>Receipt / reference: {record.reference}</small>}</div>
+                  <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.litres} L</strong><span>{displayDate(record.date)} · {record.odometerKm.toLocaleString()} km{record.supplier ? ` · ${record.supplier}` : ""} · Logged by {userLabel(record.recordedBy)}</span>{record.reference && <small>Receipt / reference: {record.reference}</small>}</div>
                   <div className="fleet-operation-meta"><b>{formatKes(record.totalCost)}</b></div>
                 </article>
               ))}
@@ -260,7 +263,7 @@ export function FleetOperations({ user }) {
                 <article className="fleet-operation-row" key={record._id}>
                   <div className="fleet-operation-main">
                     <strong>{driverLabel(record)} · {record.vehiclePlate}</strong>
-                    <span>{record.eligibleDays} day{record.eligibleDays === 1 ? "" : "s"} · {displayDate(record.startDate)}–{displayDate(record.endDate)} · {formatKes(record.ratePerDay)} / day</span>
+                    <span>{record.eligibleDays} day{record.eligibleDays === 1 ? "" : "s"} · {displayDate(record.startDate)}–{displayDate(record.endDate)} · {formatKes(record.ratePerDay)} / day · Submitted by {record.submittedByName || userLabel(record.submittedBy)}</span>
                     {record.decisionComment && <small>Review note: {record.decisionComment}</small>}
                   </div>
                   <div className="fleet-operation-meta"><b>{formatKes(record.totalAmount)}</b><Status value={record.status} />
@@ -295,7 +298,7 @@ export function FleetOperations({ user }) {
               {maintenance.length === 0 && <div className="fleet-operation-empty">No maintenance records.</div>}
               {maintenance.map((record) => (
                 <article className="fleet-operation-row" key={record._id}>
-                  <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.description}</strong><span>{displayDate(record.date)} · {record.vendor || "No vendor"}{record.odometerKm != null ? ` · ${record.odometerKm.toLocaleString()} km` : ""}{record.nextDueOdometerKm != null ? ` · next service at ${record.nextDueOdometerKm.toLocaleString()} km` : ""}</span></div>
+                  <div className="fleet-operation-main"><strong>{record.vehicle?.plate || "Vehicle"} · {record.description}</strong><span>{displayDate(record.date)} · {record.vendor || "No vendor"}{record.odometerKm != null ? ` · ${record.odometerKm.toLocaleString()} km` : ""}{record.nextDueOdometerKm != null ? ` · next service at ${record.nextDueOdometerKm.toLocaleString()} km` : ""} · Logged by {userLabel(record.recordedBy)}</span></div>
                   <div className="fleet-operation-meta"><b>{formatKes(record.cost)}</b><Status value={record.status} />{canMaintain && record.status === "open" && <button className="btn sm ghost" disabled={busy} onClick={() => run(() => updateMaintenanceStatus(record._id, "completed"), "Maintenance marked complete.")}>Complete</button>}</div>
                 </article>
               ))}
@@ -346,6 +349,7 @@ export function FleetOperations({ user }) {
                   <div className="fleet-operation-main">
                     <strong>{record.vehicle?.plate || "Vehicle"} · {record.partDescription}</strong>
                     <span>{displayDate(record.date)} · {record.source === "cfao" ? "CFAO" : record.source === "isuzu" ? "Isuzu" : "Imported"}{record.supplier ? ` · ${record.supplier}` : ""}</span>
+                    <small>Logged by {userLabel(record.recordedBy)}</small>
                     {record.maintenanceRecord && <small>Maintenance: {record.maintenanceRecord.description}</small>}
                     {record.reference && <small>Invoice / reference: {record.reference}</small>}
                   </div>

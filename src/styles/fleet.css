@@ -563,6 +563,16 @@
   margin-top: 16px;
 }
 
+.expense-claim-category-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(100%, 320px);
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .fleet-schedule-filters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
