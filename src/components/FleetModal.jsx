@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 // Pop-up window for the Fleet page's record forms. Closes on Esc, the X
 // button or a click on the dimmed background; focuses the first field when
 // it opens and stops the page behind it from scrolling.
-export function FleetModal({ title, description, onClose, children }) {
+export function FleetModal({ title, description, onClose, children, wide = false }) {
   const titleId = useId();
   const dialogRef = useRef(null);
   // Latest onClose without re-running the effect below (which would steal
@@ -28,7 +28,7 @@ export function FleetModal({ title, description, onClose, children }) {
 
   return (
     <div className="fleet-modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <div className="fleet-modal" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialogRef}>
+      <div className={`fleet-modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialogRef}>
         <div className="fleet-modal-head">
           <h3 id={titleId}>{title}</h3>
           <button type="button" className="btn sm ghost" aria-label="Close" onClick={onClose}><X size={14} /></button>

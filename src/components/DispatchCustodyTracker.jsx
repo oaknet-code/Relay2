@@ -16,6 +16,7 @@ import { decideDispatchApproval, downloadGatePassPDF, getDispatches, getLinks, r
 import { DispatchReceiptCheck, DispatchReceiptLines } from "./DispatchReceiptCheck";
 import { lineLabel } from "../utils/dispatchLines";
 import { LinkInstallationPanel } from "./LinkInstallationPanel";
+import { FleetModal } from "./FleetModal";
 import "../styles/custody.css";
 
 const formatDateTime = (value) => {
@@ -106,12 +107,16 @@ export function DispatchCustodyTracker({ user }) {
     }
   };
 
+  const [receivingId, setReceivingId] = useState("");
+  const receiving = dispatches.find((item) => item._id === receivingId) || null;
+
   const submitReceipt = async (dispatch, receipt) => {
     setActionError("");
     setNotice("");
     setBusyId(dispatch._id);
     try {
       const result = await receiveDispatch(dispatch._id, receipt);
+      setReceivingId("");
       await loadDispatches();
       setNotice([
         `${dispatch.waybillId} received: ${result?.dispatch?.receipt?.condition || "recorded"}.`,
@@ -294,7 +299,9 @@ export function DispatchCustodyTracker({ user }) {
 
                 {canReceive && (
                   <div style={{ paddingTop: 10, borderTop: "1px solid var(--line)" }}>
-                    <DispatchReceiptCheck key={dispatch._id} dispatch={dispatch} busy={busyId === dispatch._id} onSubmit={(receipt) => submitReceipt(dispatch, receipt)} />
+                    <button type="button" className="btn amber sm" onClick={() => { setActionError(""); setReceivingId(dispatch._id); }}>
+                      <Package size={13} /> Receive this dispatch
+                    </button>
                   </div>
                 )}
 
@@ -312,6 +319,24 @@ export function DispatchCustodyTracker({ user }) {
           );
         })}
       </div>
+
+      {receiving && (
+        <FleetModal
+          wide
+          title={`Receive ${receiving.waybillId}`}
+          description={`${receiving.siteName || receiving.siteId}${receiving.linkId ? ` · link ${receiving.linkId}` : ""}. Count what arrived on each line.`}
+          onClose={() => { if (busyId !== receiving._id) setReceivingId(""); }}
+        >
+          {actionError && <div role="alert" className="receipt-problem" style={{ marginBottom: 10 }}><AlertTriangle size={13} /> {actionError}</div>}
+          <DispatchReceiptCheck
+            key={receiving._id}
+            dispatch={receiving}
+            busy={busyId === receiving._id}
+            onCancel={() => setReceivingId("")}
+            onSubmit={(receipt) => submitReceipt(receiving, receipt)}
+          />
+        </FleetModal>
+      )}
     </section>
   );
 }

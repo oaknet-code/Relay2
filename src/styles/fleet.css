@@ -730,6 +730,10 @@
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
 }
 
+.fleet-modal.wide {
+  max-width: 760px;
+}
+
 .fleet-modal-head {
   display: flex;
   align-items: center;

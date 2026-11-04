@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { TypeIcon, Band } from '../components/ui';
 import { getSiteKits, getSiteKit, createDispatch, getDispatches, getGatePass, downloadGatePassPDF, getVehicles, getDrivers, getAssets, getLinks } from '../services/api';
+import '../styles/custody.css';
 
 // Picks a reasonable icon for a consumable line based on its model/name —
 // purely cosmetic, has no bearing on the actual decrement logic.
@@ -14,6 +15,29 @@ function consumableIcon(label = "") {
   if (s.includes("ground") || s.includes("gnd")) return ShieldCheck;
   if (s.includes("tape") || s.includes("wpf")) return Package;
   return Boxes;
+}
+
+// Gate pass lines for the screen: serialized units grouped by what they
+// are (with their serial numbers), then counted items.
+function gatePassLines(gatePass) {
+  const groups = new Map();
+  for (const a of gatePass.assets || []) {
+    const label = a.description || `${a.type} · ${a.model}`;
+    const group = groups.get(label) || { key: `a-${label}`, label, part: a.description ? `${a.type} · ${a.model}` : "", serials: [], unit: "ea" };
+    group.serials.push(a.serial);
+    groups.set(label, group);
+  }
+  const units = [...groups.values()].map((g) => ({
+    ...g, qty: g.serials.length, sub: [g.part, `S/N ${g.serials.join(", ")}`].filter(Boolean).join("   "),
+  }));
+  const counted = (gatePass.consumables || []).map((c, i) => ({
+    key: `c-${i}`,
+    label: c.description || `${c.type} · ${c.model}`,
+    sub: c.description ? `${c.type} · ${c.model}` : "",
+    qty: c.qty,
+    unit: c.unit || "ea",
+  }));
+  return [...units, ...counted];
 }
 
 // Serialized units on the pick-list: the kit's assets that are staged
@@ -475,19 +499,13 @@ export function Dispatch({ canEdit = true, onNavigate }) {
             <FileText size={11} />
             Waybill
           </span>
-          <h2>Goods Dispatch Gate Pass</h2>
-          <p>Official movement record <b>{gatePass.gatePassNumber}</b> · Kit {gatePass.kitId || "—"}</p>
+          <h2>Gate pass {gatePass.gatePassNumber}</h2>
         </div>
 
-        <div className="panel" style={{ maxWidth: 900 }}>
+        <div className="panel" style={{ maxWidth: 720 }}>
           <div className="panel-h">
             <FileText size={15} className="ph-ico" />
-            <div>
-              <h3>Gate pass {gatePass.gatePassNumber}</h3>
-              <div className="faint" style={{ fontSize: 10, marginTop: 3 }}>
-                {gatePass.siteId ? `${gatePass.siteId} · ` : ""}{gatePass.destination || site?.name || "Destination not recorded"}
-              </div>
-            </div>
+            <h3>{gatePass.gatePassNumber}</h3>
             <div className="ph-r" style={{ marginLeft: "auto", position: "relative" }}>
               <button
                 className="btn sm teal"
@@ -571,155 +589,46 @@ export function Dispatch({ canEdit = true, onNavigate }) {
             </div>
           </div>
 
-          <div className="panel-b" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-              gap: 10,
-              padding: "12px 14px",
-              background: "var(--bg)",
-              border: "1px solid var(--line)",
-              borderRadius: 10
-            }}>
-              {[
-                ["Dispatch request", gatePass.dispatchId || gatePass.gatePassNumber],
-                ["Requested by", gatePass.requestedByName || gatePass.dispatchedBy],
-                ["Request date", gatePass.requestedAt ? fmtTime(new Date(gatePass.requestedAt)) : "—"],
-                ["Kit / link", `${gatePass.kitId || "—"}${gatePass.linkId ? ` · ${gatePass.linkId}` : ""}`],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <div className="faint" style={{ fontSize: 9, fontFamily: "var(--mono)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{value || "—"}</div>
-                </div>
-              ))}
+          <div className="panel-b gp-compact">
+            <dl className="gp-details">
+              <div><dt>To</dt><dd>{[gatePass.siteId, gatePass.destination || site?.name].filter(Boolean).join(" · ") || "—"}</dd></div>
+              <div><dt>Vehicle</dt><dd>{[gatePass.vehicle?.plate, gatePass.vehicle?.make].filter(Boolean).join(" · ") || "—"}</dd></div>
+              <div><dt>Link</dt><dd>{gatePass.linkId || "—"}</dd></div>
+              <div><dt>Driver</dt><dd>{[gatePass.driver?.name, gatePass.driver?.phone].filter(Boolean).join(" · ") || "—"}</dd></div>
+              <div><dt>Kit</dt><dd>{gatePass.kitId || "—"}</dd></div>
+              <div><dt>Out</dt><dd>{gatePass.dispatchedAt ? fmtTime(new Date(gatePass.dispatchedAt)) : (dispatchTime ? fmtTime(dispatchTime) : "—")}</dd></div>
+            </dl>
+
+            <table className="gp-items">
+              <thead>
+                <tr><th>Description</th><th className="num">Qty</th><th>Unit</th></tr>
+              </thead>
+              <tbody>
+                {gatePassLines(gatePass).map((line) => (
+                  <tr key={line.key}>
+                    <td>
+                      {line.label}
+                      {line.sub && <div className="gp-sub">{line.sub}</div>}
+                    </td>
+                    <td className="num">{line.qty}</td>
+                    <td>{line.unit}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="gp-note">
+              <span>Approved</span>
+              {gatePass.approvalSteps?.length
+                ? gatePass.approvalSteps.map((step) => `${step.role === "project_manager" ? "Project Manager" : step.role === "ceo" ? "CEO" : step.role}: ${step.approverName || step.status || "—"}`).join("  ·  ")
+                : `Released by ${gatePass.authorizedBy || "—"}`}
             </div>
-
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-              gap: 12,
-              padding: "12px 14px",
-              background: "rgba(51, 220, 174, 0.04)",
-              border: "1px solid rgba(51, 220, 174, 0.18)",
-              borderRadius: 10
-            }}>
-              <div>
-                <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Vehicle</div>
-                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
-                  {gatePass.vehicle?.plate || '—'}
-                </div>
-                <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
-                  {gatePass.vehicle?.make || ''} {gatePass.vehicle?.type ? `· ${gatePass.vehicle.type}` : ''}
-                </div>
-              </div>
-              <div>
-                <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Driver</div>
-                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
-                  {gatePass.driver?.name || '—'}
-                </div>
-                <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
-                  {gatePass.driver?.phone || ''}
-                </div>
-              </div>
-              <div>
-                <div className="faint" style={{ fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Issued</div>
-                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
-                  {gatePass.dispatchedAt ? fmtTime(new Date(gatePass.dispatchedAt)) : (dispatchTime ? fmtTime(dispatchTime) : '—')}
-                </div>
-                <div className="faint" style={{ fontSize: 10.5, fontFamily: 'var(--mono)' }}>
-                  {site?.name || gatePass.destination || ''}
-                </div>
-              </div>
-            </div>
-
-            <section style={{ padding: "13px 15px", border: "1px solid var(--line)", borderRadius: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
-                <ShieldCheck size={14} style={{ color: "var(--teal)" }} />
-                <strong style={{ fontSize: 11, letterSpacing: "0.05em" }}>APPROVAL RECORD</strong>
-                {gatePass.financialAspect && (
-                  <span className="faint" style={{ marginLeft: "auto", fontSize: 10 }}>
-                    Recorded asset value: {Number(gatePass.estimatedValue || 0).toLocaleString()}
-                  </span>
-                )}
-              </div>
-              {gatePass.approvalSteps?.length ? (
-                <div style={{ display: "grid", gap: 9 }}>
-                  {gatePass.approvalSteps.map((step) => (
-                    <div key={step.role} style={{
-                      display: "grid",
-                      gridTemplateColumns: "minmax(110px, 0.8fr) minmax(140px, 1fr) minmax(130px, 1fr)",
-                      gap: 8,
-                      padding: "9px 10px",
-                      background: "var(--bg)",
-                      borderRadius: 7,
-                      fontSize: 11
-                    }}>
-                      <strong>{step.role === "project_manager" ? "Project Manager" : step.role === "ceo" ? "CEO" : step.role}</strong>
-                      <span>{step.approverName || "Approver not recorded"} · {step.status || "pending"}</span>
-                      <span className="faint">{step.decidedAt ? fmtTime(new Date(step.decidedAt)) : "Decision time not recorded"}</span>
-                      {step.comment && <span className="faint" style={{ gridColumn: "1 / -1" }}>Comment: {step.comment}</span>}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="faint" style={{ fontSize: 11 }}>Approval history is not available for this gate pass.</div>
-              )}
-              <div className="faint" style={{ fontSize: 10, marginTop: 9 }}>
-                Final release authorised by {gatePass.authorizedBy || "—"} · {gatePass.authorizedAt ? fmtTime(new Date(gatePass.authorizedAt)) : "—"}
-              </div>
-            </section>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {gatePass.assets && gatePass.assets.length > 0 && (
-                <div style={{
-                  padding: "12px 14px",
-                  background: "rgba(255,255,255,.02)",
-                  border: "1px solid var(--line)",
-                  borderRadius: 10
-                }}>
-                  <div className="faint" style={{ fontSize: 10, marginBottom: 8, textTransform: "uppercase", fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
-                    Assets ({gatePass.assets.length})
-                  </div>
-                  {gatePass.assets.map((a, i) => (
-                    <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.assets.length - 1 ? 6 : 0 }}>
-                      <span style={{ fontWeight: 600 }}>{a.description || `${a.type} · ${a.model}`}</span>
-                      <div className="faint" style={{ fontSize: 10 }}>{a.description ? `${a.type} · ${a.model} · ` : ""}SN {a.serial}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {gatePass.consumables && gatePass.consumables.length > 0 && (
-                <div style={{
-                  padding: "12px 14px",
-                  background: "rgba(255,255,255,.02)",
-                  border: "1px solid var(--line)",
-                  borderRadius: 10
-                }}>
-                  <div className="faint" style={{ fontSize: 10, marginBottom: 8, textTransform: "uppercase", fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
-                    Consumables ({gatePass.consumables.length})
-                  </div>
-                  {gatePass.consumables.map((c, i) => (
-                    <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.consumables.length - 1 ? 6 : 0 }}>
-                      <span style={{ fontWeight: 600 }}>{c.description || `${c.type} · ${c.model}`}</span>
-                      <div className="faint" style={{ fontSize: 10 }}>{c.qty} {c.unit}{c.description ? ` · ${c.type} · ${c.model}` : ""}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {gatePass.receivedAt && (
-              <section style={{ padding: "13px 15px", border: "1px solid var(--line)", borderRadius: 10 }}>
-                <strong style={{ fontSize: 11, letterSpacing: "0.05em" }}>RECEIPT CONFIRMATION</strong>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 9, marginTop: 9, fontSize: 11 }}>
-                  <span>Received by: <b>{gatePass.receivedByName || "—"}</b></span>
-                  <span>Date: <b>{fmtTime(new Date(gatePass.receivedAt))}</b></span>
-                  <span>Condition: <b>{gatePass.receivedCondition || "—"}</b></span>
-                  <span>Signature: <b>{gatePass.receiptSignature || gatePass.receivedByName || "—"}</b></span>
-                </div>
-                {gatePass.receiptDiscrepancyDetails && <p className="faint" style={{ fontSize: 11, margin: "9px 0 0" }}>Discrepancy: {gatePass.receiptDiscrepancyDetails}</p>}
-                {gatePass.receiptNotes && <p className="faint" style={{ fontSize: 11, margin: "5px 0 0" }}>Notes: {gatePass.receiptNotes}</p>}
-              </section>
+              <div className={`gp-note ${gatePass.receivedCondition === "good" ? "" : "issue"}`}>
+                <span>Received</span>
+                {gatePass.receivedByName || "—"} · {fmtTime(new Date(gatePass.receivedAt))} · {gatePass.receivedCondition || "—"}
+                {gatePass.receiptDiscrepancyDetails && <> · {gatePass.receiptDiscrepancyDetails.split("\n").join("; ")}</>}
+              </div>
             )}
           </div>
         </div>
