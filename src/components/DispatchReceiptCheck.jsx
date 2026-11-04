@@ -25,6 +25,7 @@ export function DispatchReceiptCheck({ dispatch, busy, onSubmit, onCancel }) {
   const [discrepancyDetails, setDiscrepancyDetails] = useState("");
   const [notes, setNotes] = useState("");
   const [signature, setSignature] = useState("");
+  const [driverSignature, setDriverSignature] = useState("");
   const [problem, setProblem] = useState("");
 
   const setLine = (componentId, patch) => setCounts((current) => ({
@@ -85,6 +86,10 @@ export function DispatchReceiptCheck({ dispatch, busy, onSubmit, onCancel }) {
       setProblem("Type your full name to sign for the delivery.");
       return;
     }
+    if (driverSignature.trim().length < 2) {
+      setProblem("The driver signs the handover: they type their full name.");
+      return;
+    }
     setProblem("");
     onSubmit({
       items: lines.map((line) => {
@@ -94,6 +99,7 @@ export function DispatchReceiptCheck({ dispatch, busy, onSubmit, onCancel }) {
       discrepancyDetails,
       notes,
       signature,
+      driverSignature,
     });
   };
 
@@ -182,6 +188,11 @@ export function DispatchReceiptCheck({ dispatch, busy, onSubmit, onCancel }) {
           Your full name (signature) *
           <input className="form-input" maxLength={150} value={signature} autoComplete="name"
             onChange={(event) => setSignature(event.target.value)} disabled={busy} />
+        </label>
+        <label className="receipt-field">
+          Driver handing over{dispatch.driver?.name ? ` (${dispatch.driver.name})` : ""}: full name *
+          <input className="form-input" maxLength={150} value={driverSignature}
+            onChange={(event) => setDriverSignature(event.target.value)} disabled={busy} />
         </label>
       </div>
 

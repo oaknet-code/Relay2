@@ -350,3 +350,7 @@
 .link-install-action .form-input {
   flex: 1 1 220px;
 }
+
+.receipt-sign > :first-child {
+  grid-column: 1 / -1;
+}

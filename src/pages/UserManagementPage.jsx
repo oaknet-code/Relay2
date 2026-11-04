@@ -31,6 +31,7 @@ const ROLES = [
   { value: "admin", label: "Admin", hint: "Views everything and prints reports; manages accounts below admin" },
   { value: "field_worker", label: "Contractor / Site Worker", hint: "Submits Site Work reports (needs a company)" },
   { value: "site_engineer", label: "Site Engineer", hint: "Receives dispatches; installs links; plans; fleet entries" },
+  { value: "driver", label: "Driver", hint: "Collects dispatches and reports the trip; link the account to their driver in Fleet" },
 ];
 // Old roles, still on some accounts until they're given a current one.
 const LEGACY_ROLES = {
@@ -52,6 +53,7 @@ const ROLE_COLORS = {
   site_engineer: "var(--blue)",
   client: "var(--teal)",
   field_worker: "var(--teal)",
+  driver: "var(--blue)",
 };
 
 const EMPTY_FORM = { username: "", email: "", company: "", role: "client", password: "" };

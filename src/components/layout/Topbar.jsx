@@ -1,6 +1,7 @@
 import { RadioTower, Menu } from 'lucide-react';
 import { Dot } from '../ui/Dot';
 import { NotificationBell } from './NotificationBell';
+import { InstallAppButton } from './InstallAppButton';
 
 export function Topbar({ currentView, liveLinks, totalLinks, onMenuToggle, allowedTabs = [], onNavigate, showBell = true }) {
   return (
@@ -15,6 +16,7 @@ export function Topbar({ currentView, liveLinks, totalLinks, onMenuToggle, allow
       </div>
 
       <div className="topbar-r">
+        <InstallAppButton />
         <span className="netpill netpill-live">
           <Dot c="var(--teal)" />
           {liveLinks} live

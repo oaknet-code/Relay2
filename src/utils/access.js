@@ -25,6 +25,8 @@ export const ACCESS_LEVELS = {
 //                    below admin; no other edits
 //   field_worker     "Contractor / Site Worker": site work and own claims
 //   client           views their own links
+//   driver           "My Trips": the dispatches assigned to them — confirms
+//                    pickup, marks arrival, reports problems
 export const ROLE_LABELS = {
   super_admin: "Super Admin",
   ceo: "CEO",
@@ -33,6 +35,7 @@ export const ROLE_LABELS = {
   admin: "Admin",
   field_worker: "Contractor / Site Worker",
   client: "Client",
+  driver: "Driver",
 };
 // Old roles: no access until someone gives the account a current role.
 export const LEGACY_ROLES = new Set(["warehouse_manager", "warehouse_operator", "site_manager"]);
@@ -41,6 +44,7 @@ export const needsNewRole = (user) => LEGACY_ROLES.has(user?.role);
 export const isSuperAdmin = (user) => ["super_admin", "ceo"].includes(user?.role);
 export const isAdmin = (user) => user?.role === "admin" || isSuperAdmin(user);
 export const isFieldWorker = (user) => user?.role === "field_worker";
+export const isDriver = (user) => user?.role === "driver";
 
 export const getAccessLevel = (user) => {
   if (isAdmin(user)) return ACCESS_LEVELS.FULL;
@@ -67,6 +71,8 @@ export const canViewFleet = (user) => hasFullView(user) || FLEET_VIEW_ROLES.has(
 export const CLIENT_NAV_IDS = ["control", "links"];
 // Contractor / site worker accounts: the Site Work page and their own claims.
 export const FIELD_WORKER_NAV_IDS = ["site-work", "expense-claims"];
+// Pages only for drivers (not shown to anyone else, even full-view roles).
+export const DRIVER_NAV_IDS = ["trips"];
 const ROLE_NAV_IDS = {
   project_manager: ["control", "links", "tracking", "movement-plan", "fleet", "expense-claims"],
   site_engineer: ["control", "links", "tracking", "movement-plan", "fleet", "expense-claims"],
@@ -74,6 +80,8 @@ const ROLE_NAV_IDS = {
 
 export const getAllowedNavigation = (navigation, user) => {
   if (!user || needsNewRole(user)) return [];
+  if (isDriver(user)) return navigation.filter((item) => DRIVER_NAV_IDS.includes(item.id));
+  navigation = navigation.filter((item) => !DRIVER_NAV_IDS.includes(item.id));
   if (hasFullView(user)) return navigation;
   if (isFieldWorker(user)) return navigation.filter((item) => FIELD_WORKER_NAV_IDS.includes(item.id));
   const allowed = ROLE_NAV_IDS[user.role] || CLIENT_NAV_IDS;

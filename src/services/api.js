@@ -384,6 +384,23 @@ export const receiveDispatch = async (dispatchId, receipt) => {
   return data;
 };
 
+// Driver's part of a released dispatch (a super admin may record pickup
+// and problems for a driver without an account).
+export const confirmDispatchPickup = async (dispatchId, { signature, note = "" }) => {
+  const { data } = await axiosInstance.post(`/api/dispatch/${dispatchId}/pickup`, { signature, note });
+  return data; // { dispatch, notificationWarning }
+};
+
+export const markDispatchArrived = async (dispatchId, note = "") => {
+  const { data } = await axiosInstance.post(`/api/dispatch/${dispatchId}/arrived`, { note });
+  return data;
+};
+
+export const reportDispatchIncident = async (dispatchId, { type, note }) => {
+  const { data } = await axiosInstance.post(`/api/dispatch/${dispatchId}/incidents`, { type, note });
+  return data;
+};
+
 /**
  * Inventory — Assets
  */

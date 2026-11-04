@@ -1,0 +1,244 @@
+/* Driver "My Trips" page — phone first, big touch targets. */
+
+.driver-trips {
+  max-width: 640px;
+}
+
+.driver-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.driver-notice,
+.driver-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.driver-notice {
+  background: rgba(51, 220, 174, 0.08);
+  color: var(--teal);
+}
+
+.driver-error {
+  background: rgba(255, 95, 95, 0.08);
+  color: var(--red);
+}
+
+.driver-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.driver-trip {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 16px;
+}
+
+.driver-trip-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.driver-trip-id {
+  color: var(--ink);
+  font: 700 16px var(--mono);
+}
+
+.driver-trip-to {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.driver-stage {
+  flex-shrink: 0;
+  padding: 4px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.driver-stage.collect { background: rgba(255, 180, 70, 0.12); color: var(--amber); }
+.driver-stage.moving { background: rgba(90, 160, 255, 0.12); color: var(--blue); }
+.driver-stage.site { background: rgba(170, 130, 255, 0.12); color: var(--violet); }
+.driver-stage.done { background: rgba(51, 220, 174, 0.1); color: var(--teal); }
+
+.driver-trip-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.driver-trip-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.driver-load summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.driver-load ul,
+.driver-checklist {
+  display: grid;
+  gap: 0;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.driver-load li,
+.driver-checklist li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.driver-checklist {
+  margin: 0;
+}
+
+.driver-incidents {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--amber);
+  font-size: 11.5px;
+}
+
+.driver-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.driver-big {
+  justify-content: center;
+  min-height: 46px;
+  font-size: 14px;
+}
+
+.driver-wait {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(170, 130, 255, 0.08);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.driver-form {
+  display: grid;
+  gap: 12px;
+}
+
+.driver-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.driver-check input {
+  width: 18px;
+  height: 18px;
+}
+
+.driver-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.driver-chip {
+  padding: 9px 12px;
+  border: 1px solid var(--line2);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.driver-chip.on {
+  border-color: var(--amber);
+  background: rgba(255, 180, 70, 0.1);
+  color: var(--amber);
+}
+
+.driver-history {
+  margin-top: 22px;
+}
+
+.driver-history h3 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.driver-history-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+/* Site Engineer / super admin view of the driver's part (tracker). */
+.trip-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.trip-progress .done {
+  color: var(--teal);
+}
+
+.trip-progress .now {
+  color: var(--amber);
+  font-weight: 600;
+}

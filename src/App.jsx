@@ -11,7 +11,7 @@ import { SiteWorkPage } from "./pages/SiteWorkPage";
 
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
-import { canEdit, canRequestDispatch, canViewAssetTracking, canViewFleet, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin, needsNewRole, ROLE_LABELS } from "./utils/access";
+import { canEdit, canRequestDispatch, canViewAssetTracking, canViewFleet, getAllowedNavigation, hasFullView, isAdmin, isDriver, isSuperAdmin, needsNewRole, ROLE_LABELS } from "./utils/access";
 
 import "./styles/globals.css";
 import "./styles/layout.css";
@@ -53,6 +53,7 @@ const FleetManagement = lazyPage(() => import("./pages/FleetManagement").then((m
 const AssetTracking = lazyPage(() => import("./pages/AssetTracking").then((m) => ({ default: m.AssetTracking })));
 const MovementPlanPage = lazyPage(() => import("./pages/MovementPlanPage").then((m) => ({ default: m.MovementPlanPage })));
 const ExpenseClaimsPage = lazyPage(() => import("./pages/ExpenseClaimsPage").then((m) => ({ default: m.ExpenseClaimsPage })));
+const DriverTripsPage = lazyPage(() => import("./pages/DriverTripsPage").then((m) => ({ default: m.DriverTripsPage })));
 const NotificationsPage = lazyPage(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const UserManagementPage = lazyPage(() =>
   import("./pages/UserManagementPage").then((m) => ({ default: m.UserManagementPage }))
@@ -170,7 +171,7 @@ export default function App() {
    */
   const [linkCounts, setLinkCounts] = useState({ live: 0, planned: 0 });
   useEffect(() => {
-    if (!user || user.role === "field_worker" || needsNewRole(user)) return;
+    if (!user || user.role === "field_worker" || isDriver(user) || needsNewRole(user)) return;
     let cancelled = false;
     api.getLinks()
       .then((links) => {
@@ -280,6 +281,9 @@ export default function App() {
 
       case "site-work":
         return <SiteWorkPage user={user} />;
+
+      case "trips":
+        return isDriver(user) ? <DriverTripsPage user={user} /> : <MissionControl />;
 
       default:
         return <MissionControl />;

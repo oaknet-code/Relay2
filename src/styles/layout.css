@@ -241,6 +241,38 @@
   backdrop-filter: blur(2px);
 }
 
+/* ─── Installed app (PWA) ────────────────────────────────── */
+/* Notch / home-bar spacing is at the end of this file. */
+.install-app-wrap {
+  position: relative;
+}
+
+.install-app-help {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 300;
+  width: min(270px, calc(100vw - 32px));
+  padding: 12px 30px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.install-app-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
 /* ─── TABLET (≤ 880px) ───────────────────────────────────── */
 @media (max-width: 880px) {
   .shell {
@@ -321,6 +353,11 @@
   .body {
     padding: 14px 12px;
   }
+
+  /* Icon only on small phones */
+  .install-app span {
+    display: none;
+  }
 }
 
 /* --- RESPONSIVE MEDIA QUERIES --- */
@@ -394,5 +431,24 @@
   tr,
   .fleet-operation-row {
     break-inside: avoid;
+  }
+}
+
+/* ─── Installed app: keep clear of the notch and home bar ──
+   Only when Relay runs full screen from its icon (viewport-fit=cover,
+   black-translucent status bar). Last in the file so it wins over the
+   tablet/phone padding above. */
+@media (display-mode: standalone) {
+  .topbar {
+    padding-top: calc(10px + env(safe-area-inset-top));
+  }
+
+  .sidebar {
+    padding-top: calc(18px + env(safe-area-inset-top));
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .body {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
   }
 }
