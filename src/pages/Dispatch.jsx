@@ -187,8 +187,10 @@ export function Dispatch({ canEdit = true, onNavigate }) {
     else if (!selectedDriverId && activeDrivers.length === 1) setSelectedDriverId(activeDrivers[0]._id);
   };
 
-  // Consumable pick-list is driven straight from the kit's components —
-  // the "required" amount doubles as what gets requested from stock.
+  // Consumable pick-list comes from the kit's components. What can be sent
+  // is the stock reserved for the kit from the inventory list (BOQ) on
+  // Site Kits — qtyAvailable — so the count is capped there. "toSend" is
+  // what the kit still needs after earlier dispatches.
   const consReq = (kit?.components || [])
     .filter(c => c.sourceType === "consumable")
     .map(c => ({
@@ -197,6 +199,9 @@ export function Dispatch({ canEdit = true, onNavigate }) {
       desc: c.description || "",
       type: c.type,
       req: c.qtyRequired,
+      sent: c.qtyDispatched || 0,
+      toSend: Math.max(0, c.qtyRequired - (c.qtyDispatched || 0)),
+      reserved: c.qtyAvailable || 0,
       unit: c.unit || "ea",
       ico: consumableIcon(c.model),
     }));
@@ -212,7 +217,8 @@ export function Dispatch({ canEdit = true, onNavigate }) {
 
   // Serialized (IDU/ODU/DISH) units are matched to a kit component of the
   // same type, so scanning them can decrement that component too.
-  const step = (k, d) => setCounts(p => ({ ...p, [k]: Math.max(0, (p[k] || 0) + d) }));
+  const step = (k, d, max) => setCounts(p => ({ ...p, [k]: Math.min(max, Math.max(0, (p[k] || 0) + d)) }));
+  const countableLines = consReq.filter(c => c.reserved > 0);
   const verify = (uid) => setVerified(p => ({ ...p, [uid]: true }));
 
   const serN = serUnits.filter(a => dispatched || verified[a.uid]).length;
@@ -772,7 +778,7 @@ export function Dispatch({ canEdit = true, onNavigate }) {
           <span className="ph-r" style={{ marginLeft: "auto" }}>
             {(dispatched || waybill) ?
               "Gate pass issued" :
-              `${serN}/${serUnits.length} scanned · ${consReq.filter(c => (counts[c.k] || 0) >= c.req).length}/${consReq.length} counted`
+              `${serN}/${serUnits.length} scanned · ${countableLines.filter(c => (counts[c.k] || 0) >= c.reserved).length}/${countableLines.length} counted`
             }
           </span>
         </div>
@@ -820,32 +826,42 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                 <ListChecks size={13} /> Count to verify · consumables
               </div>
               {consReq.map(c => {
-                const ok = counts[c.k] >= c.req;
+                const ok = c.reserved > 0 && (counts[c.k] || 0) >= c.reserved;
+                const unreserved = Math.max(0, c.toSend - c.reserved);
+                const blocked = c.reserved === 0;
                 return (
-                  <div className={`pickrow ${ok ? "done" : ""}`} key={c.k}>
+                  <div className={`pickrow ${ok ? "done" : ""}`} key={c.k} style={blocked && !dispatched ? { opacity: 0.6 } : undefined}>
                     <span className="pi" style={{ color: "var(--steel)" }}>
                       <c.ico size={16} />
                     </span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12.5 }}>{c.desc || c.t}</div>
                       <div className="mono faint" style={{ fontSize: 10.5 }}>
-                        {c.desc ? `${c.type} · ${c.t} · ` : ""}required {c.req} {c.unit}
+                        {c.desc ? `${c.type} · ${c.t} · ` : ""}reserved {c.reserved} of {c.toSend} {c.unit} to send
+                        {c.sent > 0 && ` · ${c.sent} sent already`}
                       </div>
+                      {!dispatched && (c.toSend === 0 ? (
+                        <div style={{ fontSize: 10.5, color: "var(--teal)" }}>All sent</div>
+                      ) : blocked ? (
+                        <div style={{ fontSize: 10.5, color: "var(--red)" }}>Nothing reserved: reserve stock for this kit on Site Kits</div>
+                      ) : unreserved > 0 && (
+                        <div style={{ fontSize: 10.5, color: "var(--amber)" }}>{unreserved} {c.unit} not reserved yet</div>
+                      ))}
                     </div>
                     {dispatched ? (
                       <span className="pill" style={{ color: "var(--teal)" }}>
                         <CheckCircle2 size={13} />
-                        {c.req}
+                        {c.sent || c.req}
                       </span>
                     ) : (
                       <div className="stepper">
-                        <button onClick={() => step(c.k, -1)}>
+                        <button onClick={() => step(c.k, -1, c.reserved)} disabled={blocked}>
                           <Minus size={13} />
                         </button>
                         <span className="n" style={{ color: ok ? "var(--teal)" : "var(--ink)" }}>
-                          {counts[c.k]}
+                          {counts[c.k] || 0}
                         </span>
-                        <button onClick={() => step(c.k, 1)}>
+                        <button onClick={() => step(c.k, 1, c.reserved)} disabled={blocked || (counts[c.k] || 0) >= c.reserved}>
                           <Plus size={13} />
                         </button>
                       </div>

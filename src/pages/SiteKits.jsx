@@ -37,6 +37,7 @@ function fromApiKit(k) {
       description: c.description || "",
       qtyRequired: c.qtyRequired,
       qtyAvailable: c.qtyAvailable || 0,
+      qtyDispatched: c.qtyDispatched || 0,
       sourceType: c.sourceType || "consumable",
       // BOQ availability, worked out by the server (not edited here).
       boq: c.boq || null,
@@ -57,10 +58,13 @@ const KIT_STATUS = {
   INSTALLED: { label: "Installed", c: "var(--teal)" }
 };
 
+// Reserved and waiting to go plus already sent out on a dispatch.
+const heldQty = (comp) => comp.qtyAvailable + (comp.qtyDispatched || 0);
+
 // A kit line against the BOQ: reserved (green), in the BOQ but not yet
 // reserved (blue), or more than the BOQ has left (red).
 function lineState(comp) {
-  if (comp.qtyAvailable >= comp.qtyRequired) return { c: "var(--teal)", label: "Reserved" };
+  if (heldQty(comp) >= comp.qtyRequired) return { c: "var(--teal)", label: "Reserved" };
   if (comp.boq && comp.boq.shortfall === 0) return { c: "var(--blue)", label: "In BOQ, not reserved" };
   return { c: "var(--red)", label: "Short in BOQ" };
 }
@@ -68,7 +72,7 @@ function lineState(comp) {
 // Short note on the BOQ position of a line not yet fully reserved.
 function boqNote(comp) {
   const b = comp.boq;
-  if (!b || comp.qtyAvailable >= comp.qtyRequired) return null;
+  if (!b || heldQty(comp) >= comp.qtyRequired) return comp.qtyDispatched ? `${comp.qtyDispatched} sent` : null;
   if (b.inBoq === 0) return "not in BOQ";
   if (b.shortfall > 0) return `short ${b.shortfall}`;
   return `${b.free} free`;
@@ -200,7 +204,7 @@ function ComponentsTable({ components, limit, onShowAll }) {
             </span>
           </div>
           <div style={{ fontFamily: "var(--mono)", textAlign: "right", flexShrink: 0 }}>
-            <div style={{ color: lineState(comp).c }}>{comp.qtyAvailable}/{comp.qtyRequired}</div>
+            <div style={{ color: lineState(comp).c }}>{heldQty(comp)}/{comp.qtyRequired}</div>
             {boqNote(comp) && (
               <div style={{ fontSize: 10, color: comp.boq?.shortfall ? "var(--red)" : "var(--faint)" }}>{boqNote(comp)}</div>
             )}

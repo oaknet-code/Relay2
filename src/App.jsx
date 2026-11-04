@@ -23,15 +23,38 @@ import "./styles/tracking.css";
 import "./styles/change-password.css";
 import "./styles/movement-plan.css";
 
+// After a deploy, a tab still running the previous build asks for page
+// files that no longer exist on the server. Reload once to pick up the new
+// build instead of showing a broken page; the session flag stops a loop if
+// the file is genuinely unavailable.
+const RELOAD_FLAG = "relay:reloaded-for-new-build";
+function lazyPage(load) {
+  return lazy(() => load().then((module) => {
+    try { sessionStorage.removeItem(RELOAD_FLAG); } catch { /* storage unavailable */ }
+    return module;
+  }, (error) => {
+    let alreadyReloaded = true;
+    try {
+      alreadyReloaded = sessionStorage.getItem(RELOAD_FLAG) === "1";
+      if (!alreadyReloaded) sessionStorage.setItem(RELOAD_FLAG, "1");
+    } catch { /* storage unavailable: don't risk a reload loop */ }
+    if (!alreadyReloaded) {
+      window.location.reload();
+      return new Promise(() => {});
+    }
+    throw error;
+  }));
+}
+
 // Operations and administration pages are lazy-loaded; renderCurrentView
 // enforces each page's role gate before its dynamic import is evaluated.
-const Dispatch = lazy(() => import("./pages/Dispatch").then((m) => ({ default: m.Dispatch })));
-const FleetManagement = lazy(() => import("./pages/FleetManagement").then((m) => ({ default: m.FleetManagement })));
-const AssetTracking = lazy(() => import("./pages/AssetTracking").then((m) => ({ default: m.AssetTracking })));
-const MovementPlanPage = lazy(() => import("./pages/MovementPlanPage").then((m) => ({ default: m.MovementPlanPage })));
-const ExpenseClaimsPage = lazy(() => import("./pages/ExpenseClaimsPage").then((m) => ({ default: m.ExpenseClaimsPage })));
-const NotificationsPage = lazy(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
-const UserManagementPage = lazy(() =>
+const Dispatch = lazyPage(() => import("./pages/Dispatch").then((m) => ({ default: m.Dispatch })));
+const FleetManagement = lazyPage(() => import("./pages/FleetManagement").then((m) => ({ default: m.FleetManagement })));
+const AssetTracking = lazyPage(() => import("./pages/AssetTracking").then((m) => ({ default: m.AssetTracking })));
+const MovementPlanPage = lazyPage(() => import("./pages/MovementPlanPage").then((m) => ({ default: m.MovementPlanPage })));
+const ExpenseClaimsPage = lazyPage(() => import("./pages/ExpenseClaimsPage").then((m) => ({ default: m.ExpenseClaimsPage })));
+const NotificationsPage = lazyPage(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
+const UserManagementPage = lazyPage(() =>
   import("./pages/UserManagementPage").then((m) => ({ default: m.UserManagementPage }))
 );
 
@@ -194,7 +217,7 @@ export default function App() {
           <div className="panel-h"><h3>Your account needs a new role</h3></div>
           <div className="panel-b">
             <p className="mp-description">
-              Relay's roles have changed and your old role ({user.role.replace(/_/g, " ")}) is no longer used.
+              Relay&apos;s roles have changed and your old role ({user.role.replace(/_/g, " ")}) is no longer used.
               Ask a super admin or admin to give your account a new role in User Management, then sign in again.
             </p>
           </div>
