@@ -194,10 +194,21 @@ export function Dispatch({ canEdit = true, onNavigate }) {
     .map(c => ({
       k: c._id,
       t: c.model,
+      desc: c.description || "",
+      type: c.type,
       req: c.qtyRequired,
       unit: c.unit || "ea",
       ico: consumableIcon(c.model),
     }));
+
+  // A serialized unit's description comes from the kit component it was
+  // assigned to (or the first component of the same type and model).
+  const componentDescription = (unit) => {
+    const comps = kit?.components || [];
+    const comp = comps.find(c => String(c._id) === String(unit.componentId)) ||
+      comps.find(c => c.type === unit.type && c.model === unit.model);
+    return comp?.description || "";
+  };
 
   // Serialized (IDU/ODU/DISH) units are matched to a kit component of the
   // same type, so scanning them can decrement that component too.
@@ -310,14 +321,14 @@ export function Dispatch({ canEdit = true, onNavigate }) {
         csv += `Driver,${gatePass.driver?.name || 'N/A'}\n`;
         csv += `Dispatched At,${new Date(gatePass.dispatchedAt).toISOString()}\n`;
         csv += '\nASSETS\n';
-        csv += 'Serial,Type,Model\n';
+        csv += 'Description,Serial,Type,Model\n';
         (gatePass.assets || []).forEach(a => {
-          csv += `"${a.serial}","${a.type}","${a.model}"\n`;
+          csv += `"${a.description || ''}","${a.serial}","${a.type}","${a.model}"\n`;
         });
         csv += '\nCONSUMABLES\n';
-        csv += 'Type,Model,Qty,Unit\n';
+        csv += 'Description,Type,Model,Qty,Unit\n';
         (gatePass.consumables || []).forEach(c => {
-          csv += `"${c.type}","${c.model}",${c.qty},"${c.unit}"\n`;
+          csv += `"${c.description || ''}","${c.type}","${c.model}",${c.qty},"${c.unit}"\n`;
         });
         blob = new Blob([csv], { type: 'text/csv' });
         filename = `gatepass-${gatePass.gatePassNumber}.csv`;
@@ -665,8 +676,8 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                   </div>
                   {gatePass.assets.map((a, i) => (
                     <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.assets.length - 1 ? 6 : 0 }}>
-                      <span style={{ fontWeight: 600 }}>{a.serial}</span>
-                      <div className="faint" style={{ fontSize: 10 }}>{a.type} · {a.model}</div>
+                      <span style={{ fontWeight: 600 }}>{a.description || `${a.type} · ${a.model}`}</span>
+                      <div className="faint" style={{ fontSize: 10 }}>{a.description ? `${a.type} · ${a.model} · ` : ""}SN {a.serial}</div>
                     </div>
                   ))}
                 </div>
@@ -683,8 +694,8 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                   </div>
                   {gatePass.consumables.map((c, i) => (
                     <div key={i} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink)", marginBottom: i < gatePass.consumables.length - 1 ? 6 : 0 }}>
-                      <span style={{ fontWeight: 600 }}>{c.qty} {c.unit}</span>
-                      <div className="faint" style={{ fontSize: 10 }}>{c.type} · {c.model}</div>
+                      <span style={{ fontWeight: 600 }}>{c.description || `${c.type} · ${c.model}`}</span>
+                      <div className="faint" style={{ fontSize: 10 }}>{c.qty} {c.unit}{c.description ? ` · ${c.type} · ${c.model}` : ""}</div>
                     </div>
                   ))}
                 </div>
@@ -780,9 +791,9 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                       <TypeIcon t={a.type} />
                     </span>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12.5 }}>{a.type} · {a.model}</div>
+                      <div style={{ fontSize: 12.5 }}>{componentDescription(a) || `${a.type} · ${a.model}`}</div>
                       <div className="mono faint" style={{ fontSize: 10.5 }}>
-                        {a.serial}{a.band ? ` · ${a.band}` : ""}
+                        {componentDescription(a) ? `${a.type} · ${a.model} · ` : ""}{a.serial}{a.band ? ` · ${a.band}` : ""}
                       </div>
                     </div>
                     {v ? (
@@ -816,9 +827,9 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                       <c.ico size={16} />
                     </span>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12.5 }}>{c.t}</div>
+                      <div style={{ fontSize: 12.5 }}>{c.desc || c.t}</div>
                       <div className="mono faint" style={{ fontSize: 10.5 }}>
-                        required {c.req} {c.unit}
+                        {c.desc ? `${c.type} · ${c.t} · ` : ""}required {c.req} {c.unit}
                       </div>
                     </div>
                     {dispatched ? (
