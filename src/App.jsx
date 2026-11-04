@@ -54,6 +54,7 @@ const AssetTracking = lazyPage(() => import("./pages/AssetTracking").then((m) =>
 const MovementPlanPage = lazyPage(() => import("./pages/MovementPlanPage").then((m) => ({ default: m.MovementPlanPage })));
 const ExpenseClaimsPage = lazyPage(() => import("./pages/ExpenseClaimsPage").then((m) => ({ default: m.ExpenseClaimsPage })));
 const DriverTripsPage = lazyPage(() => import("./pages/DriverTripsPage").then((m) => ({ default: m.DriverTripsPage })));
+const DriverVehiclePage = lazyPage(() => import("./pages/DriverVehiclePage").then((m) => ({ default: m.DriverVehiclePage })));
 const NotificationsPage = lazyPage(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const UserManagementPage = lazyPage(() =>
   import("./pages/UserManagementPage").then((m) => ({ default: m.UserManagementPage }))
@@ -284,6 +285,8 @@ export default function App() {
 
       case "trips":
         return isDriver(user) ? <DriverTripsPage user={user} /> : <MissionControl />;
+      case "my-vehicle":
+        return isDriver(user) ? <DriverVehiclePage /> : <MissionControl />;
 
       default:
         return <MissionControl />;

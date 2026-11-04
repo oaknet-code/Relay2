@@ -27,6 +27,8 @@ export const ACCESS_LEVELS = {
 //   client           views their own links
 //   driver           "My Trips": the dispatches assigned to them — confirms
 //                    pickup, marks arrival, reports problems
+//                    "My Vehicle": pre-trip checks, fuel (claimed for
+//                    reimbursement), vehicle problems, own per diem
 export const ROLE_LABELS = {
   super_admin: "Super Admin",
   ceo: "CEO",
@@ -72,7 +74,7 @@ export const CLIENT_NAV_IDS = ["control", "links"];
 // Contractor / site worker accounts: the Site Work page and their own claims.
 export const FIELD_WORKER_NAV_IDS = ["site-work", "expense-claims"];
 // Pages only for drivers (not shown to anyone else, even full-view roles).
-export const DRIVER_NAV_IDS = ["trips"];
+export const DRIVER_NAV_IDS = ["trips", "my-vehicle"];
 const ROLE_NAV_IDS = {
   project_manager: ["control", "links", "tracking", "movement-plan", "fleet", "expense-claims"],
   site_engineer: ["control", "links", "tracking", "movement-plan", "fleet", "expense-claims"],

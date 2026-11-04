@@ -242,3 +242,159 @@
   color: var(--amber);
   font-weight: 600;
 }
+
+/* Driver "My Vehicle" page. */
+.driver-stage.bad { background: rgba(255, 95, 95, 0.1); color: var(--red); }
+
+.dv-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.dv-stats > div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.dv-stats span {
+  color: var(--muted);
+  font: 600 9.5px var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.dv-stats b {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.dv-stats .ok b { color: var(--teal); }
+.dv-stats .warn b { color: var(--amber); }
+
+.dv-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.dv-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dv-tab.on {
+  border-bottom-color: var(--amber);
+  color: var(--ink);
+}
+
+.dv-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.dv-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dv-row strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.dv-row .faint {
+  font-size: 11.5px;
+}
+
+.dv-bad {
+  color: var(--red);
+  font-size: 11.5px;
+}
+
+.dv-empty {
+  padding: 14px 0;
+  font-size: 12.5px;
+}
+
+.dv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dv-checks {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dv-checks li {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.dv-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.dv-okbtns {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.dv-okbtns .driver-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+}
+
+.driver-chip.on.bad {
+  border-color: var(--red);
+  background: rgba(255, 95, 95, 0.1);
+  color: var(--red);
+}
+
+.dv-checks li.bad .dv-check-row > span {
+  color: var(--red);
+}
+
+@media (max-width: 480px) {
+  .dv-grid { grid-template-columns: 1fr; }
+  .dv-check-row { flex-direction: column; align-items: flex-start; }
+}

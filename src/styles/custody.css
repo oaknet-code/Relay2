@@ -301,6 +301,63 @@
   color: var(--amber);
 }
 
+.gp-approvals-h {
+  color: var(--muted);
+  font: 600 9.5px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gp-approvals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.gp-approval {
+  --step: var(--amber);
+  padding: 8px 10px 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--step);
+  border-radius: 8px;
+}
+
+.gp-approval.approved { --step: var(--teal); }
+.gp-approval.rejected { --step: var(--red); }
+
+.gp-approval-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font: 600 9.5px var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.gp-approval-top b {
+  color: var(--step);
+}
+
+.gp-approval-name {
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gp-approval-when {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.gp-approval-comment {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 11.5px;
+  font-style: italic;
+}
+
 @media (max-width: 560px) {
   .gp-details {
     grid-template-columns: 1fr;

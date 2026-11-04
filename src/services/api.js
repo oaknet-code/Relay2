@@ -780,6 +780,11 @@ export const updateMaintenanceStatus = (id, status) => fleetCall("patch", `/api/
 export const getPartSourcingRecords = () => fleetCall("get", "/api/fleet/parts-sourcing");
 export const createPartSourcingRecord = (payload) => fleetCall("post", "/api/fleet/parts-sourcing", payload);
 export const getPerDiemRecords = () => fleetCall("get", "/api/fleet/per-diem");
+// Driver ("My Vehicle"): their vehicles, fuel, checks, problems and per diem.
+export const getDriverFleet = () => fleetCall("get", "/api/fleet/my");
+export const createDriverFuel = (payload) => fleetCall("post", "/api/fleet/my/fuel", payload);
+export const createDriverVehicleCheck = (payload) => fleetCall("post", "/api/fleet/my/checks", payload);
+export const reportDriverVehicleIssue = (payload) => fleetCall("post", "/api/fleet/my/issues", payload);
 export const getPerDiemOptions = () => fleetCall("get", "/api/fleet/per-diem/options");
 export const createPerDiemRecord = (payload) => fleetCall("post", "/api/fleet/per-diem", payload);
 export const decidePerDiemRecord = (id, decision, comment = "") =>

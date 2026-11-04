@@ -15,6 +15,7 @@ export const NAV_CONFIG = [
   { id: "sites", label: "Sites", group: "pipeline", ico: Building2 },
   { id: "dispatch", label: "Dispatch", group: "pipeline", ico: Truck },
   { id: "trips", label: "My Trips", group: "pipeline", ico: Navigation }, // drivers only
+  { id: "my-vehicle", label: "My Vehicle", group: "pipeline", ico: Truck }, // drivers only
   { id: "fleet", label: "Fleet", group: "pipeline", ico: MapPin },
   { id: "movement-plan", label: "Movement Plan", group: "pipeline", ico: Route },
   { id: "expense-claims", label: "Expense Claims", group: "pipeline", ico: Wallet },

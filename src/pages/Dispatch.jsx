@@ -597,6 +597,7 @@ export function Dispatch({ canEdit = true, onNavigate }) {
               <div><dt>Driver</dt><dd>{[gatePass.driver?.name, gatePass.driver?.phone].filter(Boolean).join(" · ") || "—"}</dd></div>
               <div><dt>Kit</dt><dd>{gatePass.kitId || "—"}</dd></div>
               <div><dt>Out</dt><dd>{gatePass.dispatchedAt ? fmtTime(new Date(gatePass.dispatchedAt)) : (dispatchTime ? fmtTime(dispatchTime) : "—")}</dd></div>
+              <div><dt>Released by</dt><dd>{gatePass.requestedByName || gatePass.dispatchedBy || "—"}</dd></div>
             </dl>
 
             <table className="gp-items">
@@ -617,12 +618,24 @@ export function Dispatch({ canEdit = true, onNavigate }) {
               </tbody>
             </table>
 
-            <div className="gp-note">
-              <span>Approved</span>
-              {gatePass.approvalSteps?.length
-                ? gatePass.approvalSteps.map((step) => `${step.role === "project_manager" ? "Project Manager" : step.role === "ceo" ? "CEO" : step.role}: ${step.approverName || step.status || "—"}`).join("  ·  ")
-                : `Released by ${gatePass.authorizedBy || "—"}`}
-            </div>
+            <div className="gp-approvals-h">Approvals</div>
+            {gatePass.approvalSteps?.length ? (
+              <div className="gp-approvals">
+                {gatePass.approvalSteps.map((step, i) => (
+                  <div key={`${step.role}-${i}`} className={`gp-approval ${step.status || "pending"}`}>
+                    <div className="gp-approval-top">
+                      <span>Step {i + 1} · {step.role === "project_manager" ? "Project Manager" : step.role === "ceo" ? "CEO" : step.role}</span>
+                      <b>{step.status || "pending"}</b>
+                    </div>
+                    <div className="gp-approval-name">{step.approverName || "—"}</div>
+                    <div className="gp-approval-when">{step.decidedAt ? fmtTime(new Date(step.decidedAt)) : "Awaiting decision"}</div>
+                    {step.comment && <div className="gp-approval-comment">&ldquo;{step.comment}&rdquo;</div>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="gp-note">Authorized by {gatePass.authorizedBy || "—"}</div>
+            )}
             {gatePass.receivedAt && (
               <div className={`gp-note ${gatePass.receivedCondition === "good" ? "" : "issue"}`}>
                 <span>Received</span>
