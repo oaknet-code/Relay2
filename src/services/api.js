@@ -554,6 +554,15 @@ export const markAllNotificationsRead = async () => {
   const { data } = await axiosInstance.post("/api/notifications/read-all");
   return data;
 };
+// Super admin / CEO: notification email setup and a test email.
+export const getEmailStatus = async () => {
+  const { data } = await axiosInstance.get("/api/notifications/email-status");
+  return data;
+};
+export const sendTestEmail = async () => {
+  const { data } = await axiosInstance.post("/api/notifications/email-test");
+  return data; // { ok, message, status }
+};
 
 export const updateLinkStatus = async (linkId, status) => {
   const { data } = await axiosInstance.patch(`/api/links/${encodeURIComponent(linkId)}/status`, { status });

@@ -274,7 +274,7 @@ export default function App() {
 
       case "notifications":
         return fullView ? (
-          <NotificationsPage onNavigate={setCurrentTab} />
+          <NotificationsPage onNavigate={setCurrentTab} canCheckEmail={isSuperAdmin(user)} />
         ) : (
           <MissionControl />
         );
