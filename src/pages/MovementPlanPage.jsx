@@ -814,7 +814,7 @@ export function MovementPlanPage({ user }) {
           trip.passengerIds.map((id) => teamById.get(String(id))?.name).filter(Boolean).join(", "),
           trip.departTime,
           trip.overnight,
-          trip.outsideMetro ? "Yes — per diem applies" : "No",
+          trip.outsideMetro ? "Yes" : "No",
         ])),
         ...documentSection("5. Vehicle allocation by day", ["Vehicle", ...planDates.map(displayDate)], assignedVehicles.map(([vehicleId, savedTrip]) => [
           savedTrip.plate || savedTrip.vehicle?.plate || vehicleById.get(vehicleId)?.plate || "—",
@@ -1067,7 +1067,7 @@ export function MovementPlanPage({ user }) {
                                 disabled={!canEdit}
                                 onChange={(event) => updateTrip(rowIndex, "outsideMetro", event.target.checked)}
                               />
-                              Outside Nairobi Metropolitan Area (driver per diem applies)
+                              Outside Nairobi Metropolitan Area
                             </span>
                           </label>
                           <fieldset className="mp-vehicle-picker mp-passengers">

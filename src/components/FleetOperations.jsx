@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Fuel, Loader2, Plus, Wrench, Package, Wallet, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { FleetModal } from "./FleetModal";
+import { PerDiemClaimForm, PerDiemClaimRow } from "./PerDiemClaims";
 import { FLEET_ENTRY_ROLES } from "../utils/access";
 import {
   createFuelLog,
   createMaintenanceRecord,
   createPartSourcingRecord,
-  createPerDiemRecord,
   decidePerDiemRecord,
   getExpenseClaimOptions,
   getFuelLogs,
   getMaintenanceRecords,
   getPartSourcingRecords,
-  getPerDiemOptions,
   getPerDiemRecords,
   updateMaintenanceStatus,
 } from "../services/api";
@@ -21,17 +20,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 const EMPTY_FUEL = { vehicleId: "", movementPlanId: "", purpose: "", date: today(), odometerKm: "", litres: "", totalCost: "", supplier: "", reference: "", notes: "" };
 const EMPTY_MAINTENANCE = { vehicleId: "", date: today(), description: "", vendor: "", cost: "", odometerKm: "", nextDueOdometerKm: "", notes: "" };
 const EMPTY_PART_SOURCING = { vehicleId: "", maintenanceRecordId: "", date: today(), partDescription: "", source: "cfao", supplier: "", totalCost: "", reference: "", notes: "" };
-const EMPTY_PER_DIEM = { movementPlanId: "", tripId: "", vehicleId: "", driverId: "" };
 const formatKes = (value) => `KES ${Number(value || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const displayDate = (value) => value ? new Date(value).toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" }) : "—";
-const inclusiveDays = (start, end) => {
-  if (!start || !end) return 0;
-  const first = new Date(`${start.slice(0, 10)}T00:00:00.000Z`);
-  const last = new Date(`${end.slice(0, 10)}T00:00:00.000Z`);
-  const days = Math.floor((last.getTime() - first.getTime()) / 86400000) + 1;
-  return Number.isInteger(days) && days > 0 ? days : 0;
-};
-const driverLabel = (record) => `${record.driverName} · ${record.planReference} / ${record.tripId}`;
 const userLabel = (user) => user
   ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "Unknown"
   : "Unknown";
@@ -51,13 +41,11 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
   const [maintenance, setMaintenance] = useState([]);
   const [partSourcing, setPartSourcing] = useState([]);
   const [perDiems, setPerDiems] = useState([]);
-  const [plans, setPlans] = useState([]);
   // Plans the user can claim expenses against — each fuel log is claimed on one.
   const [claimPlans, setClaimPlans] = useState([]);
   const [fuelForm, setFuelForm] = useState({ ...EMPTY_FUEL });
   const [maintenanceForm, setMaintenanceForm] = useState({ ...EMPTY_MAINTENANCE });
   const [partSourcingForm, setPartSourcingForm] = useState({ ...EMPTY_PART_SOURCING });
-  const [perDiemForm, setPerDiemForm] = useState({ ...EMPTY_PER_DIEM });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -74,15 +62,14 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
 
   const load = async () => {
     try {
-      const [fuels, maintenanceRows, partRows, perDiemRows, planRows, claimPlanRows] = await Promise.all([
-        getFuelLogs(), getMaintenanceRecords(), getPartSourcingRecords(), getPerDiemRecords(), getPerDiemOptions(),
+      const [fuels, maintenanceRows, partRows, perDiemRows, claimPlanRows] = await Promise.all([
+        getFuelLogs(), getMaintenanceRecords(), getPartSourcingRecords(), getPerDiemRecords(),
         canRecordFuel ? getExpenseClaimOptions() : Promise.resolve([]),
       ]);
       setFuelLogs(fuels);
       setMaintenance(maintenanceRows);
       setPartSourcing(partRows);
       setPerDiems(perDiemRows);
-      setPlans(planRows);
       setClaimPlans(claimPlanRows);
       setError("");
     } catch (err) {
@@ -93,14 +80,6 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
   };
   useEffect(() => { load(); }, []);
 
-  const selectedPlan = plans.find((plan) => plan._id === perDiemForm.movementPlanId);
-  const selectedTrip = selectedPlan?.trips.find((trip) => trip.tripId === perDiemForm.tripId);
-  const selectedAssignment = selectedTrip?.assignments.find((assignment) =>
-    assignment.vehicleId === perDiemForm.vehicleId && assignment.driverId === perDiemForm.driverId
-  );
-  const selectedDriver = drivers.find((driver) => driver._id === perDiemForm.driverId);
-  const selectedEligibleDays = inclusiveDays(selectedTrip?.startDate || "", selectedTrip?.endDate || "");
-  const estimatedPerDiem = selectedEligibleDays && selectedDriver ? selectedEligibleDays * selectedDriver.perDiemRate : 0;
   const approvedPerDiems = useMemo(() => perDiems
     .filter((record) => record.status === "approved")
     .reduce((sum, record) => sum + record.totalAmount, 0), [perDiems]);
@@ -170,34 +149,19 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
     if (success) setPartSourcingForm({ ...EMPTY_PART_SOURCING });
   };
 
-  const submitPerDiem = async (event) => {
-    event.preventDefault();
-    const success = await run(() => createPerDiemRecord(perDiemForm), "Driver per diem submitted for review.");
-    if (success) setPerDiemForm({ ...EMPTY_PER_DIEM });
+  const perDiemSaved = async (result) => {
+    setFormOpen(null);
+    await load();
+    setNotice({ ok: true, text: ["Per diem claim submitted for review.", result?.notificationWarning].filter(Boolean).join(" ") });
   };
 
   const reviewPerDiem = async (record, decision) => {
-    const comment = window.prompt(`Optional comment for ${decision} per diem for ${record.driverName}:`);
+    const comment = window.prompt(decision === "rejected"
+      ? `Why is the claim for ${record.driverName} rejected? The driver sees this.`
+      : `Optional comment for approving ${record.driverName}'s claim:`);
     if (comment === null) return;
-    await run(() => decidePerDiemRecord(record._id, decision, comment), `Driver per diem ${decision}.`);
-  };
-
-  const updatePlan = (planId) => {
-    const plan = plans.find((item) => item._id === planId);
-    const trip = plan?.trips[0];
-    const assignment = trip?.assignments[0];
-    setPerDiemForm({
-      ...EMPTY_PER_DIEM,
-      movementPlanId: planId,
-      tripId: trip?.tripId || "",
-      vehicleId: assignment?.vehicleId || "",
-      driverId: assignment?.driverId || "",
-    });
-  };
-  const updateTrip = (tripId) => {
-    const trip = selectedPlan?.trips.find((item) => item.tripId === tripId);
-    const assignment = trip?.assignments[0];
-    setPerDiemForm((current) => ({ ...current, tripId, vehicleId: assignment?.vehicleId || "", driverId: assignment?.driverId || "" }));
+    if (decision === "rejected" && !comment.trim()) { setNotice({ ok: false, text: "Give a reason to reject the claim." }); return; }
+    await run(() => decidePerDiemRecord(record._id, decision, comment.trim()), `Per diem claim ${decision}.`);
   };
 
   const SECTIONS = {
@@ -218,8 +182,8 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
     },
     "per-diem": {
       title: "Driver per diem", icon: Wallet, count: perDiems.length,
-      intro: "Per driver, per calendar day, for published movement-plan trips outside Nairobi Metropolitan Area. Set each driver's daily rate under Vehicles & drivers.",
-      action: canSubmitPerDiem && plans.length > 0 && { label: "Submit per diem", form: "per-diem" },
+      intro: "Drivers pay for meals, accommodation and other costs on a trip, then claim what they spent with the receipts. Drivers claim from My Vehicle; you can also claim on a driver's behalf.",
+      action: canSubmitPerDiem && { label: "Submit a claim", form: "per-diem" },
     },
   };
   const current = SECTIONS[section] || SECTIONS.fuel;
@@ -279,19 +243,14 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
               <b>{formatKes(approvedPerDiems)}</b>
             </div>
             <div className="fleet-operation-list">
-              {perDiems.length === 0 && <div className="fleet-operation-empty">No driver per diem submitted yet.</div>}
+              {perDiems.length === 0 && <div className="fleet-operation-empty">No per diem claims yet.</div>}
               {perDiems.map((record) => (
-                <article className="fleet-operation-row" key={record._id}>
-                  <div className="fleet-operation-main">
-                    <strong>{driverLabel(record)} · {record.vehiclePlate}</strong>
-                    <span>{record.eligibleDays} day{record.eligibleDays === 1 ? "" : "s"} · {displayDate(record.startDate)}–{displayDate(record.endDate)} · {formatKes(record.ratePerDay)} / day · Submitted by {record.submittedByName || userLabel(record.submittedBy)}</span>
-                    {record.decisionComment && <small>Review note: {record.decisionComment}</small>}
-                    {record.status === "rejected" && <small>To resubmit, use Submit per diem with the same plan, trip and vehicle.</small>}
+                <PerDiemClaimRow key={record._id} record={record} actions={canReviewPerDiem && record.status === "pending" && (
+                  <div className="fleet-operation-actions">
+                    <button className="btn sm amber" disabled={busy} onClick={() => reviewPerDiem(record, "approved")}>Approve</button>
+                    <button className="btn sm ghost" disabled={busy} onClick={() => reviewPerDiem(record, "rejected")}>Reject</button>
                   </div>
-                  <div className="fleet-operation-meta"><b>{formatKes(record.totalAmount)}</b><Status value={record.status} />
-                    {canReviewPerDiem && record.status === "pending" && <div className="fleet-operation-actions"><button className="btn sm amber" disabled={busy} onClick={() => reviewPerDiem(record, "approved")}>Approve</button><button className="btn sm ghost" disabled={busy} onClick={() => reviewPerDiem(record, "rejected")}>Reject</button></div>}
-                  </div>
-                </article>
+                )} />
               ))}
             </div>
           </>
@@ -416,37 +375,7 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
       )}
 
       {formOpen === "per-diem" && (
-        <FleetModal title="Submit driver per diem" description="Choose the trip and the vehicle and driver on it. The amount is the driver's daily rate times the trip's calendar days." onClose={closeForm}>
-          <form className="fleet-operation-form fleet-modal-form" onSubmit={submitPerDiem}>
-            {formErrorBanner}
-            <label className="wide">Published movement plan *
-              <select className="form-input" required value={perDiemForm.movementPlanId} onChange={(event) => updatePlan(event.target.value)}>
-                <option value="">Select a plan</option>{plans.map((plan) => <option key={plan._id} value={plan._id}>{plan.reference} · {plan.title}</option>)}
-              </select>
-            </label>
-            <label className="wide">Trip outside Nairobi Metropolitan Area *
-              <select className="form-input" required value={perDiemForm.tripId} onChange={(event) => updateTrip(event.target.value)} disabled={!selectedPlan}>
-                <option value="">Select an eligible trip</option>{selectedPlan?.trips.map((trip) => <option key={trip.tripId} value={trip.tripId}>{trip.tripId} · {trip.originName} to {trip.destinationName}</option>)}
-              </select>
-            </label>
-            <label className="wide">Vehicle and driver *
-              <select className="form-input" required value={`${perDiemForm.vehicleId}|${perDiemForm.driverId}`} onChange={(event) => {
-                const [vehicleId, driverId] = event.target.value.split("|");
-                setPerDiemForm((c) => ({ ...c, vehicleId, driverId }));
-              }} disabled={!selectedTrip}>
-                <option value="|">Select assignment</option>{selectedTrip?.assignments.map((assignment) => <option key={`${assignment.vehicleId}|${assignment.driverId}`} value={`${assignment.vehicleId}|${assignment.driverId}`}>{assignment.vehiclePlate} · {assignment.driverName}</option>)}
-              </select>
-            </label>
-            <div className="fleet-operation-estimate">
-              <span>{selectedTrip ? `${selectedEligibleDays} calendar day${selectedEligibleDays === 1 ? "" : "s"} · ${displayDate(selectedTrip.startDate)}–${displayDate(selectedTrip.endDate)}` : "Select a trip to see the amount."}</span>
-              <strong>{formatKes(selectedDriver?.perDiemRate || 0)} / day · Total {formatKes(estimatedPerDiem)}</strong>
-            </div>
-            {selectedDriver && !selectedDriver.perDiemRate && (
-              <div className="fleet-operation-notice error wide" role="alert"><AlertTriangle size={14} /> {selectedDriver.name} has no daily per-diem rate. Set one under Vehicles &amp; drivers first.</div>
-            )}
-            {formActions("Submit per diem", !selectedAssignment || !selectedDriver?.perDiemRate)}
-          </form>
-        </FleetModal>
+        <PerDiemClaimForm mode="office" drivers={drivers} vehicles={vehicles} onClose={() => setFormOpen(null)} onSaved={perDiemSaved} />
       )}
     </section>
   );

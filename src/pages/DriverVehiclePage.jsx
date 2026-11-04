@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Fuel, Gauge, Loader2, RefreshCw, Truck, Wallet, Wrench, XCircle } from "lucide-react";
 import { createDriverFuel, createDriverVehicleCheck, getDriverFleet, reportDriverVehicleIssue } from "../services/api";
 import { FleetModal } from "../components/FleetModal";
+import { PerDiemClaimForm, PerDiemClaimRow } from "../components/PerDiemClaims";
 import "../styles/custody.css";
 import "../styles/driver.css";
 
@@ -18,7 +19,6 @@ const errorText = (err, fallback) => err.response?.data?.message || err.message 
 
 const VEHICLE_STATUS = { available: ["Available", "done"], in_use: ["In use", "moving"], maintenance: ["In maintenance", "collect"] };
 const CLAIM_STATUS = { submitted: ["Claim awaiting review", "collect"], approved: ["Claim approved", "done"], rejected: ["Claim rejected", "bad"], paid: ["Paid", "done"] };
-const PER_DIEM_STATUS = { pending: ["Awaiting review", "collect"], approved: ["Approved", "done"], rejected: ["Rejected", "bad"] };
 const TABS = [["fuel", "Fuel", Fuel], ["checks", "Checks", ClipboardCheck], ["problems", "Problems", Wrench], ["per-diem", "Per diem", Wallet]];
 
 export function DriverVehiclePage() {
@@ -91,7 +91,7 @@ export function DriverVehiclePage() {
           {tab === "fuel" && <FuelHistory rows={data.fuel} />}
           {tab === "checks" && <CheckHistory rows={data.checks} />}
           {tab === "problems" && <ProblemHistory rows={data.issues} />}
-          {tab === "per-diem" && <PerDiemHistory rows={data.perDiem} rate={data.driver?.perDiemRate} />}
+          {tab === "per-diem" && <PerDiemHistory rows={data.perDiem} onClaim={() => { setNotice(""); setModal({ kind: "per-diem" }); }} />}
         </section>
       )}
 
@@ -104,6 +104,10 @@ export function DriverVehiclePage() {
           onSaved={(result) => done(result.passed
             ? `${modal.vehicle.plate} checked: all OK. Safe trip!`
             : `${modal.vehicle.plate} check saved. The fleet team has been told about the problem.`, result)} />
+      )}
+      {modal?.kind === "per-diem" && (
+        <PerDiemClaimForm mode="driver" vehicles={vehicles} onClose={() => setModal(null)}
+          onSaved={(result) => done("Per diem claim sent for review. You'll be told when it's approved.", result)} />
       )}
       {modal?.kind === "problem" && (
         <ProblemModal vehicle={modal.vehicle} onClose={() => setModal(null)}
@@ -212,22 +216,14 @@ function ProblemHistory({ rows }) {
   ));
 }
 
-function PerDiemHistory({ rows, rate }) {
+function PerDiemHistory({ rows, onClaim }) {
   return (
     <>
-      <div className="faint dv-empty" style={{ paddingTop: 4 }}>
-        {rate > 0 ? `Your rate: ${kes(rate)} per day, for trips outside Nairobi Metropolitan Area. It's recorded by the movement plan team.` : "Per diem is recorded by the movement plan team for trips outside Nairobi Metropolitan Area."}
+      <div className="dv-claim-bar">
+        <span className="faint">Spent money on a trip? Claim it with the receipts.</span>
+        <button type="button" className="btn sm amber" onClick={onClaim}><Wallet size={13} /> Claim per diem</button>
       </div>
-      {rows.length === 0 ? <Empty>No per diem yet.</Empty> : rows.map((row) => (
-        <div key={row._id} className="dv-row">
-          <div>
-            <strong>{row.planReference} / {row.tripId} · {kes(row.totalAmount)}</strong>
-            <span className="faint">{row.startDate} to {row.endDate} · {row.eligibleDays} day{row.eligibleDays === 1 ? "" : "s"}{row.vehiclePlate ? ` · ${row.vehiclePlate}` : ""}</span>
-            {row.status === "rejected" && row.decisionComment && <span className="dv-bad">{row.decisionComment}</span>}
-          </div>
-          <Chip map={PER_DIEM_STATUS} value={row.status} />
-        </div>
-      ))}
+      {rows.length === 0 ? <Empty>No per diem claims yet.</Empty> : rows.map((row) => <PerDiemClaimRow key={row._id} record={row} showDriver={false} />)}
     </>
   );
 }

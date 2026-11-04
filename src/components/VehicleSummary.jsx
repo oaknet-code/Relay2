@@ -175,7 +175,7 @@ export function VehicleSummary({ vehicles, onViewTransactions }) {
                           <td>
                             {kes(r.perDiem.approved)}
                             <small>
-                              {r.perDiem.days ? `${r.perDiem.days} day${r.perDiem.days === 1 ? "" : "s"}` : "None approved"}
+                              {r.perDiem.claims ? `${r.perDiem.claims} claim${r.perDiem.claims === 1 ? "" : "s"}` : "None approved"}
                               {r.perDiem.pending ? ` · ${kes(r.perDiem.pending)} pending` : ""}
                             </small>
                           </td>

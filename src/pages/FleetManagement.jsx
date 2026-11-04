@@ -48,7 +48,7 @@ const VEHICLE_STATUS = {
   maintenance: { label: "Maintenance", cls: "maintenance" },
 };
 const EMPTY_VEHICLE = { plate: "", make: "", body: "", status: "available", driverId: "", notes: "" };
-const EMPTY_DRIVER = { name: "", phone: "", status: "active", userId: "", perDiemRate: 0 };
+const EMPTY_DRIVER = { name: "", phone: "", status: "active", userId: "" };
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -190,7 +190,7 @@ export function FleetManagement({ canEdit = false, user }) {
   const saveDriver = async (e) => {
     e.preventDefault();
     const { id, ...fields } = driverForm;
-    const payload = { ...fields, userId: fields.userId || null, perDiemRate: Number(fields.perDiemRate || 0) };
+    const payload = { ...fields, userId: fields.userId || null };
     const ok = await run(
       () => (id ? updateDriver(id, payload) : createDriver(payload)),
       `Driver ${fields.name} ${id ? "updated" : "added"}.`,
@@ -310,7 +310,7 @@ export function FleetManagement({ canEdit = false, user }) {
                     {d.status !== "active" && <span className="fleet-status parked" style={{ marginLeft: 8 }}>Inactive</span>}
                   </div>
                   <div className="fv-detail">
-                    {d.phone || <span className="faint">no phone</span>} · KES {Number(d.perDiemRate || 0).toLocaleString("en-KE")} / day
+                    {d.phone || <span className="faint">no phone</span>}
                     {d.user && <> · team member: {d.user.firstName} {d.user.lastName}</>}
                     {assigned.length > 0 && <> · usual driver of {assigned.join(", ")}</>}
                   </div>
@@ -318,7 +318,7 @@ export function FleetManagement({ canEdit = false, user }) {
                 {canEdit && (
                   <div className="fv-right fleet-row-actions">
                     <button className="btn sm ghost" type="button" aria-label={`Edit ${d.name}`} title="Edit"
-                      onClick={() => openDriverForm({ id: d._id, name: d.name, phone: d.phone || "", status: d.status, userId: d.user?._id || "", perDiemRate: d.perDiemRate || 0 })}>
+                      onClick={() => openDriverForm({ id: d._id, name: d.name, phone: d.phone || "", status: d.status, userId: d.user?._id || "" })}>
                       <Pencil size={13} />
                     </button>
                     <button className="btn sm ghost" type="button" style={{ color: "var(--red)" }} aria-label={`Remove ${d.name}`} title="Remove" onClick={() => removeDriver(d)}>
@@ -468,10 +468,6 @@ export function FleetManagement({ canEdit = false, user }) {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
-            </label>
-            <label>Per diem (KES / day)
-              <input className="form-input" type="number" min="0" step="0.01" value={driverForm.perDiemRate ?? 0}
-                onChange={(e) => setDriverForm((f) => ({ ...f, perDiemRate: e.target.value }))} />
             </label>
             <label>Link team member
               <select className="form-input" value={driverForm.userId || ""} onChange={(e) => setDriverForm((f) => ({ ...f, userId: e.target.value }))}>

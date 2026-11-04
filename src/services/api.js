@@ -786,7 +786,26 @@ export const createDriverFuel = (payload) => fleetCall("post", "/api/fleet/my/fu
 export const createDriverVehicleCheck = (payload) => fleetCall("post", "/api/fleet/my/checks", payload);
 export const reportDriverVehicleIssue = (payload) => fleetCall("post", "/api/fleet/my/issues", payload);
 export const getPerDiemOptions = () => fleetCall("get", "/api/fleet/per-diem/options");
-export const createPerDiemRecord = (payload) => fleetCall("post", "/api/fleet/per-diem", payload);
+// Per diem claim: the claim as JSON plus the receipt files (multipart).
+export const createPerDiemRecord = async (payload, files = []) => {
+  const formData = new FormData();
+  formData.append("payload", JSON.stringify(payload));
+  files.forEach((file) => formData.append("documents", file));
+  try {
+    const { data } = await axiosInstance.post("/api/fleet/per-diem", formData, { headers: { "Content-Type": "multipart/form-data" } });
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "The per diem claim didn't go through.");
+  }
+};
+export const getPerDiemDocument = async (claimId, docId) => {
+  try {
+    const { data } = await axiosInstance.get(`/api/fleet/per-diem/${claimId}/documents/${docId}`, { responseType: "blob" });
+    return data;
+  } catch {
+    throw new Error("Couldn't open the receipt.");
+  }
+};
 export const decidePerDiemRecord = (id, decision, comment = "") =>
   fleetCall("patch", `/api/fleet/per-diem/${id}/decision`, { decision, comment });
 
