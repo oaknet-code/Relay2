@@ -6,12 +6,17 @@ import {
   Loader2,
   MapPin,
   Package,
+  Printer,
   RefreshCw,
   ShieldCheck,
   Truck,
   UserRound,
 } from "lucide-react";
-import { decideDispatchApproval, getDispatches, receiveDispatch } from "../services/api";
+import { decideDispatchApproval, downloadGatePassPDF, getDispatches, getLinks, receiveDispatch } from "../services/api";
+import { DispatchReceiptCheck, DispatchReceiptLines } from "./DispatchReceiptCheck";
+import { lineLabel } from "../utils/dispatchLines";
+import { LinkInstallationPanel } from "./LinkInstallationPanel";
+import "../styles/custody.css";
 
 const formatDateTime = (value) => {
   if (!value) return "Not recorded";
@@ -33,12 +38,6 @@ const STATUS_COLORS = {
   RECEIVED: "var(--teal)",
 };
 
-const emptyReceipt = () => ({
-  condition: "good",
-  discrepancyDetails: "",
-  notes: "",
-  signature: "",
-});
 
 export function DispatchCustodyTracker({ user }) {
   const [dispatches, setDispatches] = useState([]);
@@ -47,14 +46,19 @@ export function DispatchCustodyTracker({ user }) {
   const [actionError, setActionError] = useState("");
   const [busyId, setBusyId] = useState("");
   const [comments, setComments] = useState({});
-  const [receipts, setReceipts] = useState({});
+  const [notice, setNotice] = useState("");
+  const [links, setLinks] = useState({}); // linkId → link, for installation progress
 
   const loadDispatches = useCallback(async () => {
     setError("");
     setLoading(true);
     try {
-      const records = await getDispatches();
+      const [records, linkRows] = await Promise.all([
+        getDispatches(),
+        getLinks().catch(() => []), // progress is optional; dispatches still show
+      ]);
       setDispatches(Array.isArray(records) ? records : []);
+      setLinks(Object.fromEntries((Array.isArray(linkRows) ? linkRows : []).map((link) => [link.linkId, link])));
     } catch (err) {
       setError(err.response?.data?.message || "Couldn't load dispatch custody records.");
     } finally {
@@ -73,10 +77,12 @@ export function DispatchCustodyTracker({ user }) {
       return;
     }
     setActionError("");
+    setNotice("");
     setBusyId(dispatch._id);
     try {
-      await decideDispatchApproval(dispatch._id, decision, comment);
+      const result = await decideDispatchApproval(dispatch._id, decision, comment);
       await loadDispatches();
+      setNotice(`${dispatch.waybillId} ${decision === "approve" ? "approved" : "rejected"}.${result?.notificationWarning ? ` ${result.notificationWarning}` : ""}`);
     } catch (err) {
       setActionError(err.response?.data?.message || "Couldn't record the approval decision.");
     } finally {
@@ -84,28 +90,34 @@ export function DispatchCustodyTracker({ user }) {
     }
   };
 
-  const changeReceipt = (dispatchId, field, value) => {
-    setReceipts((previous) => ({
-      ...previous,
-      [dispatchId]: { ...emptyReceipt(), ...previous[dispatchId], [field]: value },
-    }));
-  };
-
-  const submitReceipt = async (dispatch) => {
-    const receipt = { ...emptyReceipt(), ...receipts[dispatch._id] };
-    if (!receipt.signature.trim()) {
-      setActionError("Enter your name as the delivery signature.");
-      return;
-    }
-    if (receipt.condition !== "good" && !receipt.discrepancyDetails.trim()) {
-      setActionError("Describe the damage or shortage before confirming receipt.");
-      return;
-    }
+  // Opens the gate pass PDF (anyone who can see the dispatch, incl. admins).
+  const printGatePass = async (dispatch) => {
     setActionError("");
     setBusyId(dispatch._id);
     try {
-      await receiveDispatch(dispatch._id, receipt);
+      const blob = await downloadGatePassPDF(dispatch._id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setActionError(err.response?.data?.message || "Couldn't open the gate pass.");
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const submitReceipt = async (dispatch, receipt) => {
+    setActionError("");
+    setNotice("");
+    setBusyId(dispatch._id);
+    try {
+      const result = await receiveDispatch(dispatch._id, receipt);
       await loadDispatches();
+      setNotice([
+        `${dispatch.waybillId} received: ${result?.dispatch?.receipt?.condition || "recorded"}.`,
+        result?.linkInstalling ? `Link ${result.linkInstalling} is now Installing.` : "",
+        result?.notificationWarning || "",
+      ].filter(Boolean).join(" "));
     } catch (err) {
       setActionError(err.response?.data?.message || "Couldn't record the delivery receipt.");
     } finally {
@@ -120,7 +132,7 @@ export function DispatchCustodyTracker({ user }) {
         <div>
           <h3>Dispatch custody</h3>
           <div className="faint" style={{ fontSize: 11 }}>
-            Requests, sequential approvals, warehouse release and site receipt
+            Requests, approvals (Project Manager, then CEO), release, site receipt and link installation
           </div>
         </div>
         <button
@@ -136,6 +148,11 @@ export function DispatchCustodyTracker({ user }) {
       </div>
 
       <div className="panel-b" style={{ display: "grid", gap: 12 }}>
+        {notice && (
+          <div role="status" style={{ color: "var(--teal)", fontSize: 12, display: "flex", gap: 7, alignItems: "center" }}>
+            <CheckCircle2 size={14} /> {notice}
+          </div>
+        )}
         {actionError && (
           <div role="alert" style={{ color: "var(--red)", fontSize: 12, display: "flex", gap: 7, alignItems: "center" }}>
             <AlertTriangle size={14} /> {actionError}
@@ -163,8 +180,8 @@ export function DispatchCustodyTracker({ user }) {
           const isLegacy = !dispatch.status;
           const status = dispatch.status || (dispatch.dispatchedAt ? "DISPATCHED" : "PENDING_APPROVAL");
           const canApprove = status === "PENDING_APPROVAL" && currentApproval?.role === user?.role;
-          const canReceive = status === "DISPATCHED" && user?.role === "site_manager";
-          const receipt = { ...emptyReceipt(), ...receipts[dispatch._id] };
+          const canReceive = status === "DISPATCHED" && user?.role === "site_engineer";
+          const link = dispatch.linkId ? links[dispatch.linkId] : null;
           const statusColor = STATUS_COLORS[status] || "var(--muted)";
 
           return (
@@ -191,19 +208,26 @@ export function DispatchCustodyTracker({ user }) {
                 </div>
 
                 <div style={{ display: "grid", gap: 6 }}>
-                  <div className="up faint" style={{ fontSize: 9 }}>ITEMS / VEHICLE</div>
+                  <div className="up faint" style={{ fontSize: 9 }}>PACKING LIST / VEHICLE</div>
                   {(dispatch.items || []).map((item, index) => {
                     const selectedAssets = Array.isArray(item.assetIds) ? item.assetIds : [];
                     const serials = selectedAssets.map((asset) => asset?.serialNumber).filter(Boolean);
                     return (
                       <div key={`${item.componentId}-${index}`} style={{ fontSize: 11.5 }}>
-                        {item.type} · {item.model} · qty {item.qty}
-                        {serials.length > 0 && <span className="faint"> · {serials.join(", ")}</span>}
+                        <strong style={{ fontWeight: 600 }}>{lineLabel(item)}</strong> · {item.qty}{item.unit && item.unit !== "ea" ? ` ${item.unit}` : ""}
+                        <div className="faint" style={{ fontSize: 10.5 }}>
+                          {item.type} · {item.model}{serials.length > 0 ? ` · SN ${serials.join(", ")}` : ""}
+                        </div>
                       </div>
                     );
                   })}
-                  <div className="faint" style={{ fontSize: 11 }}>
+                  <div className="faint" style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     Vehicle {dispatch.vehicle?.plate || "—"} · Driver {dispatch.driver?.name || "—"}
+                    {["DISPATCHED", "RECEIVED"].includes(status) && (
+                      <button type="button" className="btn sm ghost" disabled={busyId === dispatch._id} onClick={() => printGatePass(dispatch)}>
+                        <Printer size={13} /> Print gate pass
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -234,7 +258,8 @@ export function DispatchCustodyTracker({ user }) {
                     {dispatch.receipt && (
                       <div style={{ fontSize: 11.5 }}>
                         <CheckCircle2 size={13} style={{ color: "var(--teal)" }} /> Received by {dispatch.receipt.receivedByName} · {formatDateTime(dispatch.receipt.receivedAt)} · {dispatch.receipt.condition}
-                        {dispatch.receipt.discrepancyDetails && <div className="faint" style={{ marginLeft: 18, marginTop: 2 }}>{dispatch.receipt.discrepancyDetails}</div>}
+                        <div style={{ marginLeft: 18, marginTop: 4 }}><DispatchReceiptLines receipt={dispatch.receipt} /></div>
+                        {dispatch.receipt.discrepancyDetails && <div className="faint" style={{ marginLeft: 18, marginTop: 2, whiteSpace: "pre-line" }}>{dispatch.receipt.discrepancyDetails}</div>}
                         {dispatch.receipt.notes && <div className="faint" style={{ marginLeft: 18, marginTop: 2 }}>Notes: {dispatch.receipt.notes}</div>}
                         <div className="faint" style={{ marginLeft: 18, marginTop: 2 }}>Signature: {dispatch.receipt.signature}</div>
                       </div>
@@ -268,58 +293,18 @@ export function DispatchCustodyTracker({ user }) {
                 )}
 
                 {canReceive && (
-                  <div style={{ display: "grid", gap: 9, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
-                    <div className="up faint" style={{ fontSize: 9 }}>CONFIRM DELIVERY · {dispatch.siteName}</div>
-                    <label className="faint" style={{ fontSize: 11 }}>
-                      Condition
-                      <select
-                        className="form-input"
-                        value={receipt.condition}
-                        onChange={(event) => changeReceipt(dispatch._id, "condition", event.target.value)}
-                        style={{ display: "block", width: "100%", marginTop: 5 }}
-                      >
-                        <option value="good">Received in good condition</option>
-                        <option value="damaged">Damage reported</option>
-                        <option value="incomplete">Shortage / incomplete</option>
-                      </select>
-                    </label>
-                    {receipt.condition !== "good" && (
-                      <label className="faint" style={{ fontSize: 11 }}>
-                        Damage or shortage details *
-                        <textarea
-                          className="form-input"
-                          rows={2}
-                          maxLength={1000}
-                          value={receipt.discrepancyDetails}
-                          onChange={(event) => changeReceipt(dispatch._id, "discrepancyDetails", event.target.value)}
-                          style={{ display: "block", width: "100%", marginTop: 5 }}
-                        />
-                      </label>
-                    )}
-                    <label className="faint" style={{ fontSize: 11 }}>
-                      Receipt notes
-                      <textarea
-                        className="form-input"
-                        rows={2}
-                        maxLength={1000}
-                        value={receipt.notes}
-                        onChange={(event) => changeReceipt(dispatch._id, "notes", event.target.value)}
-                        style={{ display: "block", width: "100%", marginTop: 5 }}
-                      />
-                    </label>
-                    <label className="faint" style={{ fontSize: 11 }}>
-                      Electronic signature (type your full name) *
-                      <input
-                        className="form-input"
-                        value={receipt.signature}
-                        onChange={(event) => changeReceipt(dispatch._id, "signature", event.target.value)}
-                        maxLength={150}
-                        style={{ display: "block", width: "100%", marginTop: 5 }}
-                      />
-                    </label>
-                    <button className="btn amber sm" disabled={busyId === dispatch._id} onClick={() => submitReceipt(dispatch)}>
-                      {busyId === dispatch._id ? <Loader2 size={13} className="spin" /> : <CheckCircle2 size={13} />} Confirm receipt
-                    </button>
+                  <div style={{ paddingTop: 10, borderTop: "1px solid var(--line)" }}>
+                    <DispatchReceiptCheck key={dispatch._id} dispatch={dispatch} busy={busyId === dispatch._id} onSubmit={(receipt) => submitReceipt(dispatch, receipt)} />
+                  </div>
+                )}
+
+                {status === "RECEIVED" && link && (
+                  <div style={{ paddingTop: 10, borderTop: "1px solid var(--line)" }}>
+                    <LinkInstallationPanel
+                      link={link}
+                      canAdvance={user?.role === "site_engineer"}
+                      onChanged={(updated) => setLinks((current) => ({ ...current, [updated.linkId]: updated }))}
+                    />
                   </div>
                 )}
               </div>

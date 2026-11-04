@@ -25,11 +25,16 @@ import {
   submitMovementPlan,
   updateMovementPlan,
 } from "../services/api";
+import { MOVEMENT_PLAN_PREPARER_ROLES } from "../utils/access";
 
 const STANDARD_SUMMARY =
   "This plan records the team, vehicles, movement schedule, accommodation, and logistics for the planned movement.";
 const EMPTY_LIST = [];
-const EDIT_ROLES = new Set(["super_admin", "site_engineer", "warehouse_manager"]);
+// Who can prepare plans; approval is Project Manager, then CEO (strict, in
+// order, and never by the preparer).
+const EDIT_ROLES = MOVEMENT_PLAN_PREPARER_ROLES;
+const APPROVAL_ROLE_LABEL = { project_manager: "Project Manager", ceo: "CEO" };
+const approvalRoleLabel = (approval) => APPROVAL_ROLE_LABEL[approval.role] || "Super admin";
 const EMPTY_FORM = {
   title: "Oaknet Movement Plan",
   project: "",
@@ -482,7 +487,7 @@ export function MovementPlanPage({ user }) {
     try {
       const submitted = await submitMovementPlan(saved._id);
       await refresh(submitted._id);
-      setNotice(`${submitted.reference} submitted to every assigned super admin for approval.`);
+      setNotice(`${submitted.reference} submitted for approval: the Project Manager first, then the CEO.${submitted.notificationWarning ? ` ${submitted.notificationWarning}` : ""}`);
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -498,7 +503,10 @@ export function MovementPlanPage({ user }) {
       const updated = await decideMovementPlan(plan._id, decision, approvalComment);
       await refresh(updated._id);
       setApprovalComment("");
-      setNotice(decision === "approved" ? "Approval recorded." : "Plan rejected and vehicle reservations released.");
+      const decided = decision === "approved"
+        ? (updated.status === "approved" ? "Final approval recorded. The plan is ready to publish." : "Approval recorded. The plan now goes to the CEO.")
+        : "Plan rejected and vehicle reservations released.";
+      setNotice(updated.notificationWarning ? `${decided} ${updated.notificationWarning}` : decided);
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -821,7 +829,7 @@ export function MovementPlanPage({ user }) {
         ...documentSection("6. Accommodation and logistics", ACCOMMODATION_FIELDS.map(([, label]) => label), approvedPlan.accommodation.map((row) => ACCOMMODATION_FIELDS.map(([key]) => row[key]))),
         ...documentSection("Logistics checklist", LOGISTICS_FIELDS.map(([, label]) => label), approvedPlan.logistics.map((row) => LOGISTICS_FIELDS.map(([key]) => row[key]))),
         ...documentSection("Approvals", ["Role", "Name", "Status", "Date", "Comment"], approvedPlan.approvals.map((approval) => [
-          "Super admin",
+          approvalRoleLabel(approval),
           approval.approverName,
           approval.status,
           approval.decidedAt ? new Date(approval.decidedAt).toLocaleDateString("en-GB") : "",
@@ -1228,14 +1236,16 @@ export function MovementPlanPage({ user }) {
               <section className="panel mp-section">
                 <div className="panel-h"><Check size={16} className="ph-ico" /><h3>Approvals</h3></div>
                 <div className="panel-b">
-                  <p className="mp-description">On submission, Relay assigns an approval task to every other active super admin. All assigned approvals are required before download or publication.</p>
+                  <p className="mp-description">Approval is in order: the Project Manager first, then the CEO. Both are needed before the plan can be downloaded or published, and nobody approves a plan they prepared.</p>
+                  {plan.awaitingRole && <p className="mp-hint">Waiting for approval by the {APPROVAL_ROLE_LABEL[plan.awaitingRole]}.</p>}
                   {plan.approvals.length > 0 ? (
                     <div className="mp-table-scroll">
                       <table className="mp-edit-table">
-                        <thead><tr><th>Approver</th><th>Status</th><th>Date</th><th>Comment</th></tr></thead>
-                        <tbody>{plan.approvals.map((approval) => (
-                          <tr key={String(approval.approverId)}>
-                            <td>{approval.approverName}</td>
+                        <thead><tr><th>Step</th><th>Approver</th><th>Status</th><th>Date</th><th>Comment</th></tr></thead>
+                        <tbody>{plan.approvals.map((approval, index) => (
+                          <tr key={`${approval.role || "legacy"}-${index}`}>
+                            <td>{approvalRoleLabel(approval)}</td>
+                            <td>{approval.approverName || "—"}</td>
                             <td>{approval.status}</td>
                             <td>{approval.decidedAt ? displayDate(approval.decidedAt) : "—"}</td>
                             <td>{approval.comment || "—"}</td>

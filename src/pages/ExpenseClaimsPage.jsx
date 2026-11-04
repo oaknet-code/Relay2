@@ -17,7 +17,8 @@ const EMPTY_FORM = {
   receiptReference: "",
 };
 const CATEGORIES = ["fuel", "accommodation", "meals", "transport", "supplies", "other"];
-const isApprover = (user) => ["ceo", "super_admin"].includes(user?.role);
+// Only the CEO reviews claims (sees all, approves, rejects, marks paid).
+const isApprover = (user) => user?.role === "ceo";
 const formatKes = (value) => `KES ${Number(value || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const displayDate = (value) => value ? new Date(value).toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 

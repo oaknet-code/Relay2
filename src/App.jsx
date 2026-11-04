@@ -11,7 +11,7 @@ import { SiteWorkPage } from "./pages/SiteWorkPage";
 
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
-import { canEdit, canViewAssetTracking, canViewFleet, DISPATCH_CREATOR_ROLES, getAccessLevel, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin } from "./utils/access";
+import { canEdit, canRequestDispatch, canViewAssetTracking, canViewFleet, getAllowedNavigation, hasFullView, isAdmin, isSuperAdmin, needsNewRole, ROLE_LABELS } from "./utils/access";
 
 import "./styles/globals.css";
 import "./styles/layout.css";
@@ -147,7 +147,7 @@ export default function App() {
    */
   const [linkCounts, setLinkCounts] = useState({ live: 0, planned: 0 });
   useEffect(() => {
-    if (!user || ["field_worker", "project_manager", "ceo", "site_manager"].includes(user.role)) return;
+    if (!user || user.role === "field_worker" || needsNewRole(user)) return;
     let cancelled = false;
     api.getLinks()
       .then((links) => {
@@ -186,6 +186,21 @@ export default function App() {
    * Render the active application view
    */
   const renderCurrentView = () => {
+    // Old Warehouse Manager / Operator accounts have no access until an
+    // admin gives them one of the current roles.
+    if (needsNewRole(user)) {
+      return (
+        <div className="panel" style={{ maxWidth: 560, margin: "40px auto" }}>
+          <div className="panel-h"><h3>Your account needs a new role</h3></div>
+          <div className="panel-b">
+            <p className="mp-description">
+              Relay's roles have changed and your old role ({user.role.replace(/_/g, " ")}) is no longer used.
+              Ask a super admin or admin to give your account a new role in User Management, then sign in again.
+            </p>
+          </div>
+        </div>
+      );
+    }
     switch (currentTab) {
       case "control":
         return <MissionControl user={user} onNavigate={setCurrentTab} />;
@@ -200,15 +215,15 @@ export default function App() {
         return <SitesPage canEdit={hasWriteAccess} />;
 
       case "dispatch":
-        return fullView || DISPATCH_CREATOR_ROLES.has(user?.role) ? (
-          <Dispatch canEdit={hasWriteAccess || DISPATCH_CREATOR_ROLES.has(user?.role)} onNavigate={setCurrentTab} />
+        return fullView ? (
+          <Dispatch canEdit={canRequestDispatch(user)} onNavigate={setCurrentTab} />
         ) : (
           <MissionControl />
         );
 
       case "fleet":
         return canViewFleet(user) ? (
-          <FleetManagement canEdit={hasWriteAccess || ["admin", "warehouse_manager"].includes(user?.role)} user={user} />
+          <FleetManagement canEdit={hasWriteAccess} user={user} />
         ) : (
           <MissionControl />
         );
@@ -263,24 +278,13 @@ export default function App() {
         user={{
           name: user?.firstName || "User",
 
-          title:
-            isSuperAdmin(user)
-              ? user?.role === "ceo" ? "CEO · Super Admin · Full Access" : "Super Admin · Full Access"
-              : getAccessLevel(user) === "full"
-              ? "Admin · View Access"
-              : getAccessLevel(user) === "field_worker"
-                ? "Field Worker"
-                : ["site_engineer", "warehouse_manager"].includes(user?.role)
-                    ? "Movement Planner"
-                  : user?.role === "warehouse_operator"
-                    ? "Fleet Staff · View"
-                    : user?.role === "project_manager"
-                      ? "Project Manager"
-                      : user?.role === "ceo"
-                        ? "CEO"
-                        : user?.role === "site_manager"
-                          ? "Site Manager"
-                    : "Client View Only",
+          title: needsNewRole(user)
+            ? "Needs a new role"
+            : isSuperAdmin(user)
+              ? `${ROLE_LABELS[user.role]} · Full Access`
+              : user?.role === "admin"
+                ? "Admin · View & Reports"
+                : ROLE_LABELS[user?.role] || "Client View Only",
 
           initials: (user?.firstName || "U").slice(0, 2).toUpperCase(),
         }}

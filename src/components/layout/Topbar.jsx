@@ -1,8 +1,8 @@
-import React from 'react';
-import { Bell, RadioTower, Menu } from 'lucide-react';
+import { RadioTower, Menu } from 'lucide-react';
 import { Dot } from '../ui/Dot';
+import { NotificationBell } from './NotificationBell';
 
-export function Topbar({ currentView, liveLinks, totalLinks, onMenuToggle, onBellClick }) {
+export function Topbar({ currentView, liveLinks, totalLinks, onMenuToggle, allowedTabs = [], onNavigate, showBell = true }) {
   return (
     <header className="topbar">
       {/* Hamburger — only shown on mobile via CSS */}
@@ -23,12 +23,13 @@ export function Topbar({ currentView, liveLinks, totalLinks, onMenuToggle, onBel
           <RadioTower size={12} />
           {totalLinks} planned
         </span>
-        {/* Opens Notifications (Alerts + Activity Log) for roles that have it. */}
-        {onBellClick && (
-          <button className="iconbtn" onClick={onBellClick} aria-label="Notifications" title="Notifications">
-            <Bell size={16} />
-            <span className="notif-dot" />
-          </button>
+        {/* Each person's own notifications; also links to the admin alerts page for roles that have it. */}
+        {showBell && (
+          <NotificationBell
+            allowedTabs={allowedTabs}
+            onNavigate={onNavigate}
+            alertsTab={allowedTabs.includes("notifications") ? "notifications" : null}
+          />
         )}
       </div>
     </header>

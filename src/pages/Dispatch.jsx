@@ -961,7 +961,7 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                 </button>
                 <span className="faint" style={{ fontSize: 11.5 }}>
                   {!canEdit
-                    ? "View only — dispatching needs a warehouse account."
+                    ? "View only — a super admin requests dispatches."
                     : !anySelected
                     ? "Scan a unit or count a consumable to enable."
                     : !selectedVehicle

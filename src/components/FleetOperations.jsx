@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Fuel, Loader2, Plus, Wrench, Package, Wallet, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { FleetModal } from "./FleetModal";
+import { FLEET_ENTRY_ROLES } from "../utils/access";
 import {
   createFuelLog,
   createMaintenanceRecord,
@@ -62,10 +63,14 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(null); // { ok, text }
   const role = user?.role;
-  const canRecordFuel = ["warehouse_manager", "warehouse_operator", "site_engineer", "site_manager", "admin", "ceo", "super_admin"].includes(role);
-  const canMaintain = ["warehouse_manager", "site_engineer", "admin", "ceo", "super_admin"].includes(role);
-  const canManageParts = ["warehouse_manager", "admin", "ceo", "super_admin"].includes(role);
-  const canReviewPerDiem = ["admin", "ceo", "super_admin"].includes(role);
+  // Same rules as the backend (Relay3 routes/fleet.routes.js): fuel and
+  // maintenance by project managers and site engineers; parts and per-diem
+  // review by super admin / CEO. Admins view only.
+  const canRecordFuel = FLEET_ENTRY_ROLES.has(role);
+  const canMaintain = FLEET_ENTRY_ROLES.has(role);
+  const canManageParts = ["ceo", "super_admin"].includes(role);
+  const canReviewPerDiem = ["ceo", "super_admin"].includes(role);
+  const canSubmitPerDiem = ["super_admin", "ceo", "project_manager", "site_engineer", "field_worker"].includes(role);
 
   const load = async () => {
     try {
@@ -214,7 +219,7 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
     "per-diem": {
       title: "Driver per diem", icon: Wallet, count: perDiems.length,
       intro: "Per driver, per calendar day, for published movement-plan trips outside Nairobi Metropolitan Area. Set each driver's daily rate under Vehicles & drivers.",
-      action: plans.length > 0 && { label: "Submit per diem", form: "per-diem" },
+      action: canSubmitPerDiem && plans.length > 0 && { label: "Submit per diem", form: "per-diem" },
     },
   };
   const current = SECTIONS[section] || SECTIONS.fuel;

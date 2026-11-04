@@ -341,3 +341,58 @@
 @media (hover: hover) and (pointer: fine) {
   /* Add fine-pointer hover styles here if needed */
 }
+
+/* Printing a report (Fleet summary, transactions, ...): only the page
+   content, in black on white, without navigation, buttons or filters. */
+@media print {
+  .sidebar,
+  .sidebar-backdrop,
+  .topbar,
+  .fleet-tabs,
+  .no-print,
+  .btn,
+  .iconbtn {
+    display: none !important;
+  }
+
+  .shell,
+  .main,
+  .body {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    overflow: visible !important;
+  }
+
+  body,
+  .relay,
+  .panel {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  .panel,
+  .fleet-schedule-table-wrap {
+    border-color: #999 !important;
+    overflow: visible !important;
+  }
+
+  .relay *,
+  .relay .faint,
+  .relay small {
+    color: #000 !important;
+  }
+
+  .fleet-schedule-table th,
+  .fleet-schedule-table td {
+    border-color: #bbb !important;
+    white-space: normal !important;
+  }
+
+  tr,
+  .fleet-operation-row {
+    break-inside: avoid;
+  }
+}

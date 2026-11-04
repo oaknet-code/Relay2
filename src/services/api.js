@@ -515,6 +515,29 @@ export const updateLink = async (linkId, payload) => {
   return data;
 };
 
+// Site engineer: move a link to its next installation stage (Installing,
+// Installed, Commissioned, Live) once its kit has been received on site.
+export const advanceLinkInstallation = async (linkId, stage, note = "") => {
+  const { data } = await axiosInstance.post(`/api/links/${encodeURIComponent(linkId)}/installation`, { stage, note });
+  return data;
+};
+
+/**
+ * Notifications — the signed-in person's own (the bell in the top bar).
+ */
+export const getNotifications = async ({ limit = 30, unread = false } = {}) => {
+  const { data } = await axiosInstance.get("/api/notifications", { params: { limit, ...(unread ? { unread: 1 } : {}) } });
+  return data;
+};
+export const markNotificationRead = async (id) => {
+  const { data } = await axiosInstance.patch(`/api/notifications/${encodeURIComponent(id)}/read`);
+  return data;
+};
+export const markAllNotificationsRead = async () => {
+  const { data } = await axiosInstance.post("/api/notifications/read-all");
+  return data;
+};
+
 export const updateLinkStatus = async (linkId, status) => {
   const { data } = await axiosInstance.patch(`/api/links/${encodeURIComponent(linkId)}/status`, { status });
   return data;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, ListChecks, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
+import { Download, ListChecks, Loader2, RefreshCw, AlertTriangle, Printer } from "lucide-react";
 import { getFleetTransactions } from "../services/api";
 
 // Every fuel, maintenance, parts and per-diem entry as one ledger — the
@@ -101,7 +101,10 @@ export function VehicleTransactions({ vehicles, request }) {
       <div className="panel-h">
         <ListChecks size={15} className="ph-ico" />
         <h3>Transaction details</h3>
-        <div className="ph-r vehicle-summary-actions">
+        <div className="ph-r vehicle-summary-actions no-print">
+          <button className="btn sm ghost" type="button" disabled={loading || rows.length === 0} onClick={() => window.print()}>
+            <Printer size={13} /> Print
+          </button>
           <button className="btn sm ghost" type="button" disabled={loading || rows.length === 0} onClick={downloadCsv}>
             <Download size={13} /> CSV
           </button>
@@ -115,7 +118,7 @@ export function VehicleTransactions({ vehicles, request }) {
           Every fuel, maintenance, parts{includesPerDiem ? " and per diem" : ""} entry, newest first. Leave the dates blank for all time.
           {includesPerDiem ? " Pending and rejected per diem is listed but not counted in totals." : ""}
         </p>
-        <form className="fleet-schedule-filters vehicle-transactions-filters" onSubmit={submit}>
+        <form className="fleet-schedule-filters vehicle-transactions-filters no-print" onSubmit={submit}>
           <label>From<input className="form-input" type="date" value={filters.from} max={filters.to || undefined}
             onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))} /></label>
           <label>To<input className="form-input" type="date" value={filters.to} min={filters.from || undefined}

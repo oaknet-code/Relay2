@@ -34,7 +34,7 @@ const groupOf = (a) => a.kit?.kitId || 'none';
 
 // ─── Main Component ─────────────────────────────────────────
 export function AssetTracking({ user, onNavigate }) {
-  const canViewAssetLifecycle = ['super_admin', 'admin', 'warehouse_manager', 'warehouse_operator', 'site_engineer'].includes(user?.role);
+  const canViewAssetLifecycle = ['super_admin', 'ceo', 'admin', 'project_manager', 'site_engineer'].includes(user?.role);
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

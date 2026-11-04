@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
+import { BarChart3, Loader2, RefreshCw, AlertTriangle, Printer } from "lucide-react";
 import { getVehicleSummary } from "../services/api";
 
 // Per-vehicle totals for fuel, maintenance, parts and driver per diem.
@@ -72,9 +72,14 @@ export function VehicleSummary({ vehicles, onViewTransactions }) {
       <div className="panel-h">
         <BarChart3 size={15} className="ph-ico" />
         <h3>Vehicle summary</h3>
-        <button className="btn sm ghost ph-r" type="button" disabled={loading} onClick={() => load(applied)}>
-          <RefreshCw size={13} /> Refresh
-        </button>
+        <div className="ph-r vehicle-summary-actions no-print">
+          <button className="btn sm ghost" type="button" disabled={loading || !summary} onClick={() => window.print()}>
+            <Printer size={13} /> Print
+          </button>
+          <button className="btn sm ghost" type="button" disabled={loading} onClick={() => load(applied)}>
+            <RefreshCw size={13} /> Refresh
+          </button>
+        </div>
       </div>
       <div className="panel-b">
         <p className="mp-description">
@@ -82,7 +87,7 @@ export function VehicleSummary({ vehicles, onViewTransactions }) {
           {showPerDiem ? " Per diem counts approved amounts." : ""}
           {onViewTransactions ? " Click a plate to see its transactions." : ""}
         </p>
-        <form className="fleet-schedule-filters vehicle-summary-filters" onSubmit={submit}>
+        <form className="fleet-schedule-filters vehicle-summary-filters no-print" onSubmit={submit}>
           <label>From<input className="form-input" type="date" value={range.from} max={range.to || undefined}
             onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} /></label>
           <label>To<input className="form-input" type="date" value={range.to} min={range.from || undefined}

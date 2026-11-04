@@ -20,38 +20,41 @@ import {
 } from "lucide-react";
 import { PasswordRules } from "../components/ui/PasswordRules";
 import { isPasswordValid, passwordProblem, generatePassword, PASSWORD_MAX_LENGTH } from "../utils/passwordPolicy";
-import { listUsers, createUser, updateUser, deleteUser, setUserStatus, resetUserMfa, getSites } from "../services/api";
+import { listUsers, createUser, updateUser, deleteUser, setUserStatus, resetUserMfa } from "../services/api";
 
 // Order = how roles appear in the account picker.
 const ROLES = [
-  { value: "super_admin", label: "Super Admin", hint: "Full access, including admin accounts" },
-  { value: "admin", label: "Admin", hint: "Views everything; manages accounts below admin" },
-  { value: "warehouse_manager", label: "Warehouse Manager", hint: "Manages stock, kits and links" },
-  { value: "warehouse_operator", label: "Warehouse Operator", hint: "Allocates kits and dispatches" },
-  { value: "project_manager", label: "Project Manager", hint: "Approves dispatch requests" },
-  { value: "ceo", label: "CEO", hint: "Super-admin access; approves costed dispatch requests" },
-  { value: "site_manager", label: "Site Manager", hint: "Confirms delivery for assigned sites" },
-  { value: "site_engineer", label: "Site Engineer", hint: "Views kits, staging and field ops" },
+  { value: "ceo", label: "CEO", hint: "Super admin access; final approval of dispatches and movement plans" },
+  { value: "super_admin", label: "Super Admin", hint: "Full access; requests dispatches, manages stock, kits and fleet" },
+  { value: "project_manager", label: "Project Manager", hint: "First approval of dispatches and movement plans; prepares plans; fleet entries" },
   { value: "client", label: "Client", hint: "Sees only their own links" },
-  { value: "field_worker", label: "Site Worker", hint: "Submits Site Work reports (needs a company)" },
+  { value: "admin", label: "Admin", hint: "Views everything and prints reports; manages accounts below admin" },
+  { value: "field_worker", label: "Contractor / Site Worker", hint: "Submits Site Work reports (needs a company)" },
+  { value: "site_engineer", label: "Site Engineer", hint: "Receives dispatches; installs links; plans; fleet entries" },
 ];
-const ROLE_LABELS = Object.fromEntries(ROLES.map((r) => [r.value, r.label]));
+// Old roles, still on some accounts until they're given a current one.
+const LEGACY_ROLES = {
+  warehouse_manager: "Warehouse Manager (old role)",
+  warehouse_operator: "Warehouse Operator (old role)",
+  site_manager: "Site Manager (old role)",
+};
+const ROLE_LABELS = { ...Object.fromEntries(ROLES.map((r) => [r.value, r.label])), ...LEGACY_ROLES };
 // Only a super admin can create, edit or delete these.
 const PRIVILEGED_ROLES = ["super_admin", "admin", "ceo"];
 const ROLE_COLORS = {
   super_admin: "var(--red)",
   admin: "var(--amber)",
-  warehouse_manager: "var(--blue)",
-  warehouse_operator: "var(--blue)",
+  warehouse_manager: "var(--muted)",
+  warehouse_operator: "var(--muted)",
   project_manager: "var(--violet)",
   ceo: "var(--amber)",
-  site_manager: "var(--teal)",
-  site_engineer: "var(--violet)",
+  site_manager: "var(--muted)",
+  site_engineer: "var(--blue)",
   client: "var(--teal)",
   field_worker: "var(--teal)",
 };
 
-const EMPTY_FORM = { username: "", email: "", company: "", role: "client", password: "", assignedSites: [] };
+const EMPTY_FORM = { username: "", email: "", company: "", role: "client", password: "" };
 const NEW_COMPANY = "__new_company__";
 const COMPANIES = [
   "Tesla Services Limited",
@@ -83,9 +86,6 @@ export function UserManagementPage({ isSuper = false }) {
   const assignableRoles = isSuper ? ROLES : ROLES.filter((r) => !PRIVILEGED_ROLES.includes(r.value));
   const [view, setView] = useState("list"); // list, create, edit
   const [users, setUsers] = useState([]);
-  const [sites, setSites] = useState([]);
-  const [sitesError, setSitesError] = useState("");
-  const [sitesLoading, setSitesLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [listError, setListError] = useState("");
@@ -119,12 +119,6 @@ export function UserManagementPage({ isSuper = false }) {
     loadUsers();
   }, []);
 
-  useEffect(() => {
-    getSites()
-      .then(({ sites: availableSites }) => setSites(Array.isArray(availableSites) ? availableSites : []))
-      .catch((err) => setSitesError(err.message || "Failed to load sites."))
-      .finally(() => setSitesLoading(false));
-  }, []);
 
   const handleChange = (e) => {
     setFormError("");
@@ -161,7 +155,6 @@ export function UserManagementPage({ isSuper = false }) {
       company: user.company?.trim() || "",
       role: user.role,
       password: "",
-      assignedSites: (user.assignedSites || []).map((site) => String(site._id || site)),
     });
     setView("edit");
   };
@@ -181,11 +174,6 @@ export function UserManagementPage({ isSuper = false }) {
         if (formData.email.trim().toLowerCase() !== editingUser.email) payload.email = formData.email.trim();
         if (formData.role !== editingUser.role) payload.role = formData.role;
         if (formData.role === "field_worker" && company !== (editingUser.company || "")) payload.company = company;
-        const previousSites = (editingUser.assignedSites || []).map((site) => String(site._id || site)).sort();
-        const assignedSites = [...formData.assignedSites].sort();
-        if (formData.role === "site_manager" && (
-          editingUser.role !== "site_manager" || JSON.stringify(previousSites) !== JSON.stringify(assignedSites)
-        )) payload.assignedSites = assignedSites;
         if (Object.keys(payload).length) {
           const updated = await updateUser(editingUser.id, payload);
           setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
@@ -201,7 +189,6 @@ export function UserManagementPage({ isSuper = false }) {
         const result = await createUser({
           ...formData,
           company,
-          assignedSites: formData.role === "site_manager" ? formData.assignedSites : undefined,
         });
         setCreatedAccount({
           username: result.user.username,
@@ -277,6 +264,7 @@ export function UserManagementPage({ isSuper = false }) {
     }
   };
 
+  const needsRole = useMemo(() => users.filter((u) => u.needsRole || LEGACY_ROLES[u.role]), [users]);
   const roleCounts = useMemo(() => {
     const c = {};
     users.forEach((u) => { c[u.role] = (c[u.role] || 0) + 1; });
@@ -393,42 +381,6 @@ export function UserManagementPage({ isSuper = false }) {
                 )}
               </fieldset>
 
-                {formData.role === "site_manager" && (
-                  <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-                    <legend style={labelStyle}>Assigned sites *</legend>
-                    {sitesError ? (
-                      <ErrorBox>{sitesError}</ErrorBox>
-                    ) : sitesLoading ? (
-                      <div className="faint" style={{ fontSize: 12 }}>Loading sites…</div>
-                    ) : sites.length === 0 ? (
-                      <div className="faint" style={{ fontSize: 12 }}>No sites are available to assign.</div>
-                    ) : (
-                      <div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>
-                        {sites.map((site) => (
-                          <label key={site._id} style={{ display: "flex", gap: 9, alignItems: "center", fontSize: 13 }}>
-                            <input
-                              type="checkbox"
-                              checked={formData.assignedSites.includes(String(site._id))}
-                              onChange={(event) => {
-                                setFormError("");
-                                setFormData((previous) => ({
-                                  ...previous,
-                                  assignedSites: event.target.checked
-                                    ? [...previous.assignedSites, String(site._id)]
-                                    : previous.assignedSites.filter((id) => id !== String(site._id)),
-                                }));
-                              }}
-                            />
-                            <span>{site.siteId} · {site.name}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                    {formData.assignedSites.length === 0 && !sitesError && (
-                      <div style={{ color: "var(--red)", fontSize: 11, marginTop: 6 }}>Select at least one site.</div>
-                    )}
-                  </fieldset>
-                )}
 
               <div>
                 <label style={labelStyle} htmlFor="um-name">Full Name *</label>
@@ -513,7 +465,7 @@ export function UserManagementPage({ isSuper = false }) {
               <div style={{ display: "flex", gap: "12px", marginTop: "8px", flexWrap: "wrap" }}>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !formData.username || !formData.email || (!isEdit && !isPasswordValid(formData.password)) || (formData.role === "site_manager" && (sitesLoading || formData.assignedSites.length === 0 || Boolean(sitesError)))}
+                  disabled={isSubmitting || !formData.username || !formData.email || (!isEdit && !isPasswordValid(formData.password)) || Boolean(LEGACY_ROLES[formData.role])}
                   className="btn amber"
                   style={{ flex: 1, justifyContent: "center" }}
                 >
@@ -547,6 +499,26 @@ export function UserManagementPage({ isSuper = false }) {
       </div>
 
       {actionError && <ErrorBox>{actionError}</ErrorBox>}
+      {needsRole.length > 0 && (
+        <div style={{
+          padding: "12px 14px", background: "rgba(255, 180, 70, 0.08)", border: "1px solid rgba(255, 180, 70, 0.35)",
+          borderRadius: "8px", fontSize: "13px", display: "flex", flexDirection: "column", gap: 8,
+        }}>
+          <strong style={{ color: "var(--amber)" }}>
+            {needsRole.length} account{needsRole.length === 1 ? " needs" : "s need"} a new role
+          </strong>
+          <span className="faint" style={{ fontSize: 12 }}>
+            Warehouse Manager and Warehouse Operator are no longer used. These accounts can sign in but cannot do anything until you give them a current role.
+          </span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {needsRole.map((account) => (
+              <button key={account.id} type="button" className="btn sm" onClick={() => startEdit(account)} disabled={!account.canManage}>
+                {account.username} · {ROLE_LABELS[account.role]} → choose role
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {notice && (
         <div style={{
           padding: "10px 12px", background: "rgba(51, 220, 174, 0.08)", border: "1px solid rgba(51, 220, 174, 0.3)",
@@ -615,7 +587,6 @@ export function UserManagementPage({ isSuper = false }) {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
-                  <th>Assigned Sites</th>
                   <th>Company</th>
                   <th>Created</th>
                   <th>Status</th>
@@ -638,14 +609,6 @@ export function UserManagementPage({ isSuper = false }) {
                         <span className="role-badge" style={{ color, borderColor: color }}>
                           {ROLE_LABELS[user.role] || user.role}
                         </span>
-                      </td>
-                      <td style={{ color: "var(--muted)" }}>
-                        {user.role === "site_manager"
-                          ? (user.assignedSiteNames?.join(", ") || (user.assignedSites || [])
-                            .map((id) => sites.find((site) => String(site._id) === String(id))?.name)
-                            .filter(Boolean)
-                            .join(", ") || "No sites assigned")
-                          : "—"}
                       </td>
                       <td style={{ color: "var(--muted)" }}>{user.company || "—"}</td>
                       <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{fmtDate(user.createdAt)}</td>
