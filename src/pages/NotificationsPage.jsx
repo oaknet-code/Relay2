@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, AlertTriangle, Clock, Loader2 } from 'lucide-react';
 import { getConsumables, getKitBoqShortages, getDashboard, getActivity } from '../services/api';
-import { EmailDeliveryPanel } from '../components/EmailDeliveryPanel';
+import { WhatsAppPanel } from '../components/WhatsAppPanel';
 
 // Alerts and Activity Log, from live data: consumables below their reorder
 // level, kit parts the BOQ can't cover, kits out in the field
@@ -21,7 +21,7 @@ const activityText = (e) => {
   return `${e.entityType} ${e.action.toLowerCase().replace('_', ' ')}`;
 };
 
-export function NotificationsPage({ onNavigate, canCheckEmail = false }) {
+export function NotificationsPage({ onNavigate, canCheckWhatsApp = false }) {
   const [alerts, setAlerts] = useState([]);
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -105,7 +105,7 @@ export function NotificationsPage({ onNavigate, canCheckEmail = false }) {
         <p>Stock alerts and recent activity across the rollout.</p>
       </div>
 
-      {canCheckEmail && <EmailDeliveryPanel />}
+      <WhatsAppPanel isAdmin={canCheckWhatsApp} />
 
       {errors.length > 0 && (
         <div className="faint" style={{ fontSize: 12, marginBottom: 12, color: 'var(--amber)' }}>

@@ -554,13 +554,18 @@ export const markAllNotificationsRead = async () => {
   const { data } = await axiosInstance.post("/api/notifications/read-all");
   return data;
 };
-// Super admin / CEO: notification email setup and a test email.
-export const getEmailStatus = async () => {
-  const { data } = await axiosInstance.get("/api/notifications/email-status");
-  return data;
+// WhatsApp: your own number; super admin / CEO also get the setup status
+// and can send themselves a test message.
+export const getWhatsAppSettings = async () => {
+  const { data } = await axiosInstance.get("/api/notifications/whatsapp");
+  return data; // { whatsappPhone, status? }
 };
-export const sendTestEmail = async () => {
-  const { data } = await axiosInstance.post("/api/notifications/email-test");
+export const saveMyWhatsApp = async (whatsappPhone) => {
+  const { data } = await axiosInstance.put("/api/auth/me/whatsapp", { whatsappPhone });
+  return data; // { whatsappPhone }
+};
+export const sendTestWhatsApp = async () => {
+  const { data } = await axiosInstance.post("/api/notifications/whatsapp-test");
   return data; // { ok, message, status }
 };
 

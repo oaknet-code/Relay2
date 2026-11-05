@@ -56,7 +56,7 @@ const ROLE_COLORS = {
   driver: "var(--blue)",
 };
 
-const EMPTY_FORM = { username: "", email: "", company: "", role: "client", password: "" };
+const EMPTY_FORM = { username: "", email: "", company: "", role: "client", password: "", whatsappPhone: "" };
 const NEW_COMPANY = "__new_company__";
 const COMPANIES = [
   "Tesla Services Limited",
@@ -157,6 +157,7 @@ export function UserManagementPage({ isSuper = false }) {
       company: user.company?.trim() || "",
       role: user.role,
       password: "",
+      whatsappPhone: user.whatsappPhone || "",
     });
     setView("edit");
   };
@@ -176,6 +177,7 @@ export function UserManagementPage({ isSuper = false }) {
         if (formData.email.trim().toLowerCase() !== editingUser.email) payload.email = formData.email.trim();
         if (formData.role !== editingUser.role) payload.role = formData.role;
         if (formData.role === "field_worker" && company !== (editingUser.company || "")) payload.company = company;
+        if (formData.whatsappPhone.trim() !== (editingUser.whatsappPhone || "")) payload.whatsappPhone = formData.whatsappPhone.trim();
         if (Object.keys(payload).length) {
           const updated = await updateUser(editingUser.id, payload);
           setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
@@ -396,6 +398,13 @@ export function UserManagementPage({ isSuper = false }) {
                   value={formData.email} onChange={handleChange} required maxLength={254} />
               </div>
 
+              <div>
+                <label style={labelStyle} htmlFor="um-whatsapp">WhatsApp number</label>
+                <input id="um-whatsapp" type="tel" name="whatsappPhone" className="form-input" placeholder="+254 712 345 678"
+                  value={formData.whatsappPhone} onChange={handleChange} maxLength={30} autoComplete="off" />
+                <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 4 }}>Notifications and approval requests go here. Leave blank for in-app only.</div>
+              </div>
+
               {!isEdit && (
                 <div>
                   <label style={labelStyle} htmlFor="um-password">Password *</label>
@@ -606,7 +615,10 @@ export function UserManagementPage({ isSuper = false }) {
                         {user.username}
                         {user.isSelf && <span className="you-chip">You</span>}
                       </td>
-                      <td style={{ color: "var(--muted)", fontFamily: "var(--mono)", fontSize: "12px" }}>{user.email}</td>
+                      <td style={{ color: "var(--muted)", fontFamily: "var(--mono)", fontSize: "12px" }}>
+                        {user.email}
+                        {user.whatsappPhone && <div style={{ fontSize: 11, color: "var(--faint)" }}>WhatsApp {user.whatsappPhone}</div>}
+                      </td>
                       <td>
                         <span className="role-badge" style={{ color, borderColor: color }}>
                           {ROLE_LABELS[user.role] || user.role}

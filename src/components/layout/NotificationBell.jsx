@@ -5,7 +5,7 @@ import { getNotifications, markAllNotificationsRead, markNotificationRead } from
 // The signed-in person's notifications: an unread count on the bell and a
 // drop-down list. Clicking one marks it read and opens its page (when the
 // person can open that page). Checks for new ones every minute while the
-// tab is visible. The same notifications are also emailed.
+// tab is visible. The same notifications also go to WhatsApp.
 
 const POLL_MS = 60_000;
 const ago = (value) => {
