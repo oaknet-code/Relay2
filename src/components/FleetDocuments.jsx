@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, FileText, History, Image as ImageIcon, Loader2, Paperclip, Pencil, Plus, RefreshCw, Trash2, Truck, User } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, FileText, History, Image as ImageIcon, Loader2, Paperclip, Pencil, Plus, RefreshCw, Search, Trash2, Truck, User } from "lucide-react";
 import { FleetModal } from "./FleetModal";
 import { createFleetDocument, deleteFleetDocument, getFleetDocumentFile, getFleetDocuments, updateFleetDocument } from "../services/api";
 import "../styles/driver.css";
 
 // Fleet → Documents: each vehicle's and driver's papers (insurance,
-// inspection, logbook, driving licence...), with expiry status and what's
+// inspection, driving licence...), with expiry status and what's
 // missing. Super admins and the CEO add, update, renew and delete; admins
 // view. Expiry alerts are sent automatically (30, 14, 7, 1 day before, on
 // the day, then weekly), and a weekly summary lists missing required ones.
+// Logbooks and ID / passport copies are deliberately not kept (fraud risk).
 
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp";
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -46,7 +47,10 @@ export function FleetDocuments({ canEdit = false, onChanged }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [view, setView] = useState("attention"); // attention | all
+  const [kind, setKind] = useState("vehicle"); // vehicle | driver
+  const [filter, setFilter] = useState("attention"); // attention | expired | expiring | missing | all
+  const [search, setSearch] = useState("");
+  const [openId, setOpenId] = useState(""); // the vehicle/driver whose documents are open
   const [modal, setModal] = useState(null); // { mode: "add"|"edit"|"renew", ownerKind, owner, doc? }
 
   const load = useCallback(async () => {
@@ -81,12 +85,42 @@ export function FleetDocuments({ canEdit = false, onChanged }) {
   if (loading && !data) return <div className="fleet-operation-empty"><Loader2 size={18} className="spin" /> Loading documents…</div>;
   if (error && !data) return <div className="fleet-operation-notice error" role="alert"><AlertTriangle size={14} /> {error} <button className="btn sm ghost" onClick={load}>Retry</button></div>;
 
-  const needsAttention = (owner) => owner.expired > 0 || owner.expiring > 0 || owner.missing.length > 0;
   const { summary } = data;
-  const sections = [
-    ["vehicle", "Vehicles", Truck, data.vehicles],
-    ["driver", "Drivers", User, data.drivers],
-  ];
+  const owners = kind === "vehicle" ? data.vehicles : data.drivers;
+  const hasIssue = (owner) => owner.expired > 0 || owner.expiring > 0 || owner.missing.length > 0;
+  const matches = (owner) => {
+    if (filter === "expired" && !owner.expired) return false;
+    if (filter === "expiring" && !owner.expiring) return false;
+    if (filter === "missing" && !owner.missing.length) return false;
+    if (filter === "attention" && !hasIssue(owner)) return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [owner.plate, owner.make, owner.name, owner.phone, ...owner.documents.map((doc) => `${doc.label} ${doc.number}`)]
+      .filter(Boolean).some((text) => String(text).toLowerCase().includes(q));
+  };
+  // Most urgent first: expired, then soonest expiry, then missing, then A–Z.
+  const urgency = (owner) => {
+    const soonest = (status) => Math.min(...owner.documents.filter((d) => d.status === status).map((d) => d.daysLeft));
+    if (owner.expired) return [0, soonest("expired")];
+    if (owner.expiring) return [1, soonest("expiring")];
+    if (owner.missing.length) return [2, 0];
+    return [3, 0];
+  };
+  const shown = owners.filter(matches).sort((a, b) => {
+    const [ua, da] = urgency(a);
+    const [ub, db] = urgency(b);
+    return ua - ub || da - db || String(a.plate || a.name).localeCompare(String(b.plate || b.name));
+  });
+  const types = data.types[kind];
+  const pillTypes = (owner) => types.filter((t) => t.type !== "other" && (t.required || owner.documents.some((d) => d.type === t.type)));
+  const shortLabel = (label) => label.replace(/ \(.*\)$/, "").replace(/ certificate$/i, "").replace(/^Certificate of /, "");
+  const actions = (owner) => ({
+    onAdd: (type) => { setNotice(""); setModal({ mode: "add", ownerKind: kind, owner, type }); },
+    onEdit: (doc) => { setNotice(""); setModal({ mode: "edit", ownerKind: kind, owner, doc }); },
+    onRenew: (doc) => { setNotice(""); setModal({ mode: "renew", ownerKind: kind, owner, doc }); },
+    onDelete: (doc) => remove(doc, owner),
+  });
+  const pickFilter = (value) => { setFilter(value); setOpenId(""); };
 
   return (
     <section className="panel fleet-operations">
@@ -97,44 +131,88 @@ export function FleetDocuments({ canEdit = false, onChanged }) {
           <RefreshCw size={13} className={loading ? "spin" : ""} /> Refresh
         </button>
       </div>
-      <div className="panel-b" style={{ padding: 14, display: "grid", gap: 12 }}>
-        <p className="mp-description" style={{ margin: 0 }}>
-          Insurance, inspection, logbooks, driving licences and other papers, with their expiry dates and copies.
-          Reminders go to super admins, the CEO and the driver 30, 14, 7 and 1 day before a document expires, on the day, and weekly while it stays expired.
-          {canEdit ? "" : " You can view; super admins and the CEO keep them up to date."}
-        </p>
-
+      <div className="panel-b fd-body">
         <div className="fd-summary">
-          <div className={summary.expired ? "bad" : ""}><b>{summary.expired}</b><span>expired</span></div>
-          <div className={summary.expiring ? "warn" : ""}><b>{summary.expiring}</b><span>expiring in 30 days</span></div>
-          <div className={summary.missing ? "warn" : ""}><b>{summary.missing}</b><span>required, missing</span></div>
+          {[["expired", "expired", summary.expired, "bad"], ["expiring", "expiring in 30 days", summary.expiring, "warn"], ["missing", "required, missing", summary.missing, "warn"]].map(([value, label, count, tone]) => (
+            <button key={value} type="button" className={`${count ? tone : ""} ${filter === value ? "on" : ""}`} aria-pressed={filter === value}
+              onClick={() => pickFilter(filter === value ? "attention" : value)}>
+              <b>{count}</b><span>{label}</span>
+            </button>
+          ))}
         </div>
 
         {notice && <div className="fleet-operation-notice" role="status"><CheckCircle2 size={14} /> {notice}</div>}
         {error && <div className="fleet-operation-notice error" role="alert"><AlertTriangle size={14} /> {error}</div>}
 
-        <div className="driver-choice" role="radiogroup" aria-label="Show">
-          {[["attention", "Needs attention"], ["all", "All"]].map(([value, label]) => (
-            <button key={value} type="button" role="radio" aria-checked={view === value} className={`driver-chip ${view === value ? "on" : ""}`} onClick={() => setView(value)}>{label}</button>
-          ))}
+        <div className="fd-toolbar">
+          <div className="fd-kinds" role="tablist" aria-label="Documents for">
+            {[["vehicle", "Vehicles", Truck, data.vehicles], ["driver", "Drivers", User, data.drivers]].map(([value, label, Icon, list]) => {
+              const issues = list.filter(hasIssue).length;
+              return (
+                <button key={value} type="button" role="tab" aria-selected={kind === value} className={`dv-tab ${kind === value ? "on" : ""}`}
+                  onClick={() => { setKind(value); setOpenId(""); }}>
+                  <Icon size={13} /> {label} <span className="faint">{list.length}</span>
+                  {issues > 0 && <span className="fd-badge">{issues}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <label className="fd-search">
+            <Search size={13} />
+            <input className="form-input" type="search" placeholder={kind === "vehicle" ? "Search plate or number" : "Search name or number"}
+              value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search" />
+          </label>
+          <select className="form-input fd-filter" value={filter} onChange={(event) => pickFilter(event.target.value)} aria-label="Show">
+            <option value="attention">Needs attention</option>
+            <option value="expired">Expired</option>
+            <option value="expiring">Expiring in 30 days</option>
+            <option value="missing">Missing required</option>
+            <option value="all">All</option>
+          </select>
         </div>
 
-        {sections.map(([kind, title, Icon, owners]) => {
-          const shown = view === "all" ? owners : owners.filter(needsAttention);
-          return (
-            <div key={kind} className="fd-section">
-              <h4><Icon size={14} /> {title}</h4>
-              {shown.length === 0 && <div className="faint" style={{ fontSize: 12 }}>{view === "all" ? `No ${title.toLowerCase()}.` : `All ${title.toLowerCase()} are up to date.`}</div>}
-              {shown.map((owner) => (
-                <OwnerCard key={owner._id} kind={kind} owner={owner} types={data.types[kind]} canEdit={canEdit} onError={setError}
-                  onAdd={(type) => { setNotice(""); setModal({ mode: "add", ownerKind: kind, owner, type }); }}
-                  onEdit={(doc) => { setNotice(""); setModal({ mode: "edit", ownerKind: kind, owner, doc }); }}
-                  onRenew={(doc) => { setNotice(""); setModal({ mode: "renew", ownerKind: kind, owner, doc }); }}
-                  onDelete={(doc) => remove(doc, owner)} />
-              ))}
+        <div className="fd-list">
+          {shown.length === 0 && (
+            <div className="faint fd-empty">
+              {search.trim() ? "Nothing matches your search." : filter === "attention" ? `All ${kind === "vehicle" ? "vehicles" : "drivers"} are up to date.` : "Nothing to show."}
             </div>
-          );
-        })}
+          )}
+          {shown.map((owner) => {
+            const open = openId === owner._id;
+            const others = owner.documents.filter((d) => d.type === "other").length;
+            return (
+              <div key={owner._id} className={`fd-item ${open ? "open" : ""}`}>
+                <button type="button" className="fd-row" aria-expanded={open} onClick={() => setOpenId(open ? "" : owner._id)}>
+                  <span className="fd-name">
+                    <b>{kind === "vehicle" ? owner.plate : owner.name}</b>
+                    <small className="faint">{kind === "vehicle" ? owner.make : owner.status === "inactive" ? "inactive" : owner.phone || ""}</small>
+                  </span>
+                  <span className="fd-pills">
+                    {pillTypes(owner).map((t) => {
+                      const doc = owner.documents.find((d) => d.type === t.type);
+                      const state = doc ? doc.status : "missing";
+                      return <span key={t.type} className={`fd-pill ${state}`} title={doc ? statusText(doc) : "Not on file"}>{shortLabel(t.label)}</span>;
+                    })}
+                    {others > 0 && <span className="fd-pill no_expiry" title="Other documents">+{others}</span>}
+                  </span>
+                  <span className="fd-state">
+                    {owner.expired > 0 ? <span className="driver-stage bad">{owner.expired} expired</span>
+                      : owner.expiring > 0 ? <span className="driver-stage collect">{owner.expiring} expiring</span>
+                        : owner.missing.length > 0 ? <span className="driver-stage collect">{owner.missing.length} missing</span>
+                          : <span className="driver-stage done">Up to date</span>}
+                    <ChevronDown size={14} className="fd-chevron" />
+                  </span>
+                </button>
+                {open && <OwnerCard owner={owner} types={types} canEdit={canEdit} onError={setError} {...actions(owner)} />}
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="faint fd-foot">
+          Reminders go to super admins, the CEO and the driver 30, 14, 7 and 1 day before a document expires, on the day, and weekly while it stays expired.
+          {canEdit ? "" : " You can view; super admins and the CEO keep the documents up to date."}
+        </p>
       </div>
 
       {modal && (
@@ -144,20 +222,10 @@ export function FleetDocuments({ canEdit = false, onChanged }) {
   );
 }
 
-function OwnerCard({ kind, owner, types, canEdit, onAdd, onEdit, onRenew, onDelete, onError }) {
+function OwnerCard({ owner, types, canEdit, onAdd, onEdit, onRenew, onDelete, onError }) {
   const [showHistory, setShowHistory] = useState({});
-  const name = kind === "vehicle" ? `${owner.plate}${owner.make ? ` · ${owner.make}` : ""}` : `${owner.name}${owner.status === "inactive" ? " (inactive)" : ""}`;
   return (
-    <article className="fd-owner">
-      <header>
-        <strong>{name}</strong>
-        <span className="fd-chips">
-          {owner.expired > 0 && <span className="driver-stage bad">{owner.expired} expired</span>}
-          {owner.expiring > 0 && <span className="driver-stage collect">{owner.expiring} expiring</span>}
-          {owner.missing.length > 0 && <span className="driver-stage collect">{owner.missing.length} missing</span>}
-          {owner.expired === 0 && owner.expiring === 0 && owner.missing.length === 0 && <span className="driver-stage done">Up to date</span>}
-        </span>
-      </header>
+    <div className="fd-owner">
       {owner.documents.map((doc) => {
         const [label, className] = STATUS[doc.status] || STATUS.valid;
         return (
@@ -218,7 +286,7 @@ function OwnerCard({ kind, owner, types, canEdit, onAdd, onEdit, onRenew, onDele
           <Plus size={12} /> Add document
         </button>
       )}
-    </article>
+    </div>
   );
 }
 
@@ -297,6 +365,7 @@ function DocumentForm({ mode, ownerKind, owner, doc, type: initialType, types, o
           </label>
         </div>
         <label className="receipt-field">Note (optional)<input className="form-input" maxLength={500} value={form.notes} onChange={set("notes")} disabled={busy} /></label>
+        <div className="faint" style={{ fontSize: 11.5 }}>Don&apos;t upload logbooks, ID cards or passports: copies can be misused for fraud. Keep the originals in the office safe.</div>
         {problem && <div role="alert" className="receipt-problem"><AlertTriangle size={13} /> {problem}</div>}
         <div className="receipt-actions">
           <button type="button" className="btn sm ghost" onClick={onClose} disabled={busy}>Cancel</button>

@@ -526,57 +526,132 @@
 }
 
 /* Fleet → Documents, and a driver's document list. */
+.fd-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+}
+
 .fd-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.fd-summary > div {
+.fd-summary > button {
   display: grid;
   gap: 2px;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
+  background: var(--panel);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
+.fd-summary > button:hover { border-color: var(--line2); }
+.fd-summary > button.on { border-color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber); }
 .fd-summary b { color: var(--ink); font-size: 20px; }
 .fd-summary span { color: var(--muted); font-size: 11.5px; }
 .fd-summary .warn b { color: var(--amber); }
 .fd-summary .bad b { color: var(--red); }
 
-.fd-section { display: grid; gap: 8px; }
+.fd-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
 
-.fd-section h4 {
+.fd-kinds { display: flex; gap: 2px; margin-right: auto; }
+.fd-kinds .dv-tab { padding-bottom: 10px; }
+
+.fd-search {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  flex: 1 1 200px;
+  max-width: 280px;
+  margin-bottom: 6px;
+  color: var(--faint);
 }
+
+.fd-search svg { position: absolute; left: 10px; pointer-events: none; }
+.fd-search input { width: 100%; padding-left: 30px; }
+.fd-filter { flex: 0 0 auto; width: auto; margin-bottom: 6px; }
+
+.fd-list {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.fd-empty { padding: 18px 14px; font-size: 12.5px; }
+.fd-item + .fd-item { border-top: 1px solid var(--line); }
+.fd-item.open { background: rgba(255, 180, 70, 0.03); }
+
+.fd-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fd-row:hover { background: rgba(255, 255, 255, 0.02); }
+
+.fd-name { display: grid; min-width: 0; }
+.fd-name b { font-size: 13px; font-weight: 600; }
+.fd-name small { overflow: hidden; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+
+.fd-pills { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+
+.fd-pill {
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.fd-pill.valid, .fd-pill.no_expiry { color: var(--teal); border-color: rgba(51, 220, 174, 0.35); }
+.fd-pill.expiring { color: var(--amber); }
+.fd-pill.expired { color: var(--red); background: rgba(255, 95, 95, 0.08); }
+.fd-pill.missing { color: var(--faint); border-style: dashed; }
+
+.fd-state { display: flex; align-items: center; gap: 8px; }
+.fd-chevron { color: var(--faint); transition: transform 0.15s ease; }
+.fd-item.open .fd-chevron { transform: rotate(180deg); }
 
 .fd-owner {
   display: grid;
   gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  padding: 0 14px 12px;
 }
 
-.fd-owner > header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--ink);
-  font-size: 13.5px;
-}
+.fd-foot { margin: 0; font-size: 11.5px; line-height: 1.5; }
 
-.fd-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+@media (max-width: 640px) {
+  .fd-body { padding: 10px; }
+  .fd-summary span { font-size: 10.5px; }
+  .fd-kinds { width: 100%; }
+  .fd-filter { flex: 1 1 140px; }
+  .fd-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .fd-pills { grid-column: 1 / -1; grid-row: 2; }
+  .fd-search { max-width: none; }
+}
 
 .fd-doc {
   display: flex;
