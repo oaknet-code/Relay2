@@ -2,84 +2,266 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#080b10" />
   <title>Relay Privacy Policy · Oaknet Business Limited</title>
-  <meta name="description" content="How Oaknet Business Limited's Relay operations system handles staff information, including WhatsApp notifications." />
+  <meta name="description" content="How Oaknet Business Limited's Relay operations system handles staff information, including email and WhatsApp notifications." />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" />
   <style>
-    :root { color-scheme: light dark; --bg: #f6f8fb; --panel: #ffffff; --ink: #142233; --muted: #5a6b7e; --line: #dfe5ec; --accent: #1f6fd6; }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg: #080b10; --panel: #0f141c; --ink: #e6edf5; --muted: #9aa7b6; --line: #1f2834; --accent: #5fa8ff; }
+    /* Relay's own design tokens (src/styles/globals.css). */
+    :root {
+      color-scheme: dark;
+      --bg: #080b10; --bg2: #0b0f15; --panel: #10161f; --panel2: #141c27;
+      --line: #1d2735; --line2: #2a3849;
+      --ink: #e7eef6; --muted: #90a0b2; --faint: #5f6e80;
+      --amber: #5fa8ff; --amber2: #2f7fd4; --teal: #33dcae;
+      --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    main { max-width: 760px; margin: 0 auto; padding: 32px 16px 56px; }
-    header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
-    header img { width: 48px; height: 48px; border-radius: 12px; }
-    header .org { color: var(--muted); font-size: 14px; }
-    h1 { margin: 0; font-size: 26px; line-height: 1.25; }
-    article { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px 24px 24px; }
-    h2 { margin: 26px 0 6px; font-size: 18px; }
-    p, ul { margin: 0 0 12px; }
-    ul { padding-left: 22px; }
-    li { margin: 3px 0; }
-    .updated { color: var(--muted); font-size: 14px; margin: 16px 0 0; }
-    a { color: var(--accent); }
-    address { font-style: normal; }
-    footer { margin-top: 20px; color: var(--muted); font-size: 13px; text-align: center; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; overflow-x: clip; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(900px 420px at 15% -10%, rgba(95, 168, 255, 0.10), transparent 60%),
+        radial-gradient(700px 380px at 100% 0%, rgba(51, 220, 174, 0.06), transparent 60%),
+        linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 38px 38px,
+        linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 38px 38px,
+        var(--bg);
+      background-attachment: fixed;
+      color: var(--ink);
+      font: 15px/1.65 var(--sans);
+    }
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: -1;
+      background: linear-gradient(180deg, rgba(8, 11, 16, 0.55), rgba(8, 11, 16, 0.92));
+      pointer-events: none;
+    }
+    a { color: var(--amber); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .top {
+      position: sticky; top: 0; z-index: 5;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px clamp(16px, 4vw, 40px);
+      background: rgba(8, 11, 16, 0.82);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); }
+    .brand:hover { text-decoration: none; }
+    .brand-badge {
+      width: 34px; height: 34px; border-radius: 9px; flex: none;
+      display: grid; place-items: center;
+      background: linear-gradient(140deg, var(--amber), var(--amber2));
+      color: #06111f;
+      box-shadow: 0 0 18px rgba(95, 168, 255, 0.38);
+    }
+    .brand b { display: block; font: 700 18px/1 var(--cond); letter-spacing: 0.04em; }
+    .brand small { display: block; margin-top: 3px; color: var(--faint); font: 500 9.5px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      min-height: 34px; padding: 0 14px; border-radius: 8px;
+      background: linear-gradient(140deg, var(--amber), var(--amber2));
+      color: #06111f; font: 600 13px var(--sans); white-space: nowrap;
+    }
+    .btn:hover { text-decoration: none; filter: brightness(1.08); }
+
+    main { max-width: 880px; margin: 0 auto; padding: 32px clamp(16px, 4vw, 40px) 56px; }
+
+    .view-head { margin-bottom: 22px; }
+    .tagchip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px; border-radius: 6px;
+      color: var(--amber); background: rgba(95, 168, 255, 0.1); border: 1px solid rgba(95, 168, 255, 0.28);
+      font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .view-head h1 { margin: 12px 0 0; font: 700 clamp(24px, 4vw, 30px)/1.2 var(--cond); letter-spacing: 0.01em; }
+    .view-head p { margin: 8px 0 0; color: var(--muted); font-size: 14px; max-width: 680px; }
+    .meta { margin-top: 12px; color: var(--faint); font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+
+    .panel { background: linear-gradient(180deg, var(--panel), var(--bg2)); border: 1px solid var(--line); border-radius: 14px; }
+    .panel + .panel { margin-top: 12px; }
+    .panel-h { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .panel-h .num { color: var(--amber); font: 600 11px var(--mono); }
+    .panel-h h2 { margin: 0; font: 600 13px var(--sans); letter-spacing: 0.04em; text-transform: uppercase; }
+    .panel-b { padding: 16px 18px 18px; }
+    .panel-b p { margin: 0 0 10px; }
+    .panel-b p:last-child { margin-bottom: 0; }
+    section { scroll-margin-top: 76px; }
+
+    .summary { margin-bottom: 18px; border-color: rgba(51, 220, 174, 0.28); }
+    .summary ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 18px; margin: 0; padding: 0; list-style: none; }
+    .summary li { display: flex; gap: 9px; color: var(--ink); font-size: 14px; }
+    .summary li svg { flex: none; margin-top: 4px; color: var(--teal); }
+
+    .toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; padding: 0; list-style: none; }
+    .toc a {
+      display: inline-flex; gap: 6px; padding: 5px 10px; border-radius: 16px;
+      border: 1px solid var(--line2); background: var(--panel);
+      color: var(--muted); font-size: 12.5px;
+    }
+    .toc a span { color: var(--amber); font: 500 11px var(--mono); }
+    .toc a:hover { color: var(--ink); border-color: var(--amber); text-decoration: none; }
+
+    .items { display: grid; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+    .items li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); }
+    .items b { display: block; color: var(--ink); font-weight: 600; }
+    .items span { color: var(--muted); font-size: 14px; }
+    .note {
+      display: flex; gap: 9px; padding: 10px 12px; border-radius: 10px;
+      background: rgba(95, 168, 255, 0.06); border: 1px solid rgba(95, 168, 255, 0.22);
+      color: var(--ink); font-size: 14px;
+    }
+    .note svg { flex: none; margin-top: 3px; color: var(--amber); }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+    .chips span { padding: 3px 9px; border-radius: 6px; background: var(--panel2); border: 1px solid var(--line2); color: var(--muted); font: 500 11.5px var(--mono); }
+
+    .contact { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+    .contact div { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); }
+    .contact small { display: block; color: var(--faint); font: 500 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+    .contact address { font-style: normal; }
+
+    footer { margin-top: 28px; color: var(--faint); font: 500 11px var(--mono); letter-spacing: 0.06em; text-align: center; }
+
+    @media (max-width: 560px) {
+      .top .btn span.long { display: none; }
+      .panel-h { padding: 12px 14px; }
+      .panel-b { padding: 14px; }
+    }
   </style>
 </head>
 <body>
+  <header class="top">
+    <a class="brand" href="/" aria-label="Relay home">
+      <span class="brand-badge" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h12"/><path d="m12 6 6 6-6 6"/><path d="M4 6v12"/></svg>
+      </span>
+      <span><b>RELAY</b><small>Oaknet operations</small></span>
+    </a>
+    <a class="btn" href="/">Open <span class="long">Relay</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+    </a>
+  </header>
+
   <main>
-    <header>
-      <img src="/icons/icon-192.png" alt="" />
-      <div>
-        <h1>Relay Privacy Policy</h1>
-        <div class="org">Oaknet Business Limited</div>
+    <div class="view-head">
+      <span class="tagchip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Privacy policy
+      </span>
+      <h1>How Relay handles your information</h1>
+      <p>Relay is Oaknet Business Limited's internal operations system. This page explains what it holds about staff, why, and who it's shared with.</p>
+      <div class="meta">Last updated · 5 Nov 2026</div>
+    </div>
+
+    <div class="panel summary">
+      <div class="panel-b">
+        <ul>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Used only to run our work: never for marketing, never sold.</li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Notifications by app, email and WhatsApp; you can remove your WhatsApp number at any time.</li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No copies of logbooks, ID cards or passports are kept.</li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Your rights under Kenya's Data Protection Act, 2019.</li>
+        </ul>
       </div>
-    </header>
+    </div>
 
-    <article>
-      <p class="updated">Last updated: 5 November 2026</p>
+    <ul class="toc" aria-label="Contents">
+      <li><a href="#about"><span>01</span>About Relay</a></li>
+      <li><a href="#information"><span>02</span>Information we hold</a></li>
+      <li><a href="#use"><span>03</span>How we use it</a></li>
+      <li><a href="#notifications"><span>04</span>Notifications</a></li>
+      <li><a href="#sharing"><span>05</span>Sharing</a></li>
+      <li><a href="#retention"><span>06</span>Retention</a></li>
+      <li><a href="#security"><span>07</span>Security</a></li>
+      <li><a href="#rights"><span>08</span>Your rights</a></li>
+      <li><a href="#contact"><span>09</span>Contact</a></li>
+    </ul>
 
-      <h2>About Relay</h2>
-      <p>Relay is Oaknet Business Limited's internal operations system. Our staff and approved contractors use it to manage dispatches, site work, the vehicle fleet, movement plans, claims and approvals. It is not offered to the public.</p>
+    <section class="panel" id="about">
+      <div class="panel-h"><span class="num">01</span><h2>About Relay</h2></div>
+      <div class="panel-b">
+        <p>Relay is used by Oaknet staff and approved contractors to manage dispatches, site work, the vehicle fleet, movement plans, claims and approvals. It is not offered to the public.</p>
+      </div>
+    </section>
 
-      <h2>Information we hold</h2>
-      <ul>
-        <li><strong>Account details:</strong> name, work email address, role and, if provided, a WhatsApp phone number.</li>
-        <li><strong>Work records:</strong> dispatches, deliveries, movement plans, vehicle checks, fuel logs, claims and approvals made in Relay.</li>
-        <li><strong>Supporting documents:</strong> receipts attached to claims, and vehicle and driver documents such as insurance and inspection certificates and driving licences.</li>
-      </ul>
-      <p>We do not keep copies of vehicle logbooks, national ID cards or passports in Relay.</p>
+    <section class="panel" id="information">
+      <div class="panel-h"><span class="num">02</span><h2>Information we hold</h2></div>
+      <div class="panel-b">
+        <ul class="items">
+          <li><b>Account details</b><span>Name, work email address, role and, if provided, a WhatsApp phone number.</span></li>
+          <li><b>Work records</b><span>Dispatches, deliveries, movement plans, vehicle checks, fuel logs, claims and approvals made in Relay.</span></li>
+          <li><b>Supporting documents</b><span>Receipts attached to claims, and vehicle and driver documents such as insurance and inspection certificates and driving licences.</span></li>
+        </ul>
+        <div class="note">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>We do not keep copies of vehicle logbooks, national ID cards or passports in Relay.</span>
+        </div>
+      </div>
+    </section>
 
-      <h2>How we use it</h2>
-      <p>Only to run our operations: sending work notifications and approval requests, recording decisions, reimbursing claims and keeping vehicle and driver documents up to date. We do not use it for marketing and we do not sell it.</p>
+    <section class="panel" id="use">
+      <div class="panel-h"><span class="num">03</span><h2>How we use it</h2></div>
+      <div class="panel-b">
+        <p>Only to run our operations: sending work notifications and approval requests, recording decisions, reimbursing claims and keeping vehicle and driver documents up to date.</p>
+        <p>We do not use it for marketing and we do not sell it.</p>
+      </div>
+    </section>
 
-      <h2>WhatsApp messages</h2>
-      <p>If a staff member's account has a WhatsApp number, Relay sends their work notifications and approval requests to it through the WhatsApp Business Platform provided by Meta, and approvers can reply from WhatsApp to approve or reject a request. We only send messages related to the person's work in Relay. Anyone can stop receiving WhatsApp messages by removing their number on the Relay Notifications page, or by contacting us.</p>
+    <section class="panel" id="notifications">
+      <div class="panel-h"><span class="num">04</span><h2>Notifications: app, email and WhatsApp</h2></div>
+      <div class="panel-b">
+        <p>Notifications appear in Relay and are emailed to the staff member's work address. If their account has a WhatsApp number, they are also sent to it through the WhatsApp Business Platform provided by Meta, and approvers can approve or reject a request from WhatsApp. We only send messages related to the person's work in Relay.</p>
+        <p>So that a notification doesn't stay unread after it has been seen, Relay records when it is read in the app, when WhatsApp reports it as read, and when its email is opened (through a small image or the "Open in Relay" link in the email). This is used only to mark the notification as read.</p>
+        <p>Anyone can stop receiving WhatsApp messages by removing their number on the Relay Notifications page, or by contacting us.</p>
+      </div>
+    </section>
 
-      <h2>Who we share it with</h2>
-      <p>Only the service providers that run Relay for us, and only as needed: Meta Platforms (WhatsApp messaging), Hostinger (hosting), MongoDB Atlas (database) and our email provider (account emails such as password resets). We disclose information to authorities only where the law requires it.</p>
+    <section class="panel" id="sharing">
+      <div class="panel-h"><span class="num">05</span><h2>Who we share it with</h2></div>
+      <div class="panel-b">
+        <p>Only the service providers that run Relay for us, and only as needed:</p>
+        <div class="chips"><span>Meta Platforms · WhatsApp</span><span>Hostinger · hosting</span><span>MongoDB Atlas · database</span><span>Email provider · notifications &amp; account emails</span></div>
+        <p>We disclose information to authorities only where the law requires it.</p>
+      </div>
+    </section>
 
-      <h2>How long we keep it</h2>
-      <p>For as long as it is needed for our operations and for legal, tax and audit requirements, after which it is deleted. When a document is renewed, the earlier version may be kept as a record.</p>
+    <section class="panel" id="retention">
+      <div class="panel-h"><span class="num">06</span><h2>How long we keep it</h2></div>
+      <div class="panel-b">
+        <p>For as long as it is needed for our operations and for legal, tax and audit requirements, after which it is deleted. When a document is renewed, the earlier version may be kept as a record.</p>
+      </div>
+    </section>
 
-      <h2>Security</h2>
-      <p>Access is limited by role, sign-in requires two-factor authentication, and data is sent over encrypted connections.</p>
+    <section class="panel" id="security">
+      <div class="panel-h"><span class="num">07</span><h2>Security</h2></div>
+      <div class="panel-b">
+        <p>Access is limited by role, sign-in requires two-factor authentication, and data is sent over encrypted connections.</p>
+      </div>
+    </section>
 
-      <h2>Your rights</h2>
-      <p>Under Kenya's Data Protection Act, 2019, you may ask to see, correct or delete your personal information, or object to how we use it, by contacting us below.</p>
+    <section class="panel" id="rights">
+      <div class="panel-h"><span class="num">08</span><h2>Your rights</h2></div>
+      <div class="panel-b">
+        <p>Under Kenya's Data Protection Act, 2019, you may ask to see, correct or delete your personal information, or object to how we use it. Contact us using the details below.</p>
+      </div>
+    </section>
 
-      <h2>Contact</h2>
-      <address>
-        Oaknet Business Limited<br />
-        Mihrab Tower, Cotton Avenue · Nairobi, Kenya<br />
-        <a href="mailto:info@oaknetbusiness.com">info@oaknetbusiness.com</a><br />
-        <a href="tel:+254702225555">+254 702 225 555</a> · <a href="tel:+254702222224">+254 702 222 224</a>
-      </address>
-    </article>
+    <section class="panel" id="contact">
+      <div class="panel-h"><span class="num">09</span><h2>Contact</h2></div>
+      <div class="panel-b">
+        <div class="contact">
+          <div><small>Company</small><address>Oaknet Business Limited<br />Mihrab Tower, Cotton Avenue<br />Nairobi, Kenya</address></div>
+          <div><small>Email</small><a href="mailto:info@oaknetbusiness.com">info@oaknetbusiness.com</a></div>
+          <div><small>Phone</small><a href="tel:+254702225555">+254 702 225 555</a><br /><a href="tel:+254702222224">+254 702 222 224</a></div>
+        </div>
+      </div>
+    </section>
 
     <footer>© 2026 Oaknet Business Limited · <a href="/">Relay</a></footer>
   </main>

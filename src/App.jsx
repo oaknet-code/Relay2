@@ -83,6 +83,24 @@ export default function App() {
   };
   const [resetToken, setResetToken] = useState(() => (typeof window === "undefined" ? null : takeResetTokenFromUrl()));
 
+  // "Open in Relay" links in notification emails: /#n=<token>. Marks the
+  // notification read (works before login too), then opens its page once
+  // signed in.
+  const [pendingTab, setPendingTab] = useState(null);
+  useEffect(() => {
+    const openFromEmail = () => {
+      const m = /^#n=([a-f0-9]{32})$/.exec(window.location.hash);
+      if (!m) return;
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      api.openNotificationLink(m[1])
+        .then((result) => setPendingTab(result?.tab || "notifications"))
+        .catch(() => setPendingTab("notifications"));
+    };
+    openFromEmail();
+    window.addEventListener("hashchange", openFromEmail);
+    return () => window.removeEventListener("hashchange", openFromEmail);
+  }, []);
+
   // Link pasted into an already-open tab: only the hash changes, no reload.
   useEffect(() => {
     const onHash = () => {
@@ -97,6 +115,13 @@ export default function App() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  useEffect(() => {
+    if (user && pendingTab) {
+      setCurrentTab(pendingTab);
+      setPendingTab(null);
+    }
+  }, [user, pendingTab]);
 
   /*
    * Load application fonts

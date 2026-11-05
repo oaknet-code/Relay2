@@ -550,6 +550,17 @@ export const markNotificationRead = async (id) => {
   const { data } = await axiosInstance.patch(`/api/notifications/${encodeURIComponent(id)}/read`);
   return data;
 };
+// "Open in Relay" link from a notification email: marks it read (no login
+// needed) and says which page to open.
+export const openNotificationLink = async (token) => {
+  const { data } = await axiosInstance.post(`/api/notification-links/open/${encodeURIComponent(token)}`);
+  return data; // { tab }
+};
+// Email delivery: a test email to the signed-in super admin.
+export const sendTestEmail = async () => {
+  const { data } = await axiosInstance.post("/api/notifications/email-test");
+  return data; // { ok, message, emailStatus }
+};
 export const markAllNotificationsRead = async () => {
   const { data } = await axiosInstance.post("/api/notifications/read-all");
   return data;
@@ -884,6 +895,7 @@ export const logout = async () => {
 
 // Export full API interface wrapper
 export const api = {
+  openNotificationLink,
   login: loginUser,
   getMe,
   logout,

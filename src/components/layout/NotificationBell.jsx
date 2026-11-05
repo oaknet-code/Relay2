@@ -5,7 +5,8 @@ import { getNotifications, markAllNotificationsRead, markNotificationRead } from
 // The signed-in person's notifications: an unread count on the bell and a
 // drop-down list. Clicking one marks it read and opens its page (when the
 // person can open that page). Checks for new ones every minute while the
-// tab is visible. The same notifications also go to WhatsApp.
+// tab is visible. The same notifications also go by email and WhatsApp, and
+// one read state covers all three (read anywhere = read here).
 
 const POLL_MS = 60_000;
 const ago = (value) => {
@@ -108,7 +109,7 @@ export function NotificationBell({ allowedTabs, onNavigate, alertsTab }) {
                   {item.title}
                 </span>
                 {item.body && <span className="notif-item-body">{item.body}</span>}
-                <span className="notif-item-when">{ago(item.createdAt)}</span>
+                <span className="notif-item-when">{ago(item.createdAt)}{item.readVia === "whatsapp" ? " · read on WhatsApp" : item.readVia === "email" ? " · read by email" : ""}</span>
               </button>
             ))}
           </div>
