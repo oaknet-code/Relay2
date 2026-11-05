@@ -4,7 +4,7 @@ import {
   Cable, ShieldCheck, Package, Boxes, User, ChevronDown, Loader2, AlertTriangle, ArrowLeft
 } from 'lucide-react';
 import { TypeIcon, Band } from '../components/ui';
-import { getSiteKits, getSiteKit, createDispatch, getDispatches, getGatePass, downloadGatePassPDF, getVehicles, getDrivers, getAssets, getLinks } from '../services/api';
+import { getSiteKits, getSiteKit, createDispatch, getDispatches, getGatePass, downloadGatePassPDF, getVehicles, getDrivers, getAssets, getLinks, getFleetCompliance } from '../services/api';
 import '../styles/custody.css';
 
 // Picks a reasonable icon for a consumable line based on its model/name —
@@ -201,6 +201,18 @@ export function Dispatch({ canEdit = true, onNavigate }) {
   const activeDrivers = useMemo(() => fleetDrivers.filter(d => d.status === 'active'), [fleetDrivers]);
   const selectedVehicle = availableVehicles.find(v => v._id === selectedVehicleId) || null;
   const selectedDriver = activeDrivers.find(d => d._id === selectedDriverId) || null;
+
+  // Expired / soon-expiring / missing documents for the chosen vehicle and
+  // driver: a warning (approvers see it too), not a block.
+  const [documentIssues, setDocumentIssues] = useState([]);
+  useEffect(() => {
+    if (!canEdit || (!selectedVehicleId && !selectedDriverId)) { setDocumentIssues([]); return undefined; }
+    let cancelled = false;
+    getFleetCompliance(selectedVehicleId, selectedDriverId)
+      .then((result) => { if (!cancelled) setDocumentIssues(result.issues || []); })
+      .catch(() => { if (!cancelled) setDocumentIssues([]); });
+    return () => { cancelled = true; };
+  }, [canEdit, selectedVehicleId, selectedDriverId]);
 
   // Picking a vehicle pre-selects its usual driver (or the only driver).
   const chooseVehicle = (id) => {
@@ -871,6 +883,18 @@ export function Dispatch({ canEdit = true, onNavigate }) {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {documentIssues.length > 0 && !waybill && !dispatched && (
+            <div role="alert" style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, fontSize: 12, lineHeight: 1.6,
+              background: documentIssues.some((i) => i.severity === "expired") ? "rgba(255,95,95,.08)" : "rgba(255,180,70,.08)",
+              color: documentIssues.some((i) => i.severity === "expired") ? "var(--red)" : "var(--amber)" }}>
+              <b><AlertTriangle size={13} /> Check the documents before this dispatch goes out:</b>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                {documentIssues.map((issue) => <li key={issue.text}>{issue.text}</li>)}
+              </ul>
+              <span className="faint">The approvers will see this too. Update the documents in Fleet → Documents.</span>
             </div>
           )}
 

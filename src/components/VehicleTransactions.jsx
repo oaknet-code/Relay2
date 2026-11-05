@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, ListChecks, Loader2, RefreshCw, AlertTriangle, Printer } from "lucide-react";
 import { getFleetTransactions } from "../services/api";
 
-// Every fuel, maintenance, parts and per-diem entry as one ledger — the
+// Every fuel, maintenance, parts and trip-claim entry as one ledger — the
 // detail behind the Vehicle summary. `request` ({ vehicleId, from, to, key })
 // is set when someone clicks a vehicle in the summary: it applies those
 // filters and scrolls here. Reloads whenever the Fleet page reloads its
@@ -12,7 +12,7 @@ const TYPES = {
   fuel: "Fuel",
   maintenance: "Maintenance",
   parts: "Parts",
-  per_diem: "Per diem",
+  per_diem: "Trip claim",
 };
 const EMPTY_FILTERS = { from: "", to: "", vehicleId: "", type: "" };
 const kes = (value) => `KES ${Number(value || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -115,8 +115,8 @@ export function VehicleTransactions({ vehicles, request }) {
       </div>
       <div className="panel-b">
         <p className="mp-description">
-          Every fuel, maintenance, parts{includesPerDiem ? " and per diem" : ""} entry, newest first. Leave the dates blank for all time.
-          {includesPerDiem ? " Pending and rejected per diem is listed but not counted in totals." : ""}
+          Every fuel, maintenance, parts{includesPerDiem ? " and trip claim" : ""} entry, newest first. Leave the dates blank for all time.
+          {includesPerDiem ? " Claims awaiting review or rejected are listed but not counted in totals." : ""}
         </p>
         <form className="fleet-schedule-filters vehicle-transactions-filters no-print" onSubmit={submit}>
           <label>From<input className="form-input" type="date" value={filters.from} max={filters.to || undefined}

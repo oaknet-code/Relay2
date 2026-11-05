@@ -1,227 +1,151 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Plus, Wallet } from "lucide-react";
-import {
-  createExpenseClaim,
-  decideExpenseClaim,
-  getExpenseClaimOptions,
-  getExpenseClaims,
-  markExpenseClaimPaid,
-} from "../services/api";
+import { decideClaim, getClaims, getVehicles, markClaimPaid } from "../services/api";
+import { ClaimForm, ClaimRow } from "../components/Claims";
 
-const EMPTY_FORM = {
-  movementPlanId: "",
-  category: "transport",
-  amount: "",
-  expenseDate: new Date().toISOString().slice(0, 10),
-  description: "",
-  receiptReference: "",
-};
-const CATEGORIES = ["fuel", "accommodation", "meals", "transport", "supplies", "other"];
-// Only the CEO reviews claims (sees all, approves, rejects, marks paid).
-const isApprover = (user) => user?.role === "ceo";
-const formatKes = (value) => `KES ${Number(value || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const displayDate = (value) => value ? new Date(value).toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+// Claims: one place for all money staff spend for work — trip per diem
+// (meals, accommodation...), other costs, and fuel (logged in Fleet, claimed
+// automatically). Everyone sees their own claims (and ones they submitted
+// for others); only the CEO sees all, reviews and marks paid. The CEO
+// doesn't make claims.
 
-function Status({ value }) {
-  return <span className={`fleet-status ${value === "approved" || value === "paid" ? "moving" : value === "rejected" ? "maintenance" : "parked"}`}>{value}</span>;
-}
+const STAFF_ROLES = ["super_admin", "admin", "project_manager", "site_engineer", "driver"];
+const FILTERS = [["all", "All"], ["submitted", "Awaiting review"], ["approved", "Approved"], ["paid", "Paid"], ["rejected", "Rejected"]];
+const kes = (value) => `KES ${Number(value || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function ExpenseClaimsPage({ user }) {
   const [claims, setClaims] = useState([]);
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [plans, setPlans] = useState([]);
-  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [vehicles, setVehicles] = useState([]);
+  const [filter, setFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const reviewer = isApprover(user);
+  const [notice, setNotice] = useState(null); // { ok, text }
+  const reviewer = user?.role === "ceo";
+  const canClaim = STAFF_ROLES.includes(user?.role);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
-      const [claimRows, planRows] = await Promise.all([getExpenseClaims(), getExpenseClaimOptions()]);
-      setClaims(claimRows);
-      setPlans(planRows);
+      setClaims(await getClaims());
       setError("");
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => { load(); }, []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (canClaim && user?.role !== "driver") getVehicles().then(setVehicles).catch(() => setVehicles([]));
+  }, [canClaim, user?.role]);
 
   const totals = useMemo(() => ({
     submitted: claims.filter((claim) => claim.status === "submitted").length,
     approved: claims.filter((claim) => ["approved", "paid"].includes(claim.status)).reduce((sum, claim) => sum + claim.amount, 0),
     paid: claims.filter((claim) => claim.status === "paid").reduce((sum, claim) => sum + claim.amount, 0),
   }), [claims]);
-  const visibleClaims = useMemo(
-    () => categoryFilter === "all" ? claims : claims.filter((claim) => claim.category === categoryFilter),
-    [categoryFilter, claims],
-  );
+  const visible = filter === "all" ? claims : claims.filter((claim) => claim.status === filter);
 
-  const submit = async (event) => {
-    event.preventDefault();
+  const run = async (action, success) => {
     setBusy(true);
-    setNotice("");
+    setNotice(null);
     try {
-      const result = await createExpenseClaim({ ...form, amount: Number(form.amount) });
-      setForm({ ...EMPTY_FORM });
-      setShowForm(false);
-      setNotice(result?.notificationWarning
-        ? `Expense claim submitted for CEO review. ${result.notificationWarning}`
-        : "Expense claim submitted for CEO review.");
+      const result = await action();
       await load();
+      setNotice({ ok: true, text: [success, result?.notificationWarning].filter(Boolean).join(" ") });
     } catch (err) {
-      setNotice(err.message);
+      setNotice({ ok: false, text: err.message });
     } finally {
       setBusy(false);
     }
   };
 
-  const decide = async (claim, decision) => {
-    const comment = window.prompt(`Optional comment for ${decision} claim ${claim.planReference || claim.description}:`);
+  const decide = (claim, decision) => {
+    const comment = window.prompt(decision === "rejected"
+      ? `Why is the claim from ${claim.claimantName} rejected? They see this.`
+      : `Optional comment for approving ${claim.claimantName}'s claim:`);
     if (comment === null) return;
-    setBusy(true);
-    setNotice("");
-    try {
-      await decideExpenseClaim(claim._id, decision, comment);
-      await load();
-    } catch (err) {
-      setNotice(err.message);
-    } finally {
-      setBusy(false);
-    }
+    if (decision === "rejected" && !comment.trim()) { setNotice({ ok: false, text: "Give a reason to reject the claim." }); return; }
+    run(() => decideClaim(claim._id, decision, comment.trim()), `Claim ${decision}.`);
   };
-
-  const markPaid = async (claim) => {
-    if (!window.confirm(`Mark ${formatKes(claim.amount)} for ${claim.claimantName} as paid?`)) return;
-    setBusy(true);
-    setNotice("");
-    try {
-      await markExpenseClaimPaid(claim._id);
-      await load();
-    } catch (err) {
-      setNotice(err.message);
-    } finally {
-      setBusy(false);
-    }
+  const markPaid = (claim) => {
+    if (!window.confirm(`Mark ${kes(claim.amount)} for ${claim.claimantName} as paid?`)) return;
+    run(() => markClaimPaid(claim._id), "Claim marked paid.");
   };
 
   return (
     <div>
       <div className="view-head">
         <span className="tagchip"><Wallet size={11} /> Reimbursements</span>
-        <h2>Expense Claims</h2>
-        <p>Record movement-plan expenses and follow each claim through review and reimbursement. Fuel recorded on the Fleet page is claimed here automatically.</p>
+        <h2>Claims</h2>
+        <p>
+          Spent money for work, like meals and accommodation on a trip, supplies or transport? Claim it here with the receipts.
+          Fuel logged in Fleet is claimed automatically. The CEO reviews each claim and marks it paid.
+        </p>
       </div>
 
       <div className="kpi-row" style={{ marginBottom: 16 }}>
-        <div className="kpi"><div className="k-top">SUBMITTED</div><div className="k-val">{totals.submitted}</div><div className="k-sub">awaiting CEO review</div></div>
-        <div className="kpi"><div className="k-top">APPROVED</div><div className="k-val">{formatKes(totals.approved)}</div><div className="k-sub">approved reimbursement</div></div>
-        <div className="kpi"><div className="k-top">PAID</div><div className="k-val">{formatKes(totals.paid)}</div><div className="k-sub">reimbursed to team</div></div>
+        <div className="kpi"><div className="k-top">AWAITING REVIEW</div><div className="k-val">{totals.submitted}</div><div className="k-sub">with the CEO</div></div>
+        <div className="kpi"><div className="k-top">APPROVED</div><div className="k-val">{kes(totals.approved)}</div><div className="k-sub">incl. paid</div></div>
+        <div className="kpi"><div className="k-top">PAID</div><div className="k-val">{kes(totals.paid)}</div><div className="k-sub">reimbursed</div></div>
       </div>
 
-      {notice && <div className="fleet-operation-notice" role="status">{notice}</div>}
+      {notice && (
+        <div className={`fleet-operation-notice ${notice.ok ? "" : "error"}`} role={notice.ok ? "status" : "alert"}>
+          {notice.ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {notice.text}
+        </div>
+      )}
       {error && <div className="fleet-operation-notice error" role="alert"><AlertTriangle size={14} /> {error}</div>}
 
       <section className="panel">
         <div className="panel-h">
           <Wallet size={15} className="ph-ico" />
           <h3>{reviewer ? "All claims" : "My claims"}</h3>
-          {!showForm && plans.length > 0 && (
-            <button className="btn sm amber ph-r" onClick={() => setShowForm(true)}><Plus size={13} /> New claim</button>
+          <span className="ff-count">{claims.length}</span>
+          {canClaim && (
+            <button className="btn sm amber ph-r" onClick={() => { setNotice(null); setShowForm(true); }}><Plus size={13} /> New claim</button>
           )}
         </div>
-        <div className="panel-b" style={{ padding: "14px" }}>
-          <label className="expense-claim-category-filter">
-            Category
-            <select className="form-input" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-              <option value="all">All categories ({claims.length})</option>
-              {CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category[0].toUpperCase() + category.slice(1)} ({claims.filter((claim) => claim.category === category).length})
-                </option>
-              ))}
-            </select>
-          </label>
-          {showForm && (
-            <form className="fleet-operation-form" onSubmit={submit}>
-              <label>Movement plan *
-                <select className="form-input" required value={form.movementPlanId} onChange={(event) => setForm((current) => ({ ...current, movementPlanId: event.target.value }))}>
-                  <option value="">Select an approved plan</option>
-                  {plans.map((plan) => <option key={plan._id} value={plan._id}>{plan.reference} · {plan.title}</option>)}
-                </select>
-              </label>
-              <label>Category *
-                <select className="form-input" value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}>
-                  {CATEGORIES.map((category) => <option key={category} value={category}>{category[0].toUpperCase() + category.slice(1)}</option>)}
-                </select>
-              </label>
-              {form.category === "fuel" && (
-                <div className="fleet-operation-help wide">
-                  Fuel for a fleet vehicle is claimed automatically when it is recorded on the Fleet page. Only claim fuel here if it was not recorded there.
-                </div>
-              )}
-              <label>Amount (KES) *
-                <input className="form-input" type="number" min="0.01" step="0.01" required value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} />
-              </label>
-              <label>Expense date *
-                <input className="form-input" type="date" required value={form.expenseDate} onChange={(event) => setForm((current) => ({ ...current, expenseDate: event.target.value }))} />
-              </label>
-              <label className="wide">Description *
-                <input className="form-input" maxLength={500} required value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="What was purchased and why?" />
-              </label>
-              <label className="wide">Receipt / reference
-                <input className="form-input" maxLength={250} value={form.receiptReference} onChange={(event) => setForm((current) => ({ ...current, receiptReference: event.target.value }))} placeholder="Receipt number or secure document link" />
-              </label>
-              <div className="fleet-operation-actions wide">
-                <button className="btn amber sm" type="submit" disabled={busy}>{busy ? <Loader2 size={13} className="spin" /> : <CheckCircle2 size={13} />} Submit claim</button>
-                <button className="btn ghost sm" type="button" onClick={() => setShowForm(false)}>Cancel</button>
-              </div>
-            </form>
-          )}
-
+        <div className="panel-b" style={{ padding: 14 }}>
+          <div className="driver-choice" role="radiogroup" aria-label="Show" style={{ marginBottom: 6 }}>
+            {FILTERS.map(([value, label]) => (
+              <button key={value} type="button" role="radio" aria-checked={filter === value} className={`driver-chip ${filter === value ? "on" : ""}`} onClick={() => setFilter(value)}>
+                {label}{value === "all" ? ` (${claims.length})` : ` (${claims.filter((claim) => claim.status === value).length})`}
+              </button>
+            ))}
+          </div>
+          {!canClaim && !reviewer && <div className="fleet-operation-help">Your account can see its earlier claims but can&apos;t submit new ones.</div>}
           {loading ? (
-            <div className="fleet-operation-empty"><Loader2 size={18} className="spin" /> Loading expense claims…</div>
-          ) : claims.length === 0 ? (
-            <div className="fleet-operation-empty">No expense claims yet.</div>
-          ) : visibleClaims.length === 0 ? (
-            <div className="fleet-operation-empty">No {categoryFilter} claims found.</div>
+            <div className="fleet-operation-empty"><Loader2 size={18} className="spin" /> Loading claims…</div>
+          ) : visible.length === 0 ? (
+            <div className="fleet-operation-empty">{claims.length ? "No claims with this status." : "No claims yet."}</div>
           ) : (
-            <div className="fleet-operation-list">
-              {visibleClaims.map((claim) => (
-                <article className="fleet-operation-row" key={claim._id}>
-                  <div className="fleet-operation-main">
-                    <strong>{claim.planReference || "Fleet errand"} · {claim.category}</strong>
-                    <span>{claim.claimantName} · {displayDate(claim.expenseDate)} · {claim.description}</span>
-                    {claim.fuelLog && <small>From a fleet fuel log</small>}
-                    {claim.receiptReference && <small>Receipt / reference: {claim.receiptReference}</small>}
-                    {claim.decisionComment && <small>Reviewer note: {claim.decisionComment}</small>}
-                  </div>
-                  <div className="fleet-operation-meta">
-                    <b>{formatKes(claim.amount)}</b>
-                    <Status value={claim.status} />
-                    {reviewer && claim.status === "submitted" && (
-                      <div className="fleet-operation-actions">
-                        <button className="btn sm amber" disabled={busy} onClick={() => decide(claim, "approved")}>Approve</button>
-                        <button className="btn sm ghost" disabled={busy} onClick={() => decide(claim, "rejected")}>Reject</button>
-                      </div>
-                    )}
-                    {reviewer && claim.status === "approved" && <button className="btn sm amber" disabled={busy} onClick={() => markPaid(claim)}>Mark paid</button>}
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-          {!loading && plans.length === 0 && !showForm && (
-            <div className="fleet-operation-help">Claims can be linked to approved movement plans where you are listed as a team member.</div>
+            visible.map((claim) => (
+              <ClaimRow key={claim._id} claim={claim} actions={reviewer && (
+                <>
+                  {claim.status === "submitted" && (
+                    <div className="fleet-operation-actions">
+                      <button className="btn sm amber" disabled={busy} onClick={() => decide(claim, "approved")}>Approve</button>
+                      <button className="btn sm ghost" disabled={busy} onClick={() => decide(claim, "rejected")}>Reject</button>
+                    </div>
+                  )}
+                  {claim.status === "approved" && <button className="btn sm amber" disabled={busy} onClick={() => markPaid(claim)}>Mark paid</button>}
+                </>
+              )} />
+            ))
           )}
         </div>
       </section>
+
+      {showForm && (
+        <ClaimForm vehicles={vehicles} onClose={() => setShowForm(false)}
+          onSaved={async (result) => {
+            setShowForm(false);
+            await load();
+            setNotice({ ok: true, text: ["Claim submitted for CEO review.", result?.notificationWarning].filter(Boolean).join(" ") });
+          }} />
+      )}
     </div>
   );
 }

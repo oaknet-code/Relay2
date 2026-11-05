@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MapPin,
   Truck,
@@ -15,9 +15,9 @@ import {
   LayoutDashboard,
   Fuel,
   Package,
-  Wallet,
   ListChecks,
   CalendarDays,
+  FileText,
 } from "lucide-react";
 import {
   getVehicles,
@@ -29,12 +29,14 @@ import {
   updateDriver,
   deleteDriver,
   getFleetTeamMembers,
+  getFleetDocuments,
 } from "../services/api";
 import { FleetOperations } from "../components/FleetOperations";
 import { FleetSchedule } from "../components/FleetSchedule";
 import { VehicleSummary } from "../components/VehicleSummary";
 import { VehicleTransactions } from "../components/VehicleTransactions";
 import { FleetModal } from "../components/FleetModal";
+import { FleetDocuments } from "../components/FleetDocuments";
 
 // Company vehicles and drivers, from the database, split into tabs so each
 // area (fuel, maintenance, parts, ...) has its own view; forms open in a
@@ -56,11 +58,11 @@ const TABS = [
   { id: "fuel", label: "Fuel", icon: Fuel },
   { id: "maintenance", label: "Maintenance", icon: Wrench },
   { id: "parts", label: "Parts", icon: Package },
-  { id: "per-diem", label: "Per diem", icon: Wallet },
+  { id: "documents", label: "Documents", icon: FileText, docsOnly: true }, // super admin, CEO, admin
   { id: "transactions", label: "Transactions", icon: ListChecks },
   { id: "schedule", label: "Schedule", icon: CalendarDays },
 ];
-const OPERATION_TABS = new Set(["fuel", "maintenance", "parts", "per-diem"]);
+const OPERATION_TABS = new Set(["fuel", "maintenance", "parts"]);
 const TAB_STORAGE_KEY = "relay.fleet.tab";
 
 function savedTab() {
@@ -82,7 +84,21 @@ function Banner({ ok, children }) {
 }
 
 export function FleetManagement({ canEdit = false, user }) {
-  const [tab, setTab] = useState(savedTab);
+  // Documents: super admins and the CEO edit (canEdit), admins view.
+  const canSeeDocuments = ["super_admin", "ceo", "admin"].includes(user?.role);
+  const tabs = TABS.filter((item) => !item.docsOnly || canSeeDocuments);
+  const [tab, setTab] = useState(() => {
+    const saved = savedTab();
+    return tabs.some((item) => item.id === saved) ? saved : "overview";
+  });
+  // Expired / expiring / missing documents, for the tab badge and banner.
+  const [docSummary, setDocSummary] = useState(null);
+  const loadDocSummary = useCallback(() => {
+    if (!canSeeDocuments) return;
+    getFleetDocuments().then((data) => setDocSummary(data.summary)).catch(() => setDocSummary(null));
+  }, [canSeeDocuments]);
+  useEffect(() => { loadDocSummary(); }, [loadDocSummary]);
+  const docIssues = docSummary ? docSummary.expired + docSummary.expiring + docSummary.missing : 0;
   const [vehicles, setVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -343,17 +359,25 @@ export function FleetManagement({ canEdit = false, user }) {
           Fleet
         </span>
         <h2>Fleet Management</h2>
-        <p>Manage vehicles, drivers, fuel, per diem, maintenance, and workshop or imported-part costs.</p>
+        <p>Manage vehicles, drivers, fuel, maintenance, and workshop or imported-part costs. Per diem and other claims are under Claims.</p>
       </div>
 
       <nav className="fleet-tabs" aria-label="Fleet sections">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {tabs.map(({ id, label, icon: Icon }) => (
           <button key={id} type="button" className={`fleet-operation-tab ${tab === id ? "active" : ""}`}
             aria-current={tab === id ? "page" : undefined} onClick={() => chooseTab(id)}>
             <Icon size={14} /> {label}
+            {id === "documents" && docIssues > 0 && <span className={`fd-badge ${docSummary.expired ? "bad" : ""}`}>{docIssues}</span>}
           </button>
         ))}
       </nav>
+
+      {docSummary && docSummary.expired > 0 && tab !== "documents" && (
+        <div className="fleet-operation-notice error" role="alert" style={{ marginBottom: 12 }}>
+          <AlertTriangle size={14} /> {docSummary.expired} vehicle/driver document{docSummary.expired === 1 ? " has" : "s have"} expired.
+          <button className="btn sm ghost" type="button" onClick={() => chooseTab("documents")}>View documents</button>
+        </div>
+      )}
 
       {notice && <Banner ok={notice.ok}>{notice.text}</Banner>}
 
@@ -407,12 +431,14 @@ export function FleetManagement({ canEdit = false, user }) {
           {tab === "vehicles" && <div className="fleet-manage">{vehiclesPanel}{driversPanel}</div>}
 
           {OPERATION_TABS.has(tab) && (
-            <FleetOperations user={user} section={tab} vehicles={vehicles} drivers={drivers} onFleetChange={refreshFleet} />
+            <FleetOperations user={user} section={tab} vehicles={vehicles} onFleetChange={refreshFleet} />
           )}
 
           {tab === "transactions" && <VehicleTransactions vehicles={vehicles} request={transactionsRequest} />}
 
           {tab === "schedule" && <FleetSchedule vehicles={vehicles} />}
+
+          {tab === "documents" && canSeeDocuments && <FleetDocuments canEdit={canEdit} onChanged={loadDocSummary} />}
         </div>
       )}
 

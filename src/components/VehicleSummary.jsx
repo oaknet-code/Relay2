@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BarChart3, Loader2, RefreshCw, AlertTriangle, Printer } from "lucide-react";
 import { getVehicleSummary } from "../services/api";
 
-// Per-vehicle totals for fuel, maintenance, parts and driver per diem.
+// Per-vehicle totals for fuel, maintenance, parts and trip claims (per diem etc.).
 // Leave both dates blank for all time. Reloads whenever the Fleet page
 // reloads its vehicles (passed in as `vehicles`), which happens after any
 // fleet change on the page.
@@ -84,7 +84,7 @@ export function VehicleSummary({ vehicles, onViewTransactions }) {
       <div className="panel-b">
         <p className="mp-description">
           Running costs per vehicle for {periodLabel}. Maintenance is labour and service only; parts are counted separately.
-          {showPerDiem ? " Per diem counts approved amounts." : ""}
+          {showPerDiem ? " Trip claims count approved and paid amounts." : ""}
           {onViewTransactions ? " Click a plate to see its transactions." : ""}
         </p>
         <form className="fleet-schedule-filters vehicle-summary-filters no-print" onSubmit={submit}>
@@ -111,7 +111,7 @@ export function VehicleSummary({ vehicles, onViewTransactions }) {
               <div><span>Fuel</span><b>{kes(totals.fuel)}</b><small>{num(totals.litres, 1)} L</small></div>
               <div><span>Maintenance</span><b>{kes(totals.maintenance)}</b><small>{totals.open} open</small></div>
               <div><span>Parts</span><b>{kes(totals.parts)}</b></div>
-              {showPerDiem && <div><span>Per diem</span><b>{kes(totals.perDiem)}</b>{totals.pending > 0 && <small>{kes(totals.pending)} pending</small>}</div>}
+              {showPerDiem && <div><span>Trip claims</span><b>{kes(totals.perDiem)}</b>{totals.pending > 0 && <small>{kes(totals.pending)} pending</small>}</div>}
             </div>
 
             {totals.serviceDue > 0 && (
@@ -128,7 +128,7 @@ export function VehicleSummary({ vehicles, onViewTransactions }) {
                     <th>Fuel</th>
                     <th>Maintenance</th>
                     <th>Parts</th>
-                    {showPerDiem && <th>Per diem</th>}
+                    {showPerDiem && <th>Trip claims</th>}
                     <th>Odometer</th>
                     <th className="num">Total</th>
                   </tr>

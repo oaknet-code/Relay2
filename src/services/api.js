@@ -784,50 +784,73 @@ export const createMaintenanceRecord = (payload) => fleetCall("post", "/api/flee
 export const updateMaintenanceStatus = (id, status) => fleetCall("patch", `/api/fleet/maintenance/${id}/status`, { status });
 export const getPartSourcingRecords = () => fleetCall("get", "/api/fleet/parts-sourcing");
 export const createPartSourcingRecord = (payload) => fleetCall("post", "/api/fleet/parts-sourcing", payload);
-export const getPerDiemRecords = () => fleetCall("get", "/api/fleet/per-diem");
-// Driver ("My Vehicle"): their vehicles, fuel, checks, problems and per diem.
+// Vehicle and driver documents (Fleet → Documents): super admin / CEO edit,
+// admins view. Details as JSON plus an optional copy (photo or PDF).
+const fleetDocCall = async (method, url, payload, file) => {
+  const formData = new FormData();
+  formData.append("payload", JSON.stringify(payload));
+  if (file) formData.append("file", file);
+  try {
+    const { data } = await axiosInstance[method](url, formData, { headers: { "Content-Type": "multipart/form-data" } });
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "The document wasn't saved.");
+  }
+};
+export const getFleetDocuments = () => fleetCall("get", "/api/fleet/documents");
+export const createFleetDocument = (payload, file) => fleetDocCall("post", "/api/fleet/documents", payload, file);
+export const updateFleetDocument = (id, payload, file) => fleetDocCall("put", `/api/fleet/documents/${id}`, payload, file);
+export const deleteFleetDocument = (id) => fleetCall("delete", `/api/fleet/documents/${id}`);
+export const getFleetDocumentFile = async (id, version) => {
+  try {
+    const { data } = await axiosInstance.get(`/api/fleet/documents/${id}/file`, { params: version !== undefined ? { version } : {}, responseType: "blob" });
+    return data;
+  } catch {
+    throw new Error("Couldn't open the document.");
+  }
+};
+// Expired / missing documents for a dispatch's vehicle and driver.
+export const getFleetCompliance = (vehicleId, driverId) =>
+  fleetCall("get", `/api/fleet/compliance?vehicleId=${encodeURIComponent(vehicleId || "")}&driverId=${encodeURIComponent(driverId || "")}`);
+// Driver ("My Vehicle"): their vehicles, fuel, checks, problems and claims.
 export const getDriverFleet = () => fleetCall("get", "/api/fleet/my");
 export const createDriverFuel = (payload) => fleetCall("post", "/api/fleet/my/fuel", payload);
 export const createDriverVehicleCheck = (payload) => fleetCall("post", "/api/fleet/my/checks", payload);
 export const reportDriverVehicleIssue = (payload) => fleetCall("post", "/api/fleet/my/issues", payload);
-export const getPerDiemOptions = () => fleetCall("get", "/api/fleet/per-diem/options");
-// Per diem claim: the claim as JSON plus the receipt files (multipart).
-export const createPerDiemRecord = async (payload, files = []) => {
-  const formData = new FormData();
-  formData.append("payload", JSON.stringify(payload));
-  files.forEach((file) => formData.append("documents", file));
-  try {
-    const { data } = await axiosInstance.post("/api/fleet/per-diem", formData, { headers: { "Content-Type": "multipart/form-data" } });
-    return data;
-  } catch (error) {
-    throw new Error(error.response?.data?.message || "The per diem claim didn't go through.");
-  }
-};
-export const getPerDiemDocument = async (claimId, docId) => {
-  try {
-    const { data } = await axiosInstance.get(`/api/fleet/per-diem/${claimId}/documents/${docId}`, { responseType: "blob" });
-    return data;
-  } catch {
-    throw new Error("Couldn't open the receipt.");
-  }
-};
-export const decidePerDiemRecord = (id, decision, comment = "") =>
-  fleetCall("patch", `/api/fleet/per-diem/${id}/decision`, { decision, comment });
-
 const claimCall = async (method, url, body) => {
   try {
     const { data } = await axiosInstance[method](url, body);
     return data;
   } catch (error) {
-    throw new Error(error.response?.data?.message || "Expense claim request failed");
+    throw new Error(error.response?.data?.message || "Claim request failed");
   }
 };
-export const getExpenseClaimOptions = () => claimCall("get", "/api/expense-claims/options");
-export const getExpenseClaims = () => claimCall("get", "/api/expense-claims");
-export const createExpenseClaim = (payload) => claimCall("post", "/api/expense-claims", payload);
-export const decideExpenseClaim = (id, decision, comment = "") =>
+// Claims (per diem and other costs): one system for all staff.
+export const getClaimOptions = () => claimCall("get", "/api/expense-claims/options");
+export const getClaims = () => claimCall("get", "/api/expense-claims");
+// The claim as JSON plus the receipt files (multipart).
+export const createClaim = async (payload, files = []) => {
+  const formData = new FormData();
+  formData.append("payload", JSON.stringify(payload));
+  files.forEach((file) => formData.append("documents", file));
+  try {
+    const { data } = await axiosInstance.post("/api/expense-claims", formData, { headers: { "Content-Type": "multipart/form-data" } });
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "The claim didn't go through.");
+  }
+};
+export const getClaimDocument = async (claimId, docId) => {
+  try {
+    const { data } = await axiosInstance.get(`/api/expense-claims/${claimId}/documents/${docId}`, { responseType: "blob" });
+    return data;
+  } catch {
+    throw new Error("Couldn't open the receipt.");
+  }
+};
+export const decideClaim = (id, decision, comment = "") =>
   claimCall("patch", `/api/expense-claims/${id}/decision`, { decision, comment });
-export const markExpenseClaimPaid = (id) => claimCall("patch", `/api/expense-claims/${id}/paid`, {});
+export const markClaimPaid = (id) => claimCall("patch", `/api/expense-claims/${id}/paid`, {});
 
 /**
  * Gate Pass (Dispatch)

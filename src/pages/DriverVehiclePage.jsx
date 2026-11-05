@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Fuel, Gauge, Loader2, RefreshCw, Truck, Wallet, Wrench, XCircle } from "lucide-react";
 import { createDriverFuel, createDriverVehicleCheck, getDriverFleet, reportDriverVehicleIssue } from "../services/api";
 import { FleetModal } from "../components/FleetModal";
-import { PerDiemClaimForm, PerDiemClaimRow } from "../components/PerDiemClaims";
+import { ClaimForm, ClaimRow } from "../components/Claims";
 import "../styles/custody.css";
 import "../styles/driver.css";
 
@@ -19,7 +19,7 @@ const errorText = (err, fallback) => err.response?.data?.message || err.message 
 
 const VEHICLE_STATUS = { available: ["Available", "done"], in_use: ["In use", "moving"], maintenance: ["In maintenance", "collect"] };
 const CLAIM_STATUS = { submitted: ["Claim awaiting review", "collect"], approved: ["Claim approved", "done"], rejected: ["Claim rejected", "bad"], paid: ["Paid", "done"] };
-const TABS = [["fuel", "Fuel", Fuel], ["checks", "Checks", ClipboardCheck], ["problems", "Problems", Wrench], ["per-diem", "Per diem", Wallet]];
+const TABS = [["fuel", "Fuel", Fuel], ["checks", "Checks", ClipboardCheck], ["problems", "Problems", Wrench], ["claims", "Claims", Wallet]];
 
 export function DriverVehiclePage() {
   const [data, setData] = useState(null);
@@ -79,6 +79,18 @@ export function DriverVehiclePage() {
         ))
       )}
 
+      {data?.driver?.documents?.length > 0 && (
+        <article className="panel driver-trip">
+          <header className="driver-trip-head">
+            <div><div className="driver-trip-id" style={{ fontSize: 14 }}>My documents</div></div>
+          </header>
+          <DocList docs={data.driver.documents} />
+          {data.driver.documents.some((doc) => doc.status !== "valid" && doc.status !== "no_expiry") && (
+            <div className="faint" style={{ fontSize: 11.5 }}>Bring the renewed document to the fleet office so it can be updated.</div>
+          )}
+        </article>
+      )}
+
       {data && (
         <section className="driver-history">
           <div className="dv-tabs" role="tablist">
@@ -91,7 +103,7 @@ export function DriverVehiclePage() {
           {tab === "fuel" && <FuelHistory rows={data.fuel} />}
           {tab === "checks" && <CheckHistory rows={data.checks} />}
           {tab === "problems" && <ProblemHistory rows={data.issues} />}
-          {tab === "per-diem" && <PerDiemHistory rows={data.perDiem} onClaim={() => { setNotice(""); setModal({ kind: "per-diem" }); }} />}
+          {tab === "claims" && <ClaimHistory rows={data.claims || []} onClaim={() => { setNotice(""); setModal({ kind: "claim" }); }} />}
         </section>
       )}
 
@@ -105,9 +117,9 @@ export function DriverVehiclePage() {
             ? `${modal.vehicle.plate} checked: all OK. Safe trip!`
             : `${modal.vehicle.plate} check saved. The fleet team has been told about the problem.`, result)} />
       )}
-      {modal?.kind === "per-diem" && (
-        <PerDiemClaimForm mode="driver" vehicles={vehicles} onClose={() => setModal(null)}
-          onSaved={(result) => done("Per diem claim sent for review. You'll be told when it's approved.", result)} />
+      {modal?.kind === "claim" && (
+        <ClaimForm onClose={() => setModal(null)}
+          onSaved={(result) => done("Claim sent for review. You'll be told when it's approved.", result)} />
       )}
       {modal?.kind === "problem" && (
         <ProblemModal vehicle={modal.vehicle} onClose={() => setModal(null)}
@@ -142,6 +154,8 @@ function VehicleCard({ vehicle, onAction }) {
         {vehicle.openIssues > 0 && <div className="warn"><span>Your open reports</span><b>{vehicle.openIssues}</b></div>}
       </div>
 
+      {vehicle.documents?.length > 0 && <DocList docs={vehicle.documents} />}
+
       {vehicle.status === "maintenance" && (
         <div className="driver-wait"><Wrench size={13} /> This vehicle is in maintenance. Don&apos;t drive it until the fleet team clears it.</div>
       )}
@@ -158,6 +172,27 @@ function VehicleCard({ vehicle, onAction }) {
         </button>
       </div>
     </article>
+  );
+}
+
+// Document status for the driver: what's on file and when it expires.
+const DOC_STATUS = { valid: ["Valid", "done"], no_expiry: ["On file", "done"], expiring: ["Expiring", "collect"], expired: ["Expired", "bad"], missing: ["Not on file", "collect"] };
+function DocList({ docs }) {
+  return (
+    <ul className="dv-docs">
+      {docs.map((doc) => {
+        const [label, className] = DOC_STATUS[doc.status] || DOC_STATUS.valid;
+        const when = doc.status === "expired" ? `expired ${fmtDay(doc.expiresOn)}`
+          : doc.status === "expiring" ? (doc.daysLeft === 0 ? "expires today" : `expires in ${doc.daysLeft} day${doc.daysLeft === 1 ? "" : "s"}`)
+            : doc.expiresOn ? `until ${fmtDay(doc.expiresOn)}` : "";
+        return (
+          <li key={doc.label}>
+            <span>{doc.label}{when && <small className="faint"> · {when}</small>}</span>
+            <span className={`driver-stage ${className}`}>{label}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -216,14 +251,14 @@ function ProblemHistory({ rows }) {
   ));
 }
 
-function PerDiemHistory({ rows, onClaim }) {
+function ClaimHistory({ rows, onClaim }) {
   return (
     <>
       <div className="dv-claim-bar">
-        <span className="faint">Spent money on a trip? Claim it with the receipts.</span>
-        <button type="button" className="btn sm amber" onClick={onClaim}><Wallet size={13} /> Claim per diem</button>
+        <span className="faint">Spent money on a trip (meals, accommodation...)? Claim it with the receipts. Fuel you log is claimed automatically.</span>
+        <button type="button" className="btn sm amber" onClick={onClaim}><Wallet size={13} /> New claim</button>
       </div>
-      {rows.length === 0 ? <Empty>No per diem claims yet.</Empty> : rows.map((row) => <PerDiemClaimRow key={row._id} record={row} showDriver={false} />)}
+      {rows.length === 0 ? <Empty>No claims yet.</Empty> : rows.map((row) => <ClaimRow key={row._id} claim={row} showClaimant={false} />)}
     </>
   );
 }

@@ -18,7 +18,7 @@ export const NAV_CONFIG = [
   { id: "my-vehicle", label: "My Vehicle", group: "pipeline", ico: Truck }, // drivers only
   { id: "fleet", label: "Fleet", group: "pipeline", ico: MapPin },
   { id: "movement-plan", label: "Movement Plan", group: "pipeline", ico: Route },
-  { id: "expense-claims", label: "Expense Claims", group: "pipeline", ico: Wallet },
+  { id: "expense-claims", label: "Claims", group: "pipeline", ico: Wallet },
   { id: "site-work", label: "Site Work", group: "pipeline", ico: Camera },
   { id: "tracking", label: "Asset Tracking", step: "Audit", group: "admin", ico: ClipboardList },
   { id: "users", label: "User Management", group: "admin", ico: Users },

@@ -1,18 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { Fuel, Loader2, Plus, Wrench, Package, Wallet, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Fuel, Loader2, Plus, Wrench, Package, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { FleetModal } from "./FleetModal";
-import { PerDiemClaimForm, PerDiemClaimRow } from "./PerDiemClaims";
 import { FLEET_ENTRY_ROLES } from "../utils/access";
 import {
   createFuelLog,
   createMaintenanceRecord,
   createPartSourcingRecord,
-  decidePerDiemRecord,
-  getExpenseClaimOptions,
+  getClaimOptions,
   getFuelLogs,
   getMaintenanceRecords,
   getPartSourcingRecords,
-  getPerDiemRecords,
   updateMaintenanceStatus,
 } from "../services/api";
 
@@ -30,17 +27,16 @@ function Status({ value, label = value }) {
   return <span className={`fleet-status ${["approved", "completed", "paid"].includes(value) ? "moving" : value === "rejected" || value === "open" ? "maintenance" : "parked"}`}>{label}</span>;
 }
 
-// One Fleet page tab ("fuel", "maintenance", "parts" or "per-diem"): the
+// One Fleet page tab ("fuel", "maintenance" or "parts"): the
 // records as a list, with the form to add one in a pop-up. Vehicles and
 // drivers come from the Fleet page so both stay in sync; onFleetChange
 // reloads them there (e.g. after maintenance changes a vehicle's status).
-export function FleetOperations({ user, section = "fuel", vehicles = [], drivers = [], onFleetChange }) {
+export function FleetOperations({ user, section = "fuel", vehicles = [], onFleetChange }) {
   const [formOpen, setFormOpen] = useState(null); // section whose form is showing
   const [formError, setFormError] = useState("");
   const [fuelLogs, setFuelLogs] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
   const [partSourcing, setPartSourcing] = useState([]);
-  const [perDiems, setPerDiems] = useState([]);
   // Plans the user can claim expenses against — each fuel log is claimed on one.
   const [claimPlans, setClaimPlans] = useState([]);
   const [fuelForm, setFuelForm] = useState({ ...EMPTY_FUEL });
@@ -57,20 +53,17 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
   const canRecordFuel = FLEET_ENTRY_ROLES.has(role);
   const canMaintain = FLEET_ENTRY_ROLES.has(role);
   const canManageParts = ["ceo", "super_admin"].includes(role);
-  const canReviewPerDiem = ["ceo", "super_admin"].includes(role);
-  const canSubmitPerDiem = ["super_admin", "ceo", "project_manager", "site_engineer", "field_worker"].includes(role);
 
   const load = async () => {
     try {
-      const [fuels, maintenanceRows, partRows, perDiemRows, claimPlanRows] = await Promise.all([
-        getFuelLogs(), getMaintenanceRecords(), getPartSourcingRecords(), getPerDiemRecords(),
-        canRecordFuel ? getExpenseClaimOptions() : Promise.resolve([]),
+      const [fuels, maintenanceRows, partRows, claimOptions] = await Promise.all([
+        getFuelLogs(), getMaintenanceRecords(), getPartSourcingRecords(),
+        canRecordFuel ? getClaimOptions() : Promise.resolve({ plans: [] }),
       ]);
       setFuelLogs(fuels);
       setMaintenance(maintenanceRows);
       setPartSourcing(partRows);
-      setPerDiems(perDiemRows);
-      setClaimPlans(claimPlanRows);
+      setClaimPlans(claimOptions.plans || []);
       setError("");
     } catch (err) {
       setError(err.message);
@@ -80,9 +73,6 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
   };
   useEffect(() => { load(); }, []);
 
-  const approvedPerDiems = useMemo(() => perDiems
-    .filter((record) => record.status === "approved")
-    .reduce((sum, record) => sum + record.totalAmount, 0), [perDiems]);
 
   // Errors from a form stay in its pop-up so nothing typed is lost; a
   // success closes the pop-up and shows the message on the tab.
@@ -121,7 +111,7 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
     event.preventDefault();
     const success = await run(
       () => createFuelLog({ ...fuelForm, odometerKm: Number(fuelForm.odometerKm), litres: Number(fuelForm.litres), totalCost: Number(fuelForm.totalCost) }),
-      "Fuel entry recorded and expense claim submitted for CEO review.",
+      role === "ceo" ? "Fuel entry recorded." : "Fuel entry recorded and claim submitted for CEO review.",
     );
     if (success) setFuelForm({ ...EMPTY_FUEL });
   };
@@ -149,25 +139,11 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
     if (success) setPartSourcingForm({ ...EMPTY_PART_SOURCING });
   };
 
-  const perDiemSaved = async (result) => {
-    setFormOpen(null);
-    await load();
-    setNotice({ ok: true, text: ["Per diem claim submitted for review.", result?.notificationWarning].filter(Boolean).join(" ") });
-  };
-
-  const reviewPerDiem = async (record, decision) => {
-    const comment = window.prompt(decision === "rejected"
-      ? `Why is the claim for ${record.driverName} rejected? The driver sees this.`
-      : `Optional comment for approving ${record.driverName}'s claim:`);
-    if (comment === null) return;
-    if (decision === "rejected" && !comment.trim()) { setNotice({ ok: false, text: "Give a reason to reject the claim." }); return; }
-    await run(() => decidePerDiemRecord(record._id, decision, comment.trim()), `Per diem claim ${decision}.`);
-  };
 
   const SECTIONS = {
     fuel: {
       title: "Fuel", icon: Fuel, count: fuelLogs.length,
-      intro: "Each fuel entry is also submitted as an expense claim for CEO review.",
+      intro: role === "ceo" ? "Fuel entries by others are also submitted as claims for your review. Fuel you record yourself isn't claimed." : "Each fuel entry is also submitted as a claim for CEO review.",
       action: canRecordFuel && { label: "Record fuel", form: "fuel" },
     },
     maintenance: {
@@ -179,11 +155,6 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
       title: "Parts", icon: Package, count: partSourcing.length,
       intro: "Parts sourced for a specific repair through CFAO, Isuzu or imports. No depot stock is tracked here.",
       action: canManageParts && { label: "Record part cost", form: "parts" },
-    },
-    "per-diem": {
-      title: "Driver per diem", icon: Wallet, count: perDiems.length,
-      intro: "Drivers pay for meals, accommodation and other costs on a trip, then claim what they spent with the receipts. Drivers claim from My Vehicle; you can also claim on a driver's behalf.",
-      action: canSubmitPerDiem && { label: "Submit a claim", form: "per-diem" },
     },
   };
   const current = SECTIONS[section] || SECTIONS.fuel;
@@ -234,26 +205,6 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
               </article>
             ))}
           </div>
-        )}
-
-        {section === "per-diem" && (
-          <>
-            <div className="fleet-operation-summary">
-              <span>Approved driver per diem to date</span>
-              <b>{formatKes(approvedPerDiems)}</b>
-            </div>
-            <div className="fleet-operation-list">
-              {perDiems.length === 0 && <div className="fleet-operation-empty">No per diem claims yet.</div>}
-              {perDiems.map((record) => (
-                <PerDiemClaimRow key={record._id} record={record} actions={canReviewPerDiem && record.status === "pending" && (
-                  <div className="fleet-operation-actions">
-                    <button className="btn sm amber" disabled={busy} onClick={() => reviewPerDiem(record, "approved")}>Approve</button>
-                    <button className="btn sm ghost" disabled={busy} onClick={() => reviewPerDiem(record, "rejected")}>Reject</button>
-                  </div>
-                )} />
-              ))}
-            </div>
-          </>
         )}
 
         {section === "maintenance" && (
@@ -374,9 +325,6 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], drivers
         </FleetModal>
       )}
 
-      {formOpen === "per-diem" && (
-        <PerDiemClaimForm mode="office" drivers={drivers} vehicles={vehicles} onClose={() => setFormOpen(null)} onSaved={perDiemSaved} />
-      )}
     </section>
   );
 }
