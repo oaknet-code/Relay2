@@ -22,7 +22,7 @@ function imageSrc(relativeUrl) {
 // chunk's JS at all, let alone call GET /api/site-work (the backend
 // enforces that independently regardless of what the client requests).
 // `canDelete`: super admins only (admins see the feed read-only).
-export function SiteWorkAdminFeed({ canDelete = false }) {
+export function SiteWorkAdminFeed({ canDelete = false, canDeleteJobCards = canDelete }) {
   const [items, setItems] = useState([]);
   // url -> stored content type; PDFs are new reports, anything else an older photo.
   const [contentTypes, setContentTypes] = useState({});
@@ -106,7 +106,7 @@ export function SiteWorkAdminFeed({ canDelete = false }) {
         </button>
       </div>
 
-      <AdminJobCards formOpen={jobCardFormOpen} onCloseForm={() => setJobCardFormOpen(false)} />
+      <AdminJobCards formOpen={jobCardFormOpen} onCloseForm={() => setJobCardFormOpen(false)} canDelete={canDeleteJobCards} />
 
       <h2 style={{ fontSize: "16px", fontWeight: "600", margin: "8px 0 0" }}>Progress Reports</h2>
 

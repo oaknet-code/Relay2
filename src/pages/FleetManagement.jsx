@@ -85,7 +85,7 @@ function Banner({ ok, children }) {
 
 export function FleetManagement({ canEdit = false, user }) {
   // Documents: super admins and the CEO edit (canEdit), admins view.
-  const canSeeDocuments = ["super_admin", "ceo", "admin"].includes(user?.role);
+  const canSeeDocuments = ["super_admin", "ceo", "project_manager", "admin"].includes(user?.role);
   const tabs = TABS.filter((item) => !item.docsOnly || canSeeDocuments);
   const [tab, setTab] = useState(() => {
     const saved = savedTab();

@@ -210,7 +210,7 @@ export function DispatchCustodyTracker({ user }) {
           const canApprove = status === "PENDING_APPROVAL" && currentApproval?.role === user?.role;
           const stage = status === "DISPATCHED" ? tripStage(dispatch) : null;
           const canReceive = status === "DISPATCHED" && user?.role === "site_engineer" && stage !== "collect";
-          const canRecordPickup = stage === "collect" && user?.role === "super_admin";
+          const canRecordPickup = stage === "collect" && ["super_admin", "ceo", "project_manager"].includes(user?.role);
           const incidents = dispatch.trip?.incidents || [];
           const link = dispatch.linkId ? links[dispatch.linkId] : null;
           const statusColor = STATUS_COLORS[status] || "var(--muted)";

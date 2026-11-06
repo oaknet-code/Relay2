@@ -363,7 +363,7 @@ function AddJobCardForm({ onSent, onCancel }) {
 
 // Admin / super admin: the form (opened by the "Add Job Card" button in the
 // Site Work header) and every card sent so far, filterable by contractor.
-export function AdminJobCards({ formOpen, onCloseForm }) {
+export function AdminJobCards({ formOpen, onCloseForm, canDelete = true }) {
   const { cards, setCards, isLoading, error, load } = useJobCards();
   const [filter, setFilter] = useState("all");
   const [sentNote, setSentNote] = useState("");
@@ -424,7 +424,7 @@ export function AdminJobCards({ formOpen, onCloseForm }) {
           cards={shown}
           emptyText={cards.length ? "No job cards for this contractor." : "No job cards sent yet. Use “Add Job Card” to send one."}
           showCompany
-          onDelete={handleDelete}
+          onDelete={canDelete ? handleDelete : undefined}
           deletingId={deletingId}
           headerExtra={companies.length > 1 && (
             <select

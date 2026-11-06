@@ -52,7 +52,7 @@ export function FleetOperations({ user, section = "fuel", vehicles = [], onFleet
   // review by super admin / CEO. Admins view only.
   const canRecordFuel = FLEET_ENTRY_ROLES.has(role);
   const canMaintain = FLEET_ENTRY_ROLES.has(role);
-  const canManageParts = ["ceo", "super_admin"].includes(role);
+  const canManageParts = ["ceo", "super_admin", "project_manager"].includes(role);
 
   const load = async () => {
     try {

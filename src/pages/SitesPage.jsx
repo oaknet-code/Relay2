@@ -85,7 +85,9 @@ function Banner({ kind, children }) {
 }
 
 // Sites replace the flat Site Kits list: pick a site to see and manage its kits.
-export function SitesPage({ canEdit = false }) {
+// canEdit: kits and deleting sites (super admins). canManageSites: adding
+// and editing sites (super admins and Project Managers).
+export function SitesPage({ canEdit = false, canManageSites = canEdit }) {
   const [sites, setSites] = useState([]);
   const [unassignedCount, setUnassignedCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -262,7 +264,7 @@ export function SitesPage({ canEdit = false }) {
             <div className="panel-h">
               <Info size={15} className="ph-ico" />
               <h3>Site information</h3>
-              {canEdit && !editing && (
+              {canManageSites && !editing && (
                 <div className="ph-r" style={{ display: "flex", gap: 8 }}>
                   <button className="btn ghost sm" onClick={() => setEditing({
                     name: openSite.name,
@@ -273,15 +275,17 @@ export function SitesPage({ canEdit = false }) {
                   })}>
                     <Pencil size={13} /> Edit
                   </button>
-                  <button
-                    className="btn ghost sm"
-                    style={{ color: "var(--red)" }}
-                    disabled={busy || kitCount > 0}
-                    title={kitCount > 0 ? "Move or delete this site's kits first" : "Delete site"}
-                    onClick={handleDelete}
-                  >
-                    <Trash2 size={13} /> Delete
-                  </button>
+                  {canEdit && (
+                    <button
+                      className="btn ghost sm"
+                      style={{ color: "var(--red)" }}
+                      disabled={busy || kitCount > 0}
+                      title={kitCount > 0 ? "Move or delete this site's kits first" : "Delete site"}
+                      onClick={handleDelete}
+                    >
+                      <Trash2 size={13} /> Delete
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -343,7 +347,7 @@ export function SitesPage({ canEdit = false }) {
                           </a>
                         </>
                       ) : (
-                        <span className="faint">Not set{canEdit ? " — add it with Edit" : ""}</span>
+                        <span className="faint">Not set{canManageSites ? " — add it with Edit" : ""}</span>
                       )}
                     </dd>
                   </div>
@@ -456,7 +460,7 @@ export function SitesPage({ canEdit = false }) {
           <option value="">All groups ({sites.length})</option>
           {SITE_GROUPS.map(g => <option key={g.name} value={g.name}>{g.name} ({groupCount(g.name)})</option>)}
         </select>
-        {canEdit && !showCreate && (
+        {canManageSites && !showCreate && (
           <button className="btn amber" onClick={() => {
             setShowCreate(true); setFormError(""); setNotice("");
             setNewSite(p => ({ ...p, groups: groupFilter ? [groupFilter] : p.groups }));

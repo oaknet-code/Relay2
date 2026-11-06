@@ -16,8 +16,10 @@ export const ACCESS_LEVELS = {
 //                    stock, fleet, vehicles, drivers and parts
 //   ceo              super admin rights + final (2nd) approval of dispatches
 //                    and movement plans
-//   project_manager  1st approval of dispatches and movement plans; prepares
-//                    movement plans; records fleet entries
+//   project_manager  everything a super admin can do except user management
+//                    (and claims, which the CEO reviews); 1st approval of
+//                    dispatches and movement plans — their own dispatch
+//                    requests go straight to the CEO
 //   site_engineer    receives dispatches (any site, not tied to sites); steps
 //                    links through installation; prepares movement plans;
 //                    records fleet entries
@@ -43,7 +45,11 @@ export const ROLE_LABELS = {
 export const LEGACY_ROLES = new Set(["warehouse_manager", "warehouse_operator", "site_manager"]);
 export const needsNewRole = (user) => LEGACY_ROLES.has(user?.role);
 
-export const isSuperAdmin = (user) => ["super_admin", "ceo"].includes(user?.role);
+// Full access: super admin, CEO and Project Manager. User management is
+// super admin and CEO only (canManageUsers).
+export const isSuperAdmin = (user) => ["super_admin", "ceo", "project_manager"].includes(user?.role);
+export const canManageUsers = (user) => ["super_admin", "ceo", "admin"].includes(user?.role);
+export const isUserAdmin = (user) => ["super_admin", "ceo"].includes(user?.role);
 export const isAdmin = (user) => user?.role === "admin" || isSuperAdmin(user);
 export const isFieldWorker = (user) => user?.role === "field_worker";
 export const isDriver = (user) => user?.role === "driver";
@@ -58,9 +64,14 @@ export const hasFullView = (user) => getAccessLevel(user) === ACCESS_LEVELS.FULL
 // Create / edit / delete of operational data (sites, kits, links, stock,
 // vehicles, drivers, parts ...).
 export const canEdit = (user) => isSuperAdmin(user);
+export const isProjectManager = (user) => user?.role === "project_manager";
+// Sites: super admins and Project Managers add and edit them (deleting
+// stays with super admins). Site work: Project Managers review it too.
+export const canManageSites = (user) => isSuperAdmin(user) || isProjectManager(user);
+export const canReviewSiteWork = (user) => isAdmin(user) || isProjectManager(user);
 
 // Only a super admin requests dispatches (not the CEO, who approves them).
-export const DISPATCH_CREATOR_ROLES = new Set(["super_admin"]);
+export const DISPATCH_CREATOR_ROLES = new Set(["super_admin", "project_manager"]);
 export const canRequestDispatch = (user) => DISPATCH_CREATOR_ROLES.has(user?.role);
 export const ASSET_TRACKING_ROLES = new Set(["project_manager", "site_engineer"]);
 export const FLEET_VIEW_ROLES = new Set(["project_manager", "site_engineer"]);
@@ -76,15 +87,23 @@ export const FIELD_WORKER_NAV_IDS = ["site-work", "expense-claims"];
 // Pages only for drivers (not shown to anyone else, even full-view roles).
 export const DRIVER_NAV_IDS = ["trips", "my-vehicle"];
 const ROLE_NAV_IDS = {
-  project_manager: ["control", "links", "tracking", "movement-plan", "fleet", "expense-claims"],
   site_engineer: ["control", "links", "tracking", "movement-plan", "fleet", "expense-claims"],
 };
 
+// Every signed-in account has Settings (WhatsApp number, notification settings).
+const EVERYONE_NAV_IDS = ["settings"];
+
 export const getAllowedNavigation = (navigation, user) => {
   if (!user || needsNewRole(user)) return [];
+  const everyone = navigation.filter((item) => EVERYONE_NAV_IDS.includes(item.id));
+  const forRole = allowedForRole(navigation, user).filter((item) => !EVERYONE_NAV_IDS.includes(item.id));
+  return [...forRole, ...everyone];
+};
+
+const allowedForRole = (navigation, user) => {
   if (isDriver(user)) return navigation.filter((item) => DRIVER_NAV_IDS.includes(item.id));
   navigation = navigation.filter((item) => !DRIVER_NAV_IDS.includes(item.id));
-  if (hasFullView(user)) return navigation;
+  if (hasFullView(user)) return navigation.filter((item) => item.id !== "users" || canManageUsers(user));
   if (isFieldWorker(user)) return navigation.filter((item) => FIELD_WORKER_NAV_IDS.includes(item.id));
   const allowed = ROLE_NAV_IDS[user.role] || CLIENT_NAV_IDS;
   return navigation.filter((item) => allowed.includes(item.id));

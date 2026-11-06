@@ -11,7 +11,7 @@ import { SiteWorkPage } from "./pages/SiteWorkPage";
 
 import { api } from "./services/api";
 import { NAV_CONFIG } from "./utils/navigation";
-import { canEdit, canRequestDispatch, canViewAssetTracking, canViewFleet, getAllowedNavigation, hasFullView, isAdmin, isDriver, isSuperAdmin, needsNewRole, ROLE_LABELS } from "./utils/access";
+import { canEdit, canManageSites, canManageUsers, isUserAdmin, canRequestDispatch, canViewAssetTracking, canViewFleet, getAllowedNavigation, hasFullView, isDriver, isSuperAdmin, needsNewRole, ROLE_LABELS } from "./utils/access";
 
 import "./styles/globals.css";
 import "./styles/layout.css";
@@ -56,6 +56,7 @@ const ExpenseClaimsPage = lazyPage(() => import("./pages/ExpenseClaimsPage").the
 const DriverTripsPage = lazyPage(() => import("./pages/DriverTripsPage").then((m) => ({ default: m.DriverTripsPage })));
 const DriverVehiclePage = lazyPage(() => import("./pages/DriverVehiclePage").then((m) => ({ default: m.DriverVehiclePage })));
 const NotificationsPage = lazyPage(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
+const SettingsPage = lazyPage(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const UserManagementPage = lazyPage(() =>
   import("./pages/UserManagementPage").then((m) => ({ default: m.UserManagementPage }))
 );
@@ -262,7 +263,7 @@ export default function App() {
         return <InventoryView canImport={hasWriteAccess} />;
 
       case "sites":
-        return <SitesPage canEdit={hasWriteAccess} />;
+        return <SitesPage canEdit={hasWriteAccess} canManageSites={canManageSites(user)} />;
 
       case "dispatch":
         return fullView ? (
@@ -292,11 +293,14 @@ export default function App() {
         );
 
       case "users":
-        return isAdmin(user) ? (
-          <UserManagementPage isSuper={isSuperAdmin(user)} />
+        return canManageUsers(user) ? (
+          <UserManagementPage isSuper={isUserAdmin(user)} />
         ) : (
           <MissionControl />
         );
+
+      case "settings":
+        return <SettingsPage />;
 
       case "notifications":
         return fullView ? (

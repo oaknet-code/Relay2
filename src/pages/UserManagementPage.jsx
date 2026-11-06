@@ -26,7 +26,7 @@ import { listUsers, createUser, updateUser, deleteUser, setUserStatus, resetUser
 const ROLES = [
   { value: "ceo", label: "CEO", hint: "Super admin access; final approval of dispatches and movement plans" },
   { value: "super_admin", label: "Super Admin", hint: "Full access; requests dispatches, manages stock, kits and fleet" },
-  { value: "project_manager", label: "Project Manager", hint: "First approval of dispatches and movement plans; prepares plans; fleet entries" },
+  { value: "project_manager", label: "Project Manager", hint: "Full access except user management; first approval of dispatches and movement plans" },
   { value: "client", label: "Client", hint: "Sees only their own links" },
   { value: "admin", label: "Admin", hint: "Views everything and prints reports; manages accounts below admin" },
   { value: "field_worker", label: "Contractor / Site Worker", hint: "Submits Site Work reports (needs a company)" },
@@ -41,7 +41,8 @@ const LEGACY_ROLES = {
 };
 const ROLE_LABELS = { ...Object.fromEntries(ROLES.map((r) => [r.value, r.label])), ...LEGACY_ROLES };
 // Only a super admin can create, edit or delete these.
-const PRIVILEGED_ROLES = ["super_admin", "admin", "ceo"];
+// Only super admins / the CEO manage these (Project Managers have near-full access).
+const PRIVILEGED_ROLES = ["super_admin", "admin", "ceo", "project_manager"];
 const ROLE_COLORS = {
   super_admin: "var(--red)",
   admin: "var(--amber)",

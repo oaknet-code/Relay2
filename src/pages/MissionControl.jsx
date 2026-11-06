@@ -96,7 +96,7 @@ export function MissionControl({ user, onNavigate }) {
   const [mapWeatherLoading, setMapWeatherLoading] = useState(false);
   const [mapWeatherError, setMapWeatherError] = useState("");
   const [mapWeatherRefresh, setMapWeatherRefresh] = useState(0);
-  const canViewFleetCosts = ["ceo", "super_admin"].includes(user?.role);
+  const canViewFleetCosts = ["ceo", "super_admin", "project_manager"].includes(user?.role);
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);

@@ -556,6 +556,15 @@ export const openNotificationLink = async (token, via = "email") => {
   const { data } = await axiosInstance.post(`/api/notification-links/open/${encodeURIComponent(token)}`, null, { params: { via } });
   return data; // { tab }
 };
+// Settings: your notification preferences per category.
+export const getNotificationPrefs = async () => {
+  const { data } = await axiosInstance.get("/api/notifications/preferences");
+  return data; // { email, whatsappPhone, categories: [{ key, label, description, needsOutside, email, whatsapp }] }
+};
+export const saveNotificationPrefs = async (prefs) => {
+  const { data } = await axiosInstance.put("/api/notifications/preferences", { prefs });
+  return data;
+};
 // Email delivery: a test email to the signed-in super admin.
 export const sendTestEmail = async () => {
   const { data } = await axiosInstance.post("/api/notifications/email-test");

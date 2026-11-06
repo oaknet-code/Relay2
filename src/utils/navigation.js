@@ -1,5 +1,5 @@
 import {
-  Gauge, Antenna, Boxes, Truck, Users, MapPin, ClipboardList, Camera, Bell, Building2, Route, Wallet, Navigation
+  Gauge, Antenna, Boxes, Truck, Users, MapPin, ClipboardList, Camera, Bell, Building2, Route, Wallet, Navigation, Settings
 } from 'lucide-react';
 
 export const NAV_GROUPS = [
@@ -23,4 +23,5 @@ export const NAV_CONFIG = [
   { id: "tracking", label: "Asset Tracking", step: "Audit", group: "admin", ico: ClipboardList },
   { id: "users", label: "User Management", group: "admin", ico: Users },
   { id: "notifications", label: "Notifications", group: "admin", ico: Bell },
+  { id: "settings", label: "Settings", group: "admin", ico: Settings }, // everyone
 ];

@@ -2,7 +2,7 @@ import React, { Suspense, lazy } from "react";
 import { Loader } from "lucide-react";
 import { SiteWorkSubmissionForm } from "./SiteWorkSubmissionForm";
 import { WorkerJobCards } from "./JobCards";
-import { isAdmin, isSuperAdmin, isFieldWorker } from "../utils/access";
+import { canReviewSiteWork, isSuperAdmin, isFieldWorker } from "../utils/access";
 
 // The admin feed is its own chunk, fetched over the network only if this
 // branch actually renders — a field_worker or client session never
@@ -21,7 +21,7 @@ function ChunkLoading() {
 }
 
 export function SiteWorkPage({ user }) {
-  if (!isAdmin(user)) {
+  if (!canReviewSiteWork(user)) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
         <SiteWorkSubmissionForm />
@@ -37,7 +37,7 @@ export function SiteWorkPage({ user }) {
 
   return (
     <Suspense fallback={<ChunkLoading />}>
-      <SiteWorkAdminFeed canDelete={isSuperAdmin(user)} />
+      <SiteWorkAdminFeed canDelete={isSuperAdmin(user)} canDeleteJobCards={isSuperAdmin(user) || user?.role === "admin"} />
     </Suspense>
   );
 }
