@@ -10,6 +10,7 @@ import {
   Table,
   TableCell,
   TableRow,
+  TextRun,
   VerticalAlign,
   WidthType,
 } from "docx";
@@ -201,13 +202,15 @@ function tableCell(value, header = false) {
     children: [
       new Paragraph({
         spacing: { before: 30, after: 30 },
-        children: [{
-          text: String(value || "—"),
+        // Runs must be TextRun objects: plain objects are written as an
+        // invalid <text> element and Word refuses to open the file.
+        children: [new TextRun({
+          text: String(value ?? "") || "—",
           bold: header,
           font: "Arial",
           size: 16,
           color: header ? "19344F" : "263746",
-        }],
+        })],
       }),
     ],
   });
@@ -768,17 +771,17 @@ export function MovementPlanPage({ user }) {
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 100 },
-          children: [{ text: approvedPlan.title, bold: true, font: "Arial", size: 32, color: "19344F" }],
+          children: [new TextRun({ text: approvedPlan.title || "Movement plan", bold: true, font: "Arial", size: 32, color: "19344F" })],
         }),
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 220 },
-          children: [{
+          children: [new TextRun({
             text: `Plan reference: ${approvedPlan.reference}   Prepared by: ${approvedPlan.preparedBy.name}   Movement period: ${displayDate(approvedPlan.trips.reduce((min, trip) => !min || trip.startDate < min ? trip.startDate : min, ""))} – ${displayDate(approvedPlan.trips.reduce((max, trip) => !max || trip.endDate > max ? trip.endDate : max, ""))}`,
             font: "Arial",
             size: 18,
             color: "526579",
-          }],
+          })],
         }),
         new Paragraph({ text: "1. Plan details", heading: HeadingLevel.HEADING_1, spacing: { before: 240, after: 100 } }),
         new Paragraph({ text: approvedPlan.summary, spacing: { after: 100 } }),
@@ -844,7 +847,9 @@ export function MovementPlanPage({ user }) {
         sections: [{
           properties: {
             page: {
-              size: { orientation: "landscape", width: 15840, height: 12240 },
+              // A4 landscape. docx swaps width/height for landscape, so give
+              // the portrait dimensions here.
+              size: { orientation: "landscape", width: 11906, height: 16838 },
               margin: { top: 720, right: 720, bottom: 720, left: 720 },
             },
           },
