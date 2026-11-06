@@ -1,19 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlignmentType,
-  BorderStyle,
-  Document,
-  HeadingLevel,
-  Packer,
-  Paragraph,
-  ShadingType,
-  Table,
-  TableCell,
-  TableRow,
-  TextRun,
-  VerticalAlign,
-  WidthType,
-} from "docx";
+import { Packer } from "docx";
+import { buildMovementPlanDocument } from "../utils/movementPlanDocx";
 import { Check, Download, FileText, Plus, Send, Trash2 } from "lucide-react";
 import {
   createMovementPlan,
@@ -186,55 +173,6 @@ function formFromPlan(plan, sites) {
     accommodation: (plan.accommodation || []).map((row) => ({ ...row })),
     logistics: (plan.logistics || []).map((row) => ({ ...row })),
   };
-}
-
-function tableCell(value, header = false) {
-  const borders = {
-    top: { style: BorderStyle.SINGLE, size: 4, color: "D8E0EA" },
-    bottom: { style: BorderStyle.SINGLE, size: 4, color: "D8E0EA" },
-    left: { style: BorderStyle.SINGLE, size: 4, color: "D8E0EA" },
-    right: { style: BorderStyle.SINGLE, size: 4, color: "D8E0EA" },
-  };
-  return new TableCell({
-    borders,
-    shading: header ? { type: ShadingType.CLEAR, fill: "EAF0F6" } : undefined,
-    verticalAlign: VerticalAlign.CENTER,
-    children: [
-      new Paragraph({
-        spacing: { before: 30, after: 30 },
-        // Runs must be TextRun objects: plain objects are written as an
-        // invalid <text> element and Word refuses to open the file.
-        children: [new TextRun({
-          text: String(value ?? "") || "—",
-          bold: header,
-          font: "Arial",
-          size: 16,
-          color: header ? "19344F" : "263746",
-        })],
-      }),
-    ],
-  });
-}
-
-function documentTable(headers, rows) {
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [
-      new TableRow({ tableHeader: true, children: headers.map((header) => tableCell(header, true)) }),
-      ...rows.map((row) => new TableRow({ children: row.map((value) => tableCell(value)) })),
-    ],
-  });
-}
-
-function documentSection(title, headers, rows) {
-  return [
-    new Paragraph({
-      text: title,
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 240, after: 100 },
-    }),
-    documentTable(headers, rows),
-  ];
 }
 
 function TextInput({ label, value, onChange, disabled = false, type = "text", required = false }) {
@@ -751,112 +689,8 @@ export function MovementPlanPage({ user }) {
     try {
       const approvedPlan = await getApprovedMovementPlan(plan._id);
       if (!approvedPlan.canDownload) throw new Error("Document download is available only after full approval.");
-      const vehicleById = new Map(availableVehicles.map((vehicle) => [String(vehicle._id), vehicle]));
-      const approvedAssignments = approvedPlan.trips.flatMap((trip) => (
-        trip.assignments?.length
-          ? trip.assignments
-          : [{
-            vehicleId: trip.vehicleId,
-            vehicle: trip.vehicle,
-            driverId: trip.driverId,
-            driverName: trip.driverName,
-          }]
-      ).map((assignment) => ({ ...assignment, tripId: trip.tripId })));
-      const uniqueVehicles = [...new Map(approvedAssignments.map((assignment) => [
-        String(assignment.vehicleId),
-        assignment,
-      ])).values()];
-      const teamById = new Map(approvedPlan.team.map((person) => [String(person.userId), person]));
-      const content = [
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 100 },
-          children: [new TextRun({ text: approvedPlan.title || "Movement plan", bold: true, font: "Arial", size: 32, color: "19344F" })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 220 },
-          children: [new TextRun({
-            text: `Plan reference: ${approvedPlan.reference}   Prepared by: ${approvedPlan.preparedBy.name}   Movement period: ${displayDate(approvedPlan.trips.reduce((min, trip) => !min || trip.startDate < min ? trip.startDate : min, ""))} – ${displayDate(approvedPlan.trips.reduce((max, trip) => !max || trip.endDate > max ? trip.endDate : max, ""))}`,
-            font: "Arial",
-            size: 18,
-            color: "526579",
-          })],
-        }),
-        new Paragraph({ text: "1. Plan details", heading: HeadingLevel.HEADING_1, spacing: { before: 240, after: 100 } }),
-        new Paragraph({ text: approvedPlan.summary, spacing: { after: 100 } }),
-        documentTable(["Field", "Entry"], [
-          ["Plan reference", approvedPlan.reference],
-          ["Project / activity", approvedPlan.project],
-          ["Movement period", `${displayDate(approvedPlan.trips.reduce((min, trip) => !min || trip.startDate < min ? trip.startDate : min, ""))} – ${displayDate(approvedPlan.trips.reduce((max, trip) => !max || trip.endDate > max ? trip.endDate : max, ""))}`],
-          ["Base", approvedPlan.base],
-          ["Destinations", [...new Set(approvedPlan.trips.map((trip) => `${trip.destinationSiteId} — ${trip.destinationName}`))].join(", ")],
-          ["Prepared by", approvedPlan.preparedBy.name],
-        ]),
-        ...documentSection("2. Team roster", ["#", "Name", "Organisation", "Trips"], approvedPlan.team.map((person, index) => [
-          index + 1,
-          person.name,
-          person.organisation,
-          approvedPlan.trips.filter((trip) => trip.passengerIds.some((id) => String(id) === String(person.userId))).map((trip) => trip.tripId).join(", "),
-        ])),
-        ...documentSection("3. Vehicle register", ["Reg no.", "Make / model", "Body", "Assigned driver", "Trips"], uniqueVehicles.map((trip) => [
-          trip.vehicle.plate,
-          trip.vehicle.make,
-          trip.vehicle.body,
-          trip.driverName,
-          approvedAssignments.filter((item) => String(item.vehicleId) === String(trip.vehicleId)).map((item) => item.tripId).join(", "),
-        ])),
-        ...documentSection("4. Movement schedule", ["Trip", "Date", "Route", "Purpose", "Vehicle", "Passengers", "Depart", "Overnight", "Outside Nairobi Metro"], approvedPlan.trips.map((trip) => [
-          trip.tripId,
-          trip.startDate === trip.endDate ? displayDate(trip.startDate) : `${displayDate(trip.startDate)} – ${displayDate(trip.endDate)}`,
-          `${trip.originName} → ${trip.destinationSiteId} — ${trip.destinationName}`,
-          trip.purpose,
-          trip.assignments?.length
-            ? trip.assignments.map((assignment) => assignment.vehicle?.plate).filter(Boolean).join(", ")
-            : trip.vehicle.plate,
-          trip.passengerIds.map((id) => teamById.get(String(id))?.name).filter(Boolean).join(", "),
-          trip.departTime,
-          trip.overnight,
-          trip.outsideMetro ? "Yes" : "No",
-        ])),
-        ...documentSection("5. Vehicle allocation by day", ["Vehicle", ...planDates.map(displayDate)], assignedVehicles.map(([vehicleId, savedTrip]) => [
-          savedTrip.plate || savedTrip.vehicle?.plate || vehicleById.get(vehicleId)?.plate || "—",
-          ...planDates.map((date) => {
-            const trip = approvedPlan.trips.find((item) =>
-              tripAssignments(item).some((assignment) => String(assignment.vehicleId) === vehicleId) &&
-              date >= item.startDate && date <= item.endDate
-            );
-            return trip ? `${trip.tripId}: ${trip.originName} → ${trip.destinationName}` : "Available";
-          }),
-        ])),
-        ...documentSection("6. Accommodation and logistics", ACCOMMODATION_FIELDS.map(([, label]) => label), approvedPlan.accommodation.map((row) => ACCOMMODATION_FIELDS.map(([key]) => row[key]))),
-        ...documentSection("Logistics checklist", LOGISTICS_FIELDS.map(([, label]) => label), approvedPlan.logistics.map((row) => LOGISTICS_FIELDS.map(([key]) => row[key]))),
-        ...documentSection("Approvals", ["Role", "Name", "Status", "Date", "Comment"], approvedPlan.approvals.map((approval) => [
-          approvalRoleLabel(approval),
-          approval.approverName,
-          approval.status,
-          approval.decidedAt ? new Date(approval.decidedAt).toLocaleDateString("en-GB") : "",
-          approval.comment,
-        ])),
-      ];
-      const document = new Document({
-        styles: {
-          default: { document: { run: { font: "Arial", size: 18, color: "263746" } } },
-          heading1: { run: { font: "Arial", size: 24, bold: true, color: "19344F" }, paragraph: { spacing: { before: 260, after: 100 } } },
-        },
-        sections: [{
-          properties: {
-            page: {
-              // A4 landscape. docx swaps width/height for landscape, so give
-              // the portrait dimensions here.
-              size: { orientation: "landscape", width: 11906, height: 16838 },
-              margin: { top: 720, right: 720, bottom: 720, left: 720 },
-            },
-          },
-          children: content,
-        }],
-      });
-      const blob = await Packer.toBlob(document);
+      // Laid out like Oaknet's movement plan template (utils/movementPlanDocx.js).
+      const blob = await Packer.toBlob(buildMovementPlanDocument(approvedPlan));
       const url = URL.createObjectURL(blob);
       const link = window.document.createElement("a");
       link.href = url;
