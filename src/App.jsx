@@ -83,16 +83,16 @@ export default function App() {
   };
   const [resetToken, setResetToken] = useState(() => (typeof window === "undefined" ? null : takeResetTokenFromUrl()));
 
-  // "Open in Relay" links in notification emails: /#n=<token>. Marks the
-  // notification read (works before login too), then opens its page once
-  // signed in.
+  // "Open in Relay" links in notification emails (/#n=<token>) and WhatsApp
+  // messages (/#w=<token>). Marks the notification read (works before login
+  // too), then opens its page once signed in.
   const [pendingTab, setPendingTab] = useState(null);
   useEffect(() => {
     const openFromEmail = () => {
-      const m = /^#n=([a-f0-9]{32})$/.exec(window.location.hash);
+      const m = /^#([nw])=([a-f0-9]{32})$/.exec(window.location.hash);
       if (!m) return;
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
-      api.openNotificationLink(m[1])
+      api.openNotificationLink(m[2], m[1] === "w" ? "whatsapp" : "email")
         .then((result) => setPendingTab(result?.tab || "notifications"))
         .catch(() => setPendingTab("notifications"));
     };

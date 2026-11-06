@@ -552,8 +552,8 @@ export const markNotificationRead = async (id) => {
 };
 // "Open in Relay" link from a notification email: marks it read (no login
 // needed) and says which page to open.
-export const openNotificationLink = async (token) => {
-  const { data } = await axiosInstance.post(`/api/notification-links/open/${encodeURIComponent(token)}`);
+export const openNotificationLink = async (token, via = "email") => {
+  const { data } = await axiosInstance.post(`/api/notification-links/open/${encodeURIComponent(token)}`, null, { params: { via } });
   return data; // { tab }
 };
 // Email delivery: a test email to the signed-in super admin.
