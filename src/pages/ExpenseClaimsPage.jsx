@@ -13,6 +13,9 @@ const STAFF_ROLES = ["super_admin", "admin", "project_manager", "site_engineer",
 const FILTERS = [["all", "All"], ["submitted", "Awaiting review"], ["approved", "Approved"], ["paid", "Paid"], ["rejected", "Rejected"]];
 const kes = (value) => `KES ${Number(value || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Claims handled by Oaknet Finance: where they are.
+const FINANCE_STATUS = { to_check: "being checked by Finance", returned: "returned by Finance", verified: "verified, waiting for payment", paid: "paid" };
+
 export function ExpenseClaimsPage({ user }) {
   const [claims, setClaims] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -122,7 +125,14 @@ export function ExpenseClaimsPage({ user }) {
             <div className="fleet-operation-empty">{claims.length ? "No claims with this status." : "No claims yet."}</div>
           ) : (
             visible.map((claim) => (
-              <ClaimRow key={claim._id} claim={claim} actions={reviewer && (
+              <ClaimRow key={claim._id} claim={claim} actions={claim.finance ? (
+                // Checked by Finance and paid by the CEO in Oaknet Finance.
+                <div className="fleet-operation-help" style={{ margin: 0 }}>
+                  With Oaknet Finance{claim.finance.ref ? ` (${claim.finance.ref})` : ""}: {FINANCE_STATUS[claim.finance.status] || claim.finance.status}
+                  {claim.finance.status === "returned" && claim.finance.reason ? ` · ${claim.finance.reason}` : ""}
+                  {claim.finance.status === "paid" && claim.finance.reference ? ` · ref ${claim.finance.reference}` : ""}
+                </div>
+              ) : reviewer && (
                 <>
                   {claim.status === "submitted" && (
                     <div className="fleet-operation-actions">
