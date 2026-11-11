@@ -1,15 +1,17 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   RadioTower, Eye, EyeOff, ArrowRight, ShieldCheck, ArrowLeft, MailCheck, CheckCircle2
 } from "lucide-react";
-import { api, requestPasswordReset, resetPassword } from "../services/api";
+import { api, requestPasswordReset, resetPassword, portalSignIn } from "../services/api";
 import { PasswordRules } from "../components/ui/PasswordRules";
 import { MfaStep } from "../components/auth/MfaStep";
 import { isPasswordValid, passwordProblem, PASSWORD_MAX_LENGTH } from "../utils/passwordPolicy";
 
 // resetToken: from an emailed "Reset password" link (App reads it from the
 // URL hash). Opens the set-new-password form instead of the login form.
-export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone }) {
+// portalToken: one-time pass from Oaknet Central ("Open RELAY"). It replaces
+// the password only; the authenticator step still follows.
+export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone, portalToken = null }) {
   const [mode, setMode] = useState(resetToken ? "reset" : "login"); // login | forgot | forgot-sent | reset | reset-done
   const [forgotEmail, setForgotEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -23,6 +25,24 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone }) {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Exchange the portal pass once (a pass works only once, so never twice,
+  // even when React runs effects twice in development).
+  const portalTried = useRef(false);
+  useEffect(() => {
+    if (!portalToken || portalTried.current) return;
+    portalTried.current = true;
+    setIsSubmitting(true);
+    portalSignIn(portalToken)
+      .then((res) => {
+        if (res?.mfaRequired) {
+          setMfaStage(res.stage);
+          setMode("mfa");
+        }
+      })
+      .catch((err) => setError(`${err.message} You can also sign in below.`))
+      .finally(() => setIsSubmitting(false));
+  }, [portalToken]);
 
   const handleChange = (e) => {
     setError("");

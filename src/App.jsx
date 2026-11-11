@@ -84,6 +84,17 @@ export default function App() {
   };
   const [resetToken, setResetToken] = useState(() => (typeof window === "undefined" ? null : takeResetTokenFromUrl()));
 
+  // "Open RELAY" in Oaknet Central opens /#portal=<one-time pass>. Read it once
+  // and remove it from the address bar; the login page exchanges it (after the
+  // on-load logout) for the usual authenticator step.
+  const [portalToken] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const m = /^#portal=([A-Za-z0-9._-]{20,2000})$/.exec(window.location.hash);
+    if (!m) return null;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    return m[1];
+  });
+
   // "Open in Relay" links in notification emails (/#n=<token>) and WhatsApp
   // messages (/#w=<token>). Marks the notification read (works before login
   // too), then opens its page once signed in.
@@ -230,7 +241,7 @@ export default function App() {
    */
   if (currentView === "login") {
     // key: a newly opened reset link remounts the form in "reset" mode.
-    return <LoginPage key={resetToken || "login"} onLoginSuccess={onLoginSuccess} resetToken={resetToken} onResetDone={() => setResetToken(null)} />;
+    return <LoginPage key={resetToken || "login"} onLoginSuccess={onLoginSuccess} resetToken={resetToken} onResetDone={() => setResetToken(null)} portalToken={resetToken ? null : portalToken} />;
   }
 
   /*

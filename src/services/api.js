@@ -24,7 +24,7 @@ const axiosInstance = axios.create({
 // Excludes /login (a wrong password is also a 401 — show the form's error,
 // don't reload) and /me (a 401 there just means "not logged in yet", the
 // normal state on first load — reloading would loop forever).
-const AUTH_PROBE_PATHS = ["/api/auth/login", "/api/auth/me", "/api/auth/mfa/"];
+const AUTH_PROBE_PATHS = ["/api/auth/login", "/api/auth/me", "/api/auth/mfa/", "/api/portal/sso"];
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -82,6 +82,9 @@ export const mfaSetupStart = () => mfaCall("/api/auth/mfa/setup");
 export const mfaSetupConfirm = (code) => mfaCall("/api/auth/mfa/setup/confirm", { code });
 // payload: { code } or { recoveryCode } -> { ok, recoveryCodesLeft? }
 export const mfaVerify = (payload) => mfaCall("/api/auth/mfa/verify", payload);
+// Oaknet Central single sign-on: a one-time pass from the portal stands in for
+// the password and opens the same 2FA step. -> { mfaRequired, stage }
+export const portalSignIn = (token) => mfaCall("/api/portal/sso", { token });
 
 /**
  * Forgot password — always resolves with the same message whether or not
