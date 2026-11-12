@@ -403,7 +403,7 @@ export function UserManagementPage({ isSuper = false }) {
                 <label style={labelStyle} htmlFor="um-whatsapp">WhatsApp number</label>
                 <input id="um-whatsapp" type="tel" name="whatsappPhone" className="form-input" placeholder="+254 712 345 678"
                   value={formData.whatsappPhone} onChange={handleChange} maxLength={30} autoComplete="off" />
-                <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 4 }}>Notifications and approval requests go here. Leave blank for in-app only.</div>
+                <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 4 }}>Notifications and approval requests go here. Leave blank for in-app only. For Oaknet staff, the number set in Oaknet Central (User Management) replaces this one.</div>
               </div>
 
               {!isEdit && (

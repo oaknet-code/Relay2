@@ -113,7 +113,7 @@ export function SettingsPage() {
                 </div>
                 {phoneResult
                   ? <small style={{ color: phoneResult.ok ? "var(--teal)" : "var(--red)" }}>{phoneResult.message}</small>
-                  : <small className="faint">{hasWhatsApp ? "Approval requests come with Approve and Reject buttons." : "Add your number to get WhatsApp messages."}</small>}
+                  : <small className="faint">{hasWhatsApp ? "Approval requests come with Approve and Reject buttons." : "Add your number to get WhatsApp messages."} If you use Oaknet Central, set your number there (Settings): it is used by every module and replaces this one.</small>}
               </form>
             </div>
           </section>
