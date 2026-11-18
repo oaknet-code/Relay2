@@ -9,8 +9,9 @@ import { isPasswordValid, passwordProblem, PASSWORD_MAX_LENGTH } from "../utils/
 
 // resetToken: from an emailed "Reset password" link (App reads it from the
 // URL hash). Opens the set-new-password form instead of the login form.
-// portalToken: one-time pass from Oaknet Central ("Open RELAY"). It replaces
-// the password only; the authenticator step still follows.
+// portalToken: one-time pass from Oaknet Central ("Open RELAY"). After the
+// portal's own two-step sign-in it signs straight in; older passes replace the
+// password only and the authenticator step follows.
 export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone, portalToken = null }) {
   const [mode, setMode] = useState(resetToken ? "reset" : "login"); // login | forgot | forgot-sent | reset | reset-done
   const [forgotEmail, setForgotEmail] = useState("");
@@ -34,7 +35,13 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone, port
     portalTried.current = true;
     setIsSubmitting(true);
     portalSignIn(portalToken)
-      .then((res) => {
+      .then(async (res) => {
+        // Passed Oaknet Central's two-step sign-in: already signed in here.
+        if (res?.signedIn) {
+          const { user } = await api.getMe();
+          onLoginSuccess?.(user);
+          return;
+        }
         if (res?.mfaRequired) {
           setMfaStage(res.stage);
           setMode("mfa");
@@ -42,7 +49,7 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone, port
       })
       .catch((err) => setError(`${err.message} You can also sign in below.`))
       .finally(() => setIsSubmitting(false));
-  }, [portalToken]);
+  }, [portalToken, onLoginSuccess]);
 
   const handleChange = (e) => {
     setError("");
