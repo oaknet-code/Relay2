@@ -1,0 +1,19 @@
+# RELAY on Hostinger (Apache). Browsers must re-check the page and the service
+# worker on every visit, so a new deploy reaches everyone at once (otherwise a
+# browser can keep an old page that still loads the previous build). The
+# build files in /assets have a content hash in their name and never change,
+# so they can be kept for a year.
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <Files "sw.js">
+    Header set Cache-Control "no-cache"
+  </Files>
+  <Files "manifest.json">
+    Header set Cache-Control "no-cache"
+  </Files>
+  <If "%{REQUEST_URI} =~ m#^/assets/#">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </If>
+</IfModule>
