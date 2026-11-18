@@ -28,7 +28,10 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone, port
   const [error, setError] = useState("");
 
   // Exchange the portal pass once (a pass works only once, so never twice,
-  // even when React runs effects twice in development).
+  // even when React runs effects twice in development). Opened from Oaknet
+  // Central, the sign-in form is never shown: only "Opening RELAY…", then
+  // RELAY itself. The form appears only if the pass does not work.
+  const [portalPending, setPortalPending] = useState(Boolean(portalToken));
   const portalTried = useRef(false);
   useEffect(() => {
     if (!portalToken || portalTried.current) return;
@@ -36,18 +39,22 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone, port
     setIsSubmitting(true);
     portalSignIn(portalToken)
       .then(async (res) => {
-        // Passed Oaknet Central's two-step sign-in: already signed in here.
+        // Opened from Oaknet Central: already signed in here.
         if (res?.signedIn) {
           const { user } = await api.getMe();
           onLoginSuccess?.(user);
           return;
         }
+        setPortalPending(false);
         if (res?.mfaRequired) {
           setMfaStage(res.stage);
           setMode("mfa");
         }
       })
-      .catch((err) => setError(`${err.message} You can also sign in below.`))
+      .catch((err) => {
+        setPortalPending(false);
+        setError(`${err.message} You can also sign in below.`);
+      })
       .finally(() => setIsSubmitting(false));
   }, [portalToken, onLoginSuccess]);
 
@@ -178,9 +185,10 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone, port
                 <div className="signup-subtitle">MW Rollout Operations</div>
               </div>
             </div>
-            <p className="signup-subtitle">{subtitle}</p>
+            <p className="signup-subtitle" role="status">{portalPending ? "Opening RELAY from Oaknet Central…" : subtitle}</p>
           </div>
 
+          {!portalPending && (<>
           {error && mode !== "mfa" && (
             <div className="auth-error">
               <ShieldCheck size={16} />
@@ -321,6 +329,7 @@ export function LoginPage({ onLoginSuccess, resetToken = null, onResetDone, port
             </button>
           </form>
           )}
+          </>)}
         </div>
       </div>
     </div>
