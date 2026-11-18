@@ -385,7 +385,7 @@ export function UserManagementPage({ isSuper = false }) {
                   </div>
                 )}
                 <div className="faint" style={{ fontSize: 11.5, marginTop: 8 }}>
-                  Oaknet staff: set the role in Oaknet Central (User Management, by job title or Edit user). A change made there reaches RELAY within a minute and replaces the role here. Super admin and site worker are set here.
+                  Oaknet staff: roles are controlled from Oaknet Central (User Management, by job title or Edit user). A change made there reaches RELAY within a minute and replaces the role here. Only site worker is set here.
                 </div>
               </fieldset>
 
