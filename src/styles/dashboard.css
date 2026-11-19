@@ -514,7 +514,8 @@
 /* Kenya Operations Map Tab */
 .map-view-container {
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  /* Map gets most of the width; the site panel keeps a readable minimum. */
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.8fr);
   gap: 16px;
   padding: 16px;
   min-height: 560px;
@@ -535,7 +536,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 540px;
+  /* Tall enough to see the whole of Kenya; grows with the screen. */
+  min-height: clamp(540px, 72vh, 860px);
 }
 
 .kenya-map-svg {
