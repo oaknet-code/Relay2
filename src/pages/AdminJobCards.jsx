@@ -170,7 +170,8 @@ function AddJobCardForm({ onSent, onCancel }) {
           padding: "12px 14px", background: "var(--bg)", border: "1px solid var(--line)",
           borderRadius: "8px", color: "var(--muted)", fontSize: "12px", lineHeight: 1.5,
         }}>
-          Uses the supplied six-page RFI card layout, including the 17-task register, evidence log,
+          Uses the supplied six-page job card layout, including the{" "}
+          {/vinke/i.test(company) ? "16-task Civil Works register (building and civil works)" : "17-task RFI register"}, evidence log,
           corrective-action register, completion summary, and sign-off tables. Long entries may add pages.
         </div>
       )}
