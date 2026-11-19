@@ -324,13 +324,21 @@ export function MissionControl({ user, onNavigate }) {
       `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/${day}/${matrixSet}/{z}/{y}/{x}.${ext}`,
       { maxZoom: 19, ...opts },
     );
+    // Recent imagery is coarser than the detailed Esri photos, so each recent
+    // layer sits over them and hides itself past the zoom where it would
+    // only be a blur: zoom in further and the detailed imagery takes over.
+    //
     // Whole-country true colour, one image a day (~375 m). Today's pass isn't
     // complete until later in the day, so show yesterday's.
     const dailyDay = gibsDay(1);
-    const nasaDaily = gibs('VIIRS_NOAA20_CorrectedReflectance_TrueColor', dailyDay, 'GoogleMapsCompatible_Level9', 'jpeg', {
-      maxNativeZoom: 9,
-      attribution: `NASA EOSDIS GIBS · VIIRS true colour ${dailyDay}`,
-    });
+    const nasaDaily = L.layerGroup([
+      esriImagery(),
+      gibs('VIIRS_NOAA20_CorrectedReflectance_TrueColor', dailyDay, 'GoogleMapsCompatible_Level9', 'jpeg', {
+        maxNativeZoom: 9,
+        maxZoom: 11,
+        attribution: `NASA EOSDIS GIBS · VIIRS true colour ${dailyDay}`,
+      }),
+    ]);
     // Sentinel-2 at ~10 m from Copernicus, through the RELAY backend (which
     // caches tiles per day to stay inside the free quota): the newest
     // cloud-free quarterly mosaic. Over the detailed imagery, so any tile the
@@ -342,7 +350,7 @@ export function MissionControl({ user, onNavigate }) {
         zoomOffset: -1,
         minNativeZoom: 6,
         maxNativeZoom: 14,
-        maxZoom: 19,
+        maxZoom: 15, // ~10 m pixels at most doubled; closer in, detailed imagery
         bounds: L.latLngBounds([[-7.3, 31.9], [8.1, 43.9]]),
         attribution: 'Contains modified Copernicus Sentinel data, processed by Sentinel Hub',
       }),
