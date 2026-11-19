@@ -77,6 +77,71 @@ const weatherSymbol = (code) => {
   return "·";
 };
 const needsWeatherCaution = (code) => [61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code);
+const titleCase = (s) => String(s || "").toLowerCase().replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
+// Hover card for a site pin: the essentials at a glance, weather included.
+// Built from DOM text nodes, so site names can't inject markup.
+function siteHoverCard(site, { links, weather, weatherState }) {
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  };
+  const card = el("div", "shc");
+  const head = el("div", "shc-head");
+  head.append(el("b", null, site.siteId), document.createTextNode(` · ${site.name}`));
+  card.append(head);
+
+  const state = siteState(site);
+  const status = el("div", "shc-status");
+  const dot = el("span", "shc-dot");
+  dot.style.background = cssColor(state.c);
+  status.append(dot, document.createTextNode(state.label));
+  card.append(status);
+
+  const row = (label, value, cls) => {
+    const r = el("div", `shc-row${cls ? ` ${cls}` : ""}`);
+    r.append(el("span", "shc-k", label), el("span", "shc-v", value));
+    card.append(r);
+  };
+
+  if (site.groups.length) row("Route", site.groups.join(", "));
+
+  const live = links.filter((l) => ["LIVE", "COMMISSIONED"].includes(l.status)).length;
+  row("Links", links.length
+    ? `${links.length}${live ? ` · ${live} live` : ""}${links.length === 1 ? ` · ${linkStatus(links[0].status).label}` : ""}`
+    : "None");
+
+  if (site.kits.length) {
+    const statuses = [...new Set(site.kits.map((k) => titleCase(k.status)))].join(", ");
+    row("Kits", `${site.kits.length} · ${statuses}`);
+    if (site.stockPct != null) {
+      const short = site.kits.reduce((n, k) => n + (k.short || 0), 0);
+      row("Stock", `${site.stockPct}% reserved${short ? ` · ${short} line${short === 1 ? "" : "s"} short` : ""}`);
+    }
+    if (site.kits.some((k) => k.overdue)) row("Alert", "Kit dispatched, overdue for install", "warn");
+  } else {
+    row("Kits", "None assigned");
+  }
+
+  const w = el("div", "shc-weather");
+  if (weather && Number.isFinite(weather.temperature_2m)) {
+    if (needsWeatherCaution(weather.weather_code)) w.classList.add("caution");
+    w.append(
+      el("span", "shc-temp", `${weatherSymbol(weather.weather_code)} ${Math.round(weather.temperature_2m)}°C`),
+      el("span", null, [
+        weatherLabel(weather.weather_code),
+        Number.isFinite(weather.precipitation) ? `${weather.precipitation.toFixed(1)} mm rain` : null,
+        Number.isFinite(weather.wind_speed_10m) ? `${Math.round(weather.wind_speed_10m)} km/h wind` : null,
+      ].filter(Boolean).join(" · ")),
+    );
+  } else {
+    w.append(el("span", "shc-muted", weatherState));
+  }
+  card.append(w);
+  return card;
+}
 
 export function MissionControl({ user, onNavigate }) {
   const [data, setData] = useState(null);
@@ -197,8 +262,11 @@ export function MissionControl({ user, onNavigate }) {
     };
   }, [activeTab, selected, weatherRefresh]);
 
+  // Site weather loads whenever the map is open (the server caches it), so
+  // hovering a site can show it; the Weather toggle only adds the chips.
+  const mapAvailable = !!data && !isClient;
   useEffect(() => {
-    if (!weatherOnMap || activeTab !== "map") return undefined;
+    if (activeTab !== "map" || !mapAvailable) return undefined;
     const controller = new AbortController();
     let active = true;
     const loadMapWeather = async () => {
@@ -223,7 +291,7 @@ export function MissionControl({ user, onNavigate }) {
       window.clearInterval(interval);
       controller.abort();
     };
-  }, [activeTab, weatherOnMap, mapWeatherRefresh]);
+  }, [activeTab, mapAvailable, mapWeatherRefresh]);
 
   // Create the map while the Map tab is shown.
   useEffect(() => {
@@ -316,9 +384,22 @@ export function MissionControl({ user, onNavigate }) {
       }).bindTooltip(`${l.linkId} · ${l.name}`).addTo(layers);
     }
 
+    const linksBySite = new Map();
+    for (const l of data?.linkList || []) {
+      for (const id of new Set([l.siteA?.siteId, l.siteB?.siteId])) {
+        if (!id) continue;
+        if (!linksBySite.has(id)) linksBySite.set(id, []);
+        linksBySite.get(id).push(l);
+      }
+    }
+    const weatherState = mapWeatherError ? "Weather unavailable right now"
+      : !mapWeather ? "Loading weather…"
+      : "No weather reading for this site";
+
     for (const s of shownSites.filter(hasGps)) {
       const isSel = s.siteId === selectedId;
-      L.circleMarker([s.latitude, s.longitude], {
+      const label = `${s.siteId} · ${s.name}`;
+      const marker = L.circleMarker([s.latitude, s.longitude], {
         radius: isSel ? 10 : 7,
         fillColor: cssColor(siteState(s).c),
         color: isSel ? '#ffffff' : '#080b10',
@@ -326,9 +407,26 @@ export function MissionControl({ user, onNavigate }) {
         opacity: 1,
         fillOpacity: 0.9,
       })
-        .bindTooltip(`${s.siteId} · ${s.name}`, { permanent: shownSites.length <= 25, direction: 'top', className: `map-tooltip ${isSel ? 'selected' : ''}`, offset: [0, -8] })
+        .bindTooltip(label, { permanent: shownSites.length <= 25, direction: 'top', className: `map-tooltip ${isSel ? 'selected' : ''}`, offset: [0, -8] })
         .on('click', () => setSelectedId(s.siteId))
         .addTo(layers);
+      // Hover: swap the short label for the site's details card, on top of
+      // any neighbouring labels; restore it when the pointer leaves.
+      marker.on('mouseover', () => {
+        marker.setTooltipContent(siteHoverCard(s, {
+          links: linksBySite.get(s.siteId) || [],
+          weather: mapWeather?.sites?.[s.siteId]?.current,
+          weatherState,
+        }));
+        marker.openTooltip();
+        const tip = marker.getTooltip()?.getElement();
+        if (tip) { tip.classList.add('expanded'); tip.style.zIndex = 1000; }
+      });
+      marker.on('mouseout', () => {
+        const tip = marker.getTooltip()?.getElement();
+        if (tip) { tip.classList.remove('expanded'); tip.style.zIndex = ''; }
+        marker.setTooltipContent(label);
+      });
     }
 
     if (weatherOnMap && mapWeather?.sites) {
@@ -363,7 +461,7 @@ export function MissionControl({ user, onNavigate }) {
       lastFitKeyRef.current = fitKey;
       fitMapToSites();
     }
-  }, [activeTab, shownSites, shownLinks, siteById, selectedId, fitMapToSites, weatherOnMap, mapWeather]);
+  }, [activeTab, data, shownSites, shownLinks, siteById, selectedId, fitMapToSites, weatherOnMap, mapWeather, mapWeatherError]);
 
   const openSite = (siteId) => {
     if (!siteId || !siteById.has(siteId)) return;
