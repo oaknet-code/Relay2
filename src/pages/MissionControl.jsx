@@ -6,6 +6,7 @@ import {
 import { Ring, Band, Dot } from '../components/ui';
 import { WeatherForecast } from '../components/WeatherForecast';
 import { LINK_STATUS } from '../constants/states';
+import { KENYA_BORDER } from '../constants/kenyaBorder';
 import { getDashboard, getFuelLogs, getMapWeather, getSiteWeather } from '../services/api';
 
 // Everything here comes from GET /api/dashboard (live links, sites, kits,
@@ -154,7 +155,7 @@ export function MissionControl({ user, onNavigate }) {
     const points = shownSites.filter(hasGps).map((s) => [s.latitude, s.longitude]);
     if (points.length > 1) map.fitBounds(points, { padding: [40, 40], maxZoom: 9 });
     else if (points.length === 1) map.setView(points[0], 9);
-    else map.setView([0.2, 38.3], 6);
+    else map.fitBounds(KENYA_BORDER, { padding: [20, 20] });
   }, [shownSites]);
   const selectedLinks = useMemo(
     () => (selected ? (data?.linkList || []).filter((l) => l.siteA?.siteId === selected.siteId || l.siteB?.siteId === selected.siteId) : []),
@@ -229,7 +230,16 @@ export function MissionControl({ user, onNavigate }) {
     if (activeTab !== 'map' || !mapRef.current || !data || isClient) return;
     const L = window.L;
     if (!L) return;
-    const map = L.map(mapRef.current, { center: [0.2, 38.3], zoom: 6, zoomControl: false });
+    // Kept to Kenya: the view can't pan far past the border.
+    const kenyaBounds = L.latLngBounds(KENYA_BORDER);
+    const map = L.map(mapRef.current, {
+      center: kenyaBounds.getCenter(),
+      zoom: 6,
+      minZoom: 5,
+      zoomControl: false,
+      maxBounds: kenyaBounds.pad(0.25),
+      maxBoundsViscosity: 1.0,
+    });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -239,10 +249,35 @@ export function MissionControl({ user, onNavigate }) {
       maxZoom: 19,
       attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics',
     });
-    streetMap.addTo(map);
-    L.control.layers({ "Street map": streetMap, "Satellite": satelliteMap }, null, {
+    satelliteMap.addTo(map);
+    L.control.layers({ "Satellite": satelliteMap, "Street map": streetMap }, null, {
       position: "topright",
       collapsed: true,
+    }).addTo(map);
+
+    // Cut-out: darken everything outside Kenya, then trace the border dashed.
+    // Own pane so it sits above the tiles but below links, sites and weather.
+    map.createPane('kenyaMask');
+    map.getPane('kenyaMask').style.zIndex = 350;
+    map.getPane('kenyaMask').style.pointerEvents = 'none';
+    L.polygon([
+      [[-89, -360], [-89, 360], [89, 360], [89, -360]],
+      KENYA_BORDER,
+    ], {
+      pane: 'kenyaMask',
+      stroke: false,
+      fillColor: '#05070b',
+      fillOpacity: 0.62,
+      interactive: false,
+    }).addTo(map);
+    L.polygon(KENYA_BORDER, {
+      pane: 'kenyaMask',
+      color: '#ffffff',
+      weight: 2,
+      opacity: 0.9,
+      dashArray: '8, 6',
+      fill: false,
+      interactive: false,
     }).addTo(map);
     L.control.scale({ position: "bottomright", metric: true, imperial: false }).addTo(map);
     layersRef.current = L.layerGroup().addTo(map);
