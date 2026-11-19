@@ -893,6 +893,15 @@
   filter: none;
 }
 
+/* The Kenya cut-out (darkened surroundings + dashed border) lives in its own
+   Leaflet pane. Leaflet only exempts the default overlay pane's SVG from the
+   global "svg { max-width: 100%; height: auto }" rule, so without this the
+   cut-out's SVG collapses to nothing. */
+.mc-map .leaflet-pane svg {
+  max-width: none !important;
+  max-height: none !important;
+}
+
 .map-actions {
   position: absolute;
   z-index: 500;
