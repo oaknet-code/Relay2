@@ -7,7 +7,7 @@ import { Ring, Band, Dot } from '../components/ui';
 import { WeatherForecast } from '../components/WeatherForecast';
 import { LINK_STATUS } from '../constants/states';
 import { KENYA_BORDER } from '../constants/kenyaBorder';
-import { getDashboard, getFuelLogs, getMapWeather, getSiteWeather } from '../services/api';
+import { API_BASE_URL, getDashboard, getFuelLogs, getMapWeather, getSiteWeather } from '../services/api';
 
 // Everything here comes from GET /api/dashboard (live links, sites, kits,
 // reserved stock and assets) — no sample data.
@@ -331,21 +331,27 @@ export function MissionControl({ user, onNavigate }) {
       maxNativeZoom: 9,
       attribution: `NASA EOSDIS GIBS · VIIRS true colour ${dailyDay}`,
     });
-    // Sentinel-2 at ~30 m (NASA HLS). Each day only covers the strips the
-    // satellite passed over, so stack the last 12 days, newest on top, over
-    // the detailed imagery to fill any gaps. Clouds in the newest pass show.
+    // Sentinel-2 at ~10 m from Copernicus, through the RELAY backend (which
+    // caches tiles per day to stay inside the free quota): the newest
+    // cloud-free quarterly mosaic. Over the detailed imagery, so any tile the
+    // backend can't supply (not set up, daily allowance used) shows that.
     const sentinel = L.layerGroup([
       esriImagery(),
-      ...Array.from({ length: 12 }, (_, i) => gibs(
-        'HLS_S30_Nadir_BRDF_Adjusted_Reflectance', gibsDay(13 - i), 'GoogleMapsCompatible_Level12', 'png',
-        { maxNativeZoom: 12, attribution: i === 11 ? 'Sentinel-2 via NASA HLS (contains modified Copernicus Sentinel data)' : undefined },
-      )),
+      L.tileLayer(`${API_BASE_URL}/media/imagery/sentinel2/{z}/{x}/{y}.jpg`, {
+        tileSize: 512,
+        zoomOffset: -1,
+        minNativeZoom: 6,
+        maxNativeZoom: 14,
+        maxZoom: 19,
+        bounds: L.latLngBounds([[-7.3, 31.9], [8.1, 43.9]]),
+        attribution: 'Contains modified Copernicus Sentinel data, processed by Sentinel Hub',
+      }),
     ]);
     satelliteMap.addTo(map);
     L.control.layers({
       "Satellite (detailed)": satelliteMap,
       [`NASA daily · ${dailyDay}`]: nasaDaily,
-      "Sentinel-2 · last 12 days": sentinel,
+      "Sentinel-2 · cloud-free (quarterly)": sentinel,
       "Street map": streetMap,
     }, null, {
       position: "topright",
