@@ -304,6 +304,7 @@ export function MissionControl({ user, onNavigate }) {
       center: kenyaBounds.getCenter(),
       zoom: 6,
       minZoom: 5,
+      maxZoom: 18, // closest every layer can still show (see esriImagery)
       zoomControl: false,
       maxBounds: kenyaBounds.pad(0.25),
       maxBoundsViscosity: 1.0,
@@ -313,8 +314,12 @@ export function MissionControl({ user, onNavigate }) {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
     });
+    // Esri has photos to zoom 18 along the routes (checked Mandera to Lamu),
+    // but at 19 only around Nairobi: elsewhere it sends grey "Map data not
+    // yet available" tiles. So the map stops at 18 (see maxZoom above).
     const esriImagery = () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19,
+      maxNativeZoom: 18,
+      maxZoom: 18,
       attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics',
     });
     const satelliteMap = esriImagery();
