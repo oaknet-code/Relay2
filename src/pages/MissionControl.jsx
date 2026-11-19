@@ -313,12 +313,41 @@ export function MissionControl({ user, onNavigate }) {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
     });
-    const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    const esriImagery = () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 19,
       attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics',
     });
+    const satelliteMap = esriImagery();
+    // Recent imagery from NASA GIBS (free, no key). Dates are UTC days.
+    const gibsDay = (daysAgo) => new Date(Date.now() - daysAgo * 864e5).toISOString().slice(0, 10);
+    const gibs = (layer, day, matrixSet, ext, opts) => L.tileLayer(
+      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/${day}/${matrixSet}/{z}/{y}/{x}.${ext}`,
+      { maxZoom: 19, ...opts },
+    );
+    // Whole-country true colour, one image a day (~375 m). Today's pass isn't
+    // complete until later in the day, so show yesterday's.
+    const dailyDay = gibsDay(1);
+    const nasaDaily = gibs('VIIRS_NOAA20_CorrectedReflectance_TrueColor', dailyDay, 'GoogleMapsCompatible_Level9', 'jpeg', {
+      maxNativeZoom: 9,
+      attribution: `NASA EOSDIS GIBS · VIIRS true colour ${dailyDay}`,
+    });
+    // Sentinel-2 at ~30 m (NASA HLS). Each day only covers the strips the
+    // satellite passed over, so stack the last 12 days, newest on top, over
+    // the detailed imagery to fill any gaps. Clouds in the newest pass show.
+    const sentinel = L.layerGroup([
+      esriImagery(),
+      ...Array.from({ length: 12 }, (_, i) => gibs(
+        'HLS_S30_Nadir_BRDF_Adjusted_Reflectance', gibsDay(13 - i), 'GoogleMapsCompatible_Level12', 'png',
+        { maxNativeZoom: 12, attribution: i === 11 ? 'Sentinel-2 via NASA HLS (contains modified Copernicus Sentinel data)' : undefined },
+      )),
+    ]);
     satelliteMap.addTo(map);
-    L.control.layers({ "Satellite": satelliteMap, "Street map": streetMap }, null, {
+    L.control.layers({
+      "Satellite (detailed)": satelliteMap,
+      [`NASA daily · ${dailyDay}`]: nasaDaily,
+      "Sentinel-2 · last 12 days": sentinel,
+      "Street map": streetMap,
+    }, null, {
       position: "topright",
       collapsed: true,
     }).addTo(map);
